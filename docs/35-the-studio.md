@@ -1,25 +1,8 @@
 # The Studio: the window on the loop
 
-*Rewritten 2026-09-08. The 2026-08-30 version of this page specified a
-GPUI application with an embedded chat panel and argued against embedding
-Rerun. The app that got built does none of those three things, and the
-page was never corrected — S1's own DONE criterion (docs/64 §6) was "the
-app builds, docs/35 updated", and only the first half happened. This
-rewrite states what the Studio IS, why each superseded decision was
-reversed and when, and keeps the design content that survived. Every
-reversal is dated and reasoned; nothing is quietly dropped.*
-
-
-*2026-09-09: the agent drives the window in real time through files — commands in, state and events out; the contract and the MCP doors (76 registered on 2026-09-27) are in docs/76 §10.1.*
-
-
-*2026-09-09, measured (finding `studio-viewport-pipe-2026-09-09`): the simulator's frame pipe delivers 32.6 fps on the kitting scene; the offscreen render is 26 ms/frame at any size, 17 ms of it shadows; shadows off gives 41 fps; on macOS the render is inline with physics, and a CGL context renders from a background thread at 12 ms, so the two fixes are known. The native window was not measured.*
-
-
-*2026-09-09, later: the stream is two processes (physics and render, a shared-memory state ring between them) because MuJoCo's Python render holds the GIL; kitting reaches 66 fps on screen at real-time factor 1.00 (finding `studio-viewport-two-process-2026-09-09`). The duck preview is four ducks: each microduck is 431,750 faces and this GL path draws ~7 ms per duck; MuJoCo's own viewer crawled on twenty too.*
-
-
-*2026-09-09, the Simulator page: Live view became the SIMULATION group's Simulator, with MuJoCo simulate's own sections as a control panel over the stream's status — run, step, reset, keyframes, speed, joint and control sliders, visualization and rendering flags; the agent drives the same through three doors (docs/76 §10.2).*
+*What the Studio is, what it shows, and the measured lessons behind it.
+Rewritten 2026-09-08, kept current since; the designs this page replaced
+are at the end, each reversal dated and reasoned.*
 
 ## 0. What the Studio is
 
@@ -43,74 +26,16 @@ library) that does two things:
 Around those, in the first cut: a brand bar, and an optional
 file-tree-and-editor panel behind a `code` button. The pages, the rail,
 the project switcher and the title and status bars of today are §5.
-There is **no chat panel** — see §2.
+There is **no chat panel**: see §10.2.
 
 The single ingest address has one definition, `STUDIO_ADDRESS` in
 `trainnr/trainnr/viz.py`, mirrored against the Rust bind string by a
 test (`trainnr/tests/test_studio_mirrors.py`) so the two halves cannot
 drift apart silently.
 
-## 1. Superseded: GPUI as the shell (decided 2026-08-30, reversed the same day)
-
-The original plan was to build on GPUI, Zed's Apache-2.0 UI framework,
-because "embedding one finished GPU application inside another turned out
-to be unsupported anywhere in the Rust windowing stack, in either
-direction."
-
-**What actually happened:** that premise was wrong in one specific case,
-and the exception is the whole architecture. Rerun's viewer *is* an egui
-application, so an egui host can embed it through Rerun's own
-`extend_viewer_ui` seam — no windowing tricks, no second event loop. The
-same trick does not work for a text editor (Lapce runs on Floem with its
-own event loop, checked 2026-08-31), which is why the code panel is a
-small egui editor rather than an embedded IDE.
-
-The MuJoCo half was decided by a licence-and-version wall rather than a
-UI one: the `mujoco-rs` binding needed a patched personal-fork `glutin`
-on macOS and MuJoCo 3.9.0, against this repo's deliberate `~=3.11.0` pin
-(the engine version is part of the identified artifact — docs/e2e-research/49).
-So MuJoCo renders in a subprocess on the Python side, where the pin already
-holds, and the frames cross by shared memory.
-
-Consequence worth keeping: the Studio is GPU-accelerated because egui and
-Rerun render through wgpu, not because of a framework choice.
-
-## 2. Superseded: the embedded agent panel (built 2026-08-30, deleted 2026-09-02)
-
-The app briefly had a full ACP (Agent Client Protocol) chat panel: live
-tool-call cards, markdown replies, a Stop button, prompt queueing, and
-the seven pipeline specialists as stage chips. It worked, and it was
-removed in S1 along with about a thousand lines and the ACP dependency.
-
-**Why (the open-core decision, docs/80):** developers already have an agent
-they trust and pay for. Embedding one makes us a worse IDE instead of a
-better instrument. The agent lives in the developer's own tool — Claude
-Code in a terminal, Cursor, VS Code, Claude Desktop — and reaches this
-repo through the MCP server (`trainnr/trainnr/mcp_server.py`). The
-Studio is what that agent *opens* to show a human something.
-
-The ACP work stays in git history deliberately; it taught the protocol,
-and the protocol may matter again if the app ever hosts an agent for a
-non-developer audience.
-
-## 3. Superseded: "what fills Rerun's role without embedding Rerun"
-
-The old §10 offered two options: a companion Rerun window, or native
-plot panels to avoid depending on Rerun's shifting API. An evening was
-spent building bespoke egui plot panels; the decision (2026-08-30) was to
-use exactly what Rerun does rather than reinvent it, and the embed
-replaced them.
-
-The rule that came out of it, and still holds
-(docs/e2e-research/55): **native panels only for glanceable state; the
-real Rerun viewer for anything with a scrubber, a query or a camera; the
-Studio never re-implements those.** Rerun's own time-series view is
-`egui_plot` on the exact egui version the shell pins, so a hand-rolled
-panel would have been the same code with fewer features.
-
 ## 4. Physics and rendering: two modes, one model
 
-Durable, unchanged from the original §3. The same compiled MJCF model
+Durable, unchanged since the first version. The same compiled MJCF model
 serves two jobs and the 3D view is agnostic to which is live:
 
 - **Sim mode** — `mj_step`, full dynamics, contact solver engaged. This
@@ -266,13 +191,13 @@ These are the ones that cost real time and are worth not rediscovering:
 ## 7. Where the Studio sits in the loop
 
 The Studio is the window, not the workflow. The workflow is the MCP
-surface (docs/64 §3) and the loop it walks (docs/76). The app's jobs:
+surface: 76 tools registered as of 2026-09-27, every one callable by an
+agent. The loop they walk is docs/76. The app's jobs:
 
-- **Launched by a tool.** `launch_studio` starts it (`open_studio` until 2026-09-28: a second door that built with cargo); anything speaking the
-  Rerun SDK then streams in.
+- **Launched by a tool.** `launch_studio` starts it; anything speaking
+  the Rerun SDK then streams in.
 - **Pointed at an artifact.** `open_in_studio` and `show_in_studio`
-  (since 2026-09-09) open a page or a named artifact and replay its
-  saved stream; this line said "does not exist yet" until 2026-09-24.
+  open a page or a named artifact and replay its saved stream.
 - **The human's live view.** Headless runs report the same facts
   without it — the datasheet, the evaluation, the findings record — and
   since 2026-09-13 keep the same picture: every feed that narrates an
@@ -288,7 +213,7 @@ surface (docs/64 §3) and the loop it walks (docs/76). The app's jobs:
 - Depending on Rerun Hub before a self-serve general availability exists.
 - The NVIDIA proprietary Omniverse core; the permissive slice stays the
   ceiling for how far into that ecosystem this reaches.
-- A chat panel, per §2.
+- A chat panel, per §10.2.
 
 ## 9. Standing sources when this app grows
 
@@ -296,3 +221,65 @@ For agentic-AI interface *ideas*, read Zed — never its code: its agent
 and editor crates are GPL-3.0-or-later and hard-wired to GPUI. For
 data-visualisation widgets, reuse Rerun's own crates (`re_ui`,
 `re_renderer`), which are dual MIT and Apache-2.0 and meant for reuse.
+
+## 10. History of the design
+
+The decisions this page replaced, each dated. Nothing here is current.
+
+### 10.1 GPUI as the shell (decided 2026-08-30, reversed the same day)
+
+The original plan was to build on GPUI, Zed's Apache-2.0 UI framework,
+because "embedding one finished GPU application inside another turned out
+to be unsupported anywhere in the Rust windowing stack, in either
+direction."
+
+**What actually happened:** that premise was wrong in one specific case,
+and the exception is the whole architecture. Rerun's viewer *is* an egui
+application, so an egui host can embed it through Rerun's own
+`extend_viewer_ui` seam — no windowing tricks, no second event loop. The
+same trick does not work for a text editor (Lapce runs on Floem with its
+own event loop, checked 2026-08-31), which is why the code panel is a
+small egui editor rather than an embedded IDE.
+
+The MuJoCo half was decided by a licence-and-version wall rather than a
+UI one: the `mujoco-rs` binding needed a patched personal-fork `glutin`
+on macOS and MuJoCo 3.9.0, against this repo's deliberate `~=3.11.0` pin
+(the engine version is part of the identified artifact — docs/e2e-research/49).
+So MuJoCo renders in a subprocess on the Python side, where the pin already
+holds, and the frames cross by shared memory.
+
+Consequence worth keeping: the Studio is GPU-accelerated because egui and
+Rerun render through wgpu, not because of a framework choice.
+
+### 10.2 The embedded agent panel (built 2026-08-30, deleted 2026-09-02)
+
+The app briefly had a full ACP (Agent Client Protocol) chat panel: live
+tool-call cards, markdown replies, a Stop button, prompt queueing, and
+the seven pipeline specialists as stage chips. It worked, and it was
+removed with the first open-core slice, along with about a thousand
+lines and the ACP dependency.
+
+**Why (the open-core decision, 2026-09-07):** developers already have an agent
+they trust and pay for. Embedding one makes us a worse IDE instead of a
+better instrument. The agent lives in the developer's own tool — Claude
+Code in a terminal, Cursor, VS Code, Claude Desktop — and reaches this
+repo through the MCP server (`trainnr/trainnr/mcp_server.py`). The
+Studio is what that agent *opens* to show a human something.
+
+The ACP work taught the protocol, and the protocol may matter again if
+the app ever hosts an agent for a non-developer audience.
+
+### 10.3 "What fills Rerun's role without embedding Rerun"
+
+The old §10 offered two options: a companion Rerun window, or native
+plot panels to avoid depending on Rerun's shifting API. An evening was
+spent building bespoke egui plot panels; the decision (2026-08-30) was to
+use exactly what Rerun does rather than reinvent it, and the embed
+replaced them.
+
+The rule that came out of it, and still holds
+(docs/e2e-research/55): **native panels only for glanceable state; the
+real Rerun viewer for anything with a scrubber, a query or a camera; the
+Studio never re-implements those.** Rerun's own time-series view is
+`egui_plot` on the exact egui version the shell pins, so a hand-rolled
+panel would have been the same code with fewer features.

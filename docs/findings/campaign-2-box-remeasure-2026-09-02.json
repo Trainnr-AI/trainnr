@@ -36,7 +36,7 @@
  "artifacts": {
   "pod_rows": "docs/artifacts/walk-verdicts/records-student-cuda.jsonl (policy student-last@5ca41ffb2fc6)",
   "box_rows": "runs/campaign-2/ on the WSL box (not tracked)",
-  "log": "docs/07-progress-log.md, entry 2026-09-02 (campaign 2)"
+  "log": "the maintainers' log, 2026-09-02 (not public)"
  },
  "sources": {},
  "protocol": "docs/e2e-research/63 \u00a72 (the certificate)",

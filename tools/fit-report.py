@@ -37,7 +37,7 @@ FOIL = (
     "different joints, byte-identical in Lightwheel's and Positronic's\n"
     "trees; Lightwheel's own two repos disagree on the same arm by 56x in\n"
     "stiffness. No intervals, no verdicts, no anchor, anywhere.\n"
-    "(docs/e2e-research/30-the-pipeline.md, read in their sources.)"
+    "(read in their source trees; the method is docs/76-the-loop.md, Identify.)"
 )
 
 

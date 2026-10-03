@@ -26,7 +26,7 @@
   "dynamics_draw": "damping x0.78 (one round)"
  },
  "artifacts": {
-  "log": "docs/07-progress-log.md B3.2 (2026-08-31)",
+  "log": "the maintainers' log, 2026-08-31 (not public)",
   "code": "pipeline/rq_pipeline/collect/multiply.py"
  },
  "sources": {},

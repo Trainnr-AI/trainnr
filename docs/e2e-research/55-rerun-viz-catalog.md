@@ -1,5 +1,11 @@
 # Rerun's visualization catalog, mapped to the Studio
 
+*Historical (2026-08-30). The split proposed in §3, native panels beside a
+separately spawned `rerun` viewer, was superseded: the Studio embeds the
+Rerun viewer (`rerun = 0.36.3` in `crates/trainnr-studio/Cargo.toml`) and
+its pages draw the glance-level panels themselves (docs/35-the-studio.md).
+The catalog in §1 and the logging inventory in §2 still hold.*
+
 *2026-08-30, from Rerun's own reference docs (rerun.io/docs/reference/types,
 fetched today) and crate metadata (docs.rs). The question: which of
 Rerun's views the Studio needs, which it renders natively, and which it
@@ -34,7 +40,7 @@ GeoLineStrings); **MCAP** (Channel/Message/Schema/Statistics);
 bookkeeping (AnnotationContext, Clear, RecordingInfo).
 
 Three entries earn a note against earlier research: `GaussianSplats3D`
-is first-class now (the splat capture layer of the-studio doc's phase 7
+is first-class now (the splat capture layer of the scene loop, docs/78-the-scene-loop.md,
 has a native display path waiting); the MCAP archetypes land exactly
 where docs/e2e-research/25-deployment-and-fleet-ops.md pointed for fleet logging; and
 `StateTimeline` is purpose-built for the stage/milestone bands the
@@ -49,7 +55,7 @@ their panels:
 |---|---|
 | `train-watch --follow` | TimeSeries (loss, l1, kld, grad norm, lr, samples/s, GPU), TextDocument (run manifest, trainer config), TextLog (stage), Image/video (eval episodes), the funnel per checkpoint |
 | `rig-rerun.py` / `trainnr/viz.py` | Spatial3D (Boxes3D batch + Mesh3D twin), Spatial2D (pose trail), TimeSeries (duty, ticks, angles, errors), TextLog (stage notes) |
-| `rl-watch` (rl-engineering branch, merges later) | its blueprint names verdict, reward terms, episode, losses, throughput, worlds grid |
+| `rl-watch` (`tools/rl-watch.py`) | its blueprint names verdict, reward terms, episode, losses, throughput, worlds grid |
 | `show-many.py` | batched DR worlds side by side (Spatial3D grid) |
 
 ## 3. The split: native panel vs the real viewer

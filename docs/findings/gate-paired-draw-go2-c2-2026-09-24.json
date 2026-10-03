@@ -10,13 +10,54 @@
  ],
  "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL box (Ubuntu under WSL2, x86_64); 20 held twists at seed 1000, each trial drawn from its own (seed, trial) stream (deploy.gate.DRAW_NOW = per-trial/2)",
  "outcome": {
-  "gate_count_draw": {"successes": 20, "trials": 20, "ci95": [0.8316, 1.0], "passed": true, "judged": "2026-09-12T18:57:47+00:00"},
-  "gate_paired_draw": {"successes": 18, "trials": 20, "ci95": [0.683, 0.9877], "passed": true, "judged": "2026-09-24T13:54:23+00:00"},
+  "gate_count_draw": {
+   "successes": 20,
+   "trials": 20,
+   "ci95": [
+    0.8316,
+    1.0
+   ],
+   "passed": true,
+   "judged": "2026-09-12T18:57:47+00:00"
+  },
+  "gate_paired_draw": {
+   "successes": 18,
+   "trials": 20,
+   "ci95": [
+    0.683,
+    0.9877
+   ],
+   "passed": true,
+   "judged": "2026-09-24T13:54:23+00:00"
+  },
   "failed_trials": [
-   {"trial": 0, "command": [0.04, 0.21, -0.03], "err_ratio": 0.672},
-   {"trial": 15, "command": [0.08, 0.0, 0.29], "err_ratio": 0.539}
+   {
+    "trial": 0,
+    "command": [
+     0.04,
+     0.21,
+     -0.03
+    ],
+    "err_ratio": 0.672
+   },
+   {
+    "trial": 15,
+    "command": [
+     0.08,
+     0.0,
+     0.29
+    ],
+    "err_ratio": 0.539
+   }
   ],
-  "certificate": {"successes": 38, "trials": 40, "ci95": [0.8308, 0.9939]},
+  "certificate": {
+   "successes": 38,
+   "trials": 40,
+   "ci95": [
+    0.8308,
+    0.9939
+   ]
+  },
   "attribution_paired_draw": "refused: the untouched baseline reads 18/20 [0.683, 0.9877], under the certificate's lower bound 0.8308",
   "attribution_count_draw": "most sensitive to latency 2 ticks, then kd 4 x (gate-attribution-go2-c2-2026-09-24)",
   "preflight_paired_draw": "passed 7/7 in simulation; peak torque demand 0.56x the force range (RL_calf) over the gate's first four paired twists, 0.45x under the old draw's",
@@ -27,8 +68,8 @@
   "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f"
  },
  "artifacts": {
-  "gate": "projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
-  "preflight": "projects/go2-walk/deploy/go2-c2-deploy-cited/preflight.json",
+  "gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
+  "preflight": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/preflight.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/preflight.json",
   "old_records": "the 2026-09-12 gate record was replaced by the re-run (its numbers are kept here, gate_count_draw); attribution.json beside the manifest is still the count-draw record, and the card marks it 'drawn by count (re-run to pair)'"
  },
  "sources": {

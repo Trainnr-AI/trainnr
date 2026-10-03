@@ -1,7 +1,7 @@
-# BAM's raw bench logs are public: the fitted interval paper 1 was missing
+# BAM's raw bench logs are public: the fitted interval the manuscript was missing
 
-*Researched 2026-09-05 (one agent, primary sources, URLs and dates
-inline). The question: can the "narrow" arm's declared ±10 % become a
+*Researched 2026-09-05 (primary sources, URLs and dates inline). The
+question: can the "narrow" arm's declared ±10 % become a
 FITTED interval without our own bench? Answer: yes for the XL330 and
 five other servos, on a CPU, in hours.*
 
@@ -68,7 +68,7 @@ section**. The consumer already exists:
 `identified-interval`. Missing for citation: the zip's sha256, BAM's
 git SHA, the optimiser configuration.
 
-## 4. The plan: a bootstrap refit, CPU only
+## 4. The plan: a bootstrap refit, CPU only (executed; results in §5–§6)
 
 Resample the 358 recordings by `(kp, mass, length)` block so the
 design stays balanced, process each replicate with `bam.process`,
@@ -77,9 +77,11 @@ minutes a fit, about eight CPU-hours, parallel across cores. Record
 per replicate the MAE and the parameter vector; the interval is the
 2.5–97.5 percentile per parameter. Write it into the bundle's
 `uncertainty` section plus a `metrics` section (zip sha256, BAM SHA
-`aa17d1c` = v1.0.2, trials, sampler, replicate count). Then the walk
-C1 gains the arm the thesis names — trained under the *identified*
-interval — beside point, declared ±10 % and ±30 %.
+`aa17d1c` = v1.0.2, trials, sampler, replicate count). Then the
+walk's randomization-width study ("walk C1": the microduck walk
+trained at point, declared ±10 %, declared ±30 % and the identified
+interval; manuscript §5.4 and §5.6) gains the arm the thesis names —
+trained under the *identified* interval.
 
 Honest caveats to print with it: the interval captures log-sampling
 variability on Rhoban's single unit and bench (their rig's
@@ -149,7 +151,7 @@ bundle for readers and for consumers that only understand boxes.
 **Run 2026-09-05 UTC:** three point arms and three identified arms on the
 refit bundle (`tools/walk-c1-refit-pods.sh`), certified at the refit's
 fit; then their matrix cells (record `walk-c1-refit` and
-`walk-mismatch-matrix-refit`). The paper's §5.4 is those certificates.
+`walk-mismatch-matrix-refit`). The manuscript's §5.6 is those certificates.
 
 ## 7. BAM's declared search bounds (read from the clone at aa17d1c, 2026-09-06)
 
@@ -158,7 +160,7 @@ Rhoban/bam's model module (its Parameter takes initial, min, max): `alpha` (1.35
 and `load_friction_external_quad` (0.0, 0.0, 0.01); the Stribeck load
 terms (0.05, 0.0, 1.0); `friction_base` and `friction_stribeck`
 (0.05, 0.0, max_friction_base); `friction_viscous` (0.1, 0.0,
-max_viscous_friction). its Dynamixel actuator module, the XL330 block:
+max_viscous_friction). Its Dynamixel actuator module (dynamixel.py under bam/actuators in their repository), the XL330 block:
 `kt` (0.7, 0.25, 1.5), `armature` (0.0005, 0.0001, 0.01). So the
 refit's alpha 0.5009 is at the declared floor, the bootstrap's alpha
 interval [0.50, 9.66] spans nearly the whole declared range, and the

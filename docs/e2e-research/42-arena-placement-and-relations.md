@@ -1,9 +1,16 @@
 # Arena's object and robot placement: relations, solver, validation — mapped to our harness
 
+*Source: the `isaaclab_arena` repository, read 2026-08-26 from a repomix
+bundle made in session (132,303 lines; commit not recorded). The bundle is
+not shipped; every `L<number>` below is a line of that bundle. Our-side line
+numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 *Sprint pass, 2026-08-26. One agent, one field, one primary source: a repomix
 bundle of the whole `isaaclab_arena` repository (132,303 lines). Every Arena
 claim is cited as `file.py:N` — *file.py* the path inside the repo, `N` the
-LINE IN THE BUNDLE (re-read with `Read offset=N`) — with a short quote.
+LINE IN THE BUNDLE (not shipped) — with a short quote.
 Nothing is from memory of Arena. Our side is cited by repo path and line.*
 
 Terms, defined once: **layout** = (x, y, z) plus yaw for every placed object;
@@ -174,7 +181,7 @@ placement bounds" — the Droid uses only its stand footprint
 - **A declared home.** `home` names the start keyframe, resolved by `backend.keyframe_state` (`harness.py:54-67`, `:93-97`; the 1 kN jam behind it, `docs/31-aloha2-e2e.md:53-67`). Arena's analogue is the anchor's fixed `initial_pose`.
 - **Spawn bands = `PositionLimitsBox` + `On`, hand-coded.** `PART_SPAWN` per arm (`trainnr/trainnr/tasks/aloha2/kitting.py:399-402`), `CUBE_SPAWN_X/Y` (`:62-63`), parts resting at `z = PART_HALF` (`:403-406`), the box body in `_add_free_box` with keyframes extended (`:259-283`, `:192-199`). `_corner_fraction(trial, inset)` cycles four corners (`:313-320`); kitting uses one draw for both parts (`:486-494`).
 - **Seeded uniform draws + rejection by the referee.** `tools/kitting-demos.py` seeds `np.random.default_rng(SEED)` (`:86`), draws in the proven front half (`:110-120`), keeps an episode "ONLY if the task's own referee scores it a success" (`:15-22`), and writes `seed/attempt/draws` to a manifest (`:168-175`). That is a validator — but it costs a 28 s episode and judges the demo, not the placement.
-- **Missing:** overlap, on-support, reachability and settle checks; placement verdicts in the record; a schema. "Where a part starts" is four constants and a slice index (`PART_STATE_SLICE`, `aloha2.py:409`).
+- **Missing:** overlap, on-support, reachability and settle checks; placement verdicts in the record; a schema. "Where a part starts" is four constants and a slice index (`PART_STATE_SLICE`, `aloha2.py:409` as of 2026-08-26; now the `tasks/aloha2/` package).
 
 ---
 

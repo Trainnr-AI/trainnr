@@ -1,7 +1,12 @@
 # Newton delta + live probe: it runs on the Mac, and it drops our sensors
 
+*Historical snapshot (2026-08-27): the release state (Newton 1.5.0 latest,
+1.6.0 expected mid-September) and the Isaac Lab beta status below are as
+of that day. The sensor-drop finding is measured in
+[51](51-solvermujoco-roundtrip.md).*
+
 *Fifth Newton pass, 2026-08-27 — one agent, primary sources plus a
-live install on this Mac (Apple Silicon, no CUDA, scratch venv).
+live install on an Apple M1 (arm64, no CUDA, scratch venv).
 Companions: [47](47-newton-docs-review.md) (docs review, main @
 1.6.0.dev0), [48](48-solver-landscape.md), [49](49-gpu-path-mjxwarp.md).
 Everything below VERIFIED on 2026-08-27 unless flagged.*

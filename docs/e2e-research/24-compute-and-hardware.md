@@ -1,16 +1,24 @@
 # Compute and hardware: what to run it on, what to build
 
+> **Archived.** Historical (written 2026-08-08, for a three-robot pilot plan with a
+> 24 GB RTX 3090 Ti under Windows/WSL as the only compute). Prices and
+> availability are of that date. Superseded by what was built: training
+> runs on mjlab and rented GPUs ([docs/34](../34-cloud-gpu.md)), the rig
+> this page would equip lives in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig). Kept as the record. Still useful:
+> §4's servo durability section (211–282), whose numbers are independent of
+> the plan.
+
 Research date: **2026-08-08**. Prices verified on that date — they moved a lot
 in 2025–26, so **verify at checkout rather than trusting this page**.
-Context: one 24 GB RTX 3090 Ti already owned, in a Windows/WSL machine.
 
 Re-verified **2026-08-15** where a primary source was reachable (WebSearch was
 exhausted; several store fetches were denied — those rows say so instead of
 silently keeping stale dates). One error in this doc's Jetson table was caught
 against its own cited source and corrected in place.
 
-> **TL;DR.** The owned 24 GB card removes the largest line item. The WSL
-> finding below has **narrowed** (2026-08-23): Gate A is now designed on
+> **TL;DR.** The 24 GB card already on hand removes the largest line item. The WSL
+> finding below has **narrowed** (2026-08-23): Gate A (the 2026-08 go/no-go
+> gate: does simulated evaluation predict the real ranking?) is now designed on
 > MuJoCo/MuJoCo Warp, not ManiSkill3, so what WSL provably blocks is only
 > reusing Squint's ManiSkill3 SO-101 task set — and **whether MuJoCo Warp
 > runs under WSL is now the load-bearing unrecorded question** (see §1).
@@ -48,16 +56,10 @@ built on MuJoCo, with MuJoCo Warp as the GPU path** — so what WSL provably
 blocks is now specifically **reusing Squint's ManiSkill3 SO-101 task set**,
 one candidate asset, not the evaluation path itself.
 
-⚠️ **The load-bearing question this table does not answer: does MuJoCo Warp
-(and `mjwarp-render`) run under WSL2?** Nothing in this corpus records it —
-the ✅ above covers CPU MuJoCo and MJX only. It is a one-afternoon experiment
-on the owned machine and it decides whether dual-boot matters at all. Filed
-in [27-open-questions.md](27-open-questions.md).
-
-**Recommendation, downgraded accordingly: dual-boot native Ubuntu remains the
-zero-risk position** (everything in the stack is Linux-first), but run the
-Warp-under-WSL experiment before spending the hours — if Warp works, WSL may
-be enough for everything this pipeline actually runs.
+**Does MuJoCo Warp (and `mjwarp-render`) run under WSL2?** When written,
+nothing in this corpus recorded it. Answered 2026-08-27: Warp runs on the
+WSL GPU ([49](49-gpu-path-mjxwarp.md), postscript 2), so dual-booting was
+never needed; every training run since has been WSL or a rented pod.
 
 ---
 
@@ -148,8 +150,8 @@ $95–130, and check the cart.**
 | MAXN | 739.2 ms | **1.35 Hz** |
 
 **A $3,499 device running a 450M-parameter model at 1.35 Hz.** Expect maybe
-2–4× from TensorRT and FP16, so call it 3–5 Hz optimised. The 275-TOPS figure
-on the box is meaningless for transformer inference. (Re-checked 2026-08-15:
+2–4× from TensorRT and FP16, so call it 3–5 Hz optimised. The AGX Orin's
+275-TOPS spec-sheet figure is meaningless for transformer inference. (Re-checked 2026-08-15:
 the benchmark repo is unrevised since 2026-04-30 and no newer Jetson-class VLA
 measurement was found; π0-class on Jetson remains rough — openpi issue #386 is
 still open and active. The 2–4× TensorRT guess now has one supporting
@@ -169,7 +171,7 @@ of motion for 0.74 s of compute** — that closes, with margin. So 1–3 Hz *is*
 usable for a chunked policy.
 
 **The disqualifier is the price, not the rate.** $399 × 3 units is $1,200 of a
-$1–3k budget, for compute you do not need:
+small pilot's budget, for compute you do not need:
 
 > **A LeKiwi-class base is already designed to run the policy off-robot.** The
 > Raspberry Pi is a network bridge for motors and cameras; the policy lives on a
@@ -242,7 +244,7 @@ actuator. Supporting evidence, all weak individually and consistent in direction
 number is making it up.**
 
 **One bench test now exists (added 2026-08-23), and it puts numbers on the
-thermal assessment below.** Evidence grade: operator-supplied summary of a
+thermal assessment below.** Evidence grade: a summary of a
 third-party video bench test, **single STS3215-12V unit**, video not archived
 — re-grade when linked. What it measured:
 
@@ -276,8 +278,8 @@ outlast the winding.
 3. **Torque-disable when idle**, with a park pose between cycles. Probably the
    single biggest win.
 4. **Poll the temperature and load registers yourself.** LeRobot will not.
-   Feetech's protocol exposes them. **This is required work, and it belongs in
-   the Tier 0 layer this repo already has** — see
+   Feetech's protocol exposes them. **This is required work, and it belonged in
+   the archived rig's Tier 0 layer** — see
    [19-the-system.md](19-the-system.md) §5.
 5. **Treat servos as consumables.** $13.89 each; a full six-motor respare is $84.
 
@@ -294,7 +296,7 @@ directory, not the issue.
 > **Do not try to buy 8 h/day reliability. Buy SO-101s with 12 V servos,
 > engineer the thermal mitigations, stock spares, and scope the pilot to 2–4 h
 > of *actuated* time per day. Prove the value proposition, then spend $4k/arm
-> on PiPER-class hardware with the pilot's revenue.**
+> on PiPER-class hardware once the pilot pays for itself.**
 
 ### The rest of the field
 
@@ -418,7 +420,7 @@ price on this page is moving.
 
 Scaling to three units adds roughly **$700–800 each** (arm, base, Pi, cameras,
 spares) — so a three-unit fleet lands around **$3,500–3,700**, i.e. above the
-$3k ceiling. **Build one, close the loop, then clone.** Cloning is exactly where
+plan's ceiling. **Build one, close the loop, then clone.** Cloning is exactly where
 per-unit system identification and calibration earn their keep.
 
 **Explicitly excluded, and why:** a training GPU (owned), Jetsons (policy runs

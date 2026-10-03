@@ -1,7 +1,6 @@
 # 77 — Native USD import: Isaac assets into a bundle, through Newton
 
-Research date: **2026-09-24**. The question, raised after the second
-standards review: can Isaac Sim's assets (`robotiq/isaacsim_assets`) be
+Research date: **2026-09-24**. The question: can Isaac Sim's assets (`robotiq/isaacsim_assets`) be
 used in the Studio directly, unchanged; and then: how USD becomes easily
 importable in the app, natively, through Newton and Warp.
 
@@ -41,7 +40,7 @@ five-bar finger linkage) and cannot live in a tree.
    The USD path earns its keep the day Robotiq or anyone publishes a
    USD asset Menagerie lacks, and the day a customer brings an Isaac
    asset of their own robot to the Studio.
-4. **The least-code path is additive** (docs/33's rule): Newton is the
+4. **The least-code path is additive** (the rule: use what exists): Newton is the
    reader and the MJCF writer; ours is the bundle writer around it
    (names, mesh files, provenance, sensors, the record) and the test
    that the bundle says what the USD said. About three days (§6).
@@ -174,7 +173,7 @@ The written MJCF with its inline vertex data elided is kept beside the
 stills (`docs/figures/usd-import/2f85-newton-compliant-elided.xml`).
 Hulls are what the stills show, because hulls are all the solver wrote.
 
-### 4.1 Built: the bundle (2026-09-24, branch `usd-bundle-2026-09-24`)
+### 4.1 Built: the bundle (2026-09-24)
 
 Every item above is now the writer's (`trainnr/trainnr/robot/usd_import.py`)
 and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
@@ -196,9 +195,11 @@ mujoco-warp 3.11.0), and pinned by `trainnr/tests/test_usd_import.py`:
 | Names | leaf names: `left_outer_knuckle`, `finger_joint`, `base_link_hull`, `base_link_visual` |
 | Meshes | `assets/<body>_hull.obj` (≤ 64 vertices, group 3) and `assets/<body>_visual.obj` (the USD's own mesh: 31,109 vertices on the base, 756 on a knuckle, group 2, no contact); no inline vertex data |
 | Closing from the `home` key | finger 0.8003 rad of 0.8, loops within 7.7 mm, at rest |
-| On a bench with a 30 mm cube between the pads (`tools/show-2f85-isaac.py`) | finger stops at 0.794 rad on the block, 4 contacts, the block held 29 mm below where it sat (the fingertips curl in as the five-bar closes) — stills below, the Rerun recording under `runs/` | *Since the mimic carries its authored 0.005 s (2026-09-25): the finger stops at 0.756 rad (was 0.794), 4 contacts, the block held at the same 29 mm; the stills are re-rendered.*
+| On a bench with a 30 mm cube between the pads (`tools/show-2f85-isaac.py`) | finger stops at 0.794 rad on the block, 4 contacts, the block held 29 mm below where it sat (the fingertips curl in as the five-bar closes) — stills below, the Rerun recording under `runs/` |
 | Physx_parallel_grip variant | 6 hinges, 5 joint equalities, 1 actuator |
 | Record | `bundle.json` carries `provenance`: repository, commit 6d992b6, file, both variant selections, root, `mesh_maxhullvert`, grip options, licence CC-BY-4.0, Newton's own census, the reader's versions |
+
+*Since the mimic carries its authored 0.005 s (2026-09-25): on the bench the finger stops at 0.756 rad (was 0.794), 4 contacts, the block held at the same 29 mm; the stills are re-rendered.*
 
 ![The bundle on a bench, a cube between the pads](../figures/usd-import/bundle_open.png)
 ![Closed on the cube: four contacts, held](../figures/usd-import/bundle_closed.png)
@@ -272,14 +273,14 @@ door's registry lives in `trainnr/trainnr/robot/onboarding.py`
 public asset is fetched at a pinned commit by
 `trainnr/trainnr/robot/asset_fetch.py` (Git LFS aware, the
 empty-file refusal) and `tools/import-usd.py --fetch`; the schema
-registry refusal was not planned. The plan as written:
+registry refusal was not planned. The plan as written (historical;
+§4.1 above is what shipped):
 
 1. **Day 1 — the reader and the test first.** *trainnr/robot/usd_import.py*: open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
 2. **Day 2 — the bundle writer and the door.** Leaf names, mesh files, `ctrlrange` from the driven joint's range, the sensor block, a `home` key, `--free`/`--attach` root, the record with provenance, README with the CC BY line and the runtime options Robotiq recommends as a declared `<option>`. The onboarding registry gains `.usd|.usda|.usdc|.usdz`; `onboard_robot` in the Studio's MCP surface names the variant selections in its arguments; a missing `newton` refuses with the install line per OS.
 3. **Day 3 — seen and written.** The imported gripper on a task in the Studio (closing on a block, both viewers, stills), the census against the record, docs/07, a docs/33 row, tools/README rows, this document's §4 replaced by the bundle's numbers.
 
-The same evening, every door gained the audit (branch
-`importer-audit-2026-09-24`; docs/07): the compiled bundle against the
+The same evening, every door gained the audit: the compiled bundle against the
 source as authored, per body (mass, centre of mass, the full inertia
 tensor), per joint (type, range, armature, damping, friction loss,
 stiffness, force range) and per element class, with the reader's
@@ -309,14 +310,13 @@ default 0.02 s); a PhysX-only natural frequency is still not converted.
 
 Newton's MuJoCo solver IS mujoco_warp, the engine our `gpu`/`mjx`
 extras already run; a bundle imported through Newton runs on it
-unchanged, which is the docs/33 line about the identified `mjModel`
-running on every instrument. Newton's own solvers (XPBD, VBD,
+unchanged: the identified `mjModel` runs on every instrument. Newton's own solvers (XPBD, VBD,
 Featherstone, the implicit MPM) are a third instrument: a new backend
 behind `physics/registry.py`'s seam, a new stamp qualifier, a
 CPU-vs-Newton gauntlet like the MJX one, and the same
 metrology-before-belief rule. That is a week, not a day, and it is
 worth it when a task needs what mujoco_warp lacks (deformables, MPM
-sand, cloth), not for importing a gripper. docs/76 already names where
+sand, cloth), not for importing a gripper. [76](76-physics-on-gaussians-2026-09.md) already names where
 Newton attaches gaussians to bodies; the import path above is the
 first piece of that road and costs nothing it would not need anyway.
 

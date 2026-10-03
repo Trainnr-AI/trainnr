@@ -1,8 +1,14 @@
 # The end-to-end system: from this repo to a robot fleet
 
-> **Archived code.** The Rust crates, firmware and emulator tools this page
-> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
-> on 2026-10-02; the paths below are relative to that repository.
+> **Archived.** Historical (written 2026-08-08, for a three-robot pilot plan). This was
+> the system map of the 2025–26 microcontroller rig: four tiers, a latency
+> budget, a failover design. The rig's crates, firmware and emulator tools
+> live with their history in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig); `trainnr` in the text below means that
+> 2026-08 rig codebase, not the platform this repository now is. Superseded
+> by [docs/76](../76-the-loop.md) (the loop) and
+> [docs/22](../22-pipeline-architecture.md) (the architecture); kept as the
+> record. Still useful: §2 (the latency budget) and §3 (failover), which
+> [25](25-deployment-and-fleet-ops.md) cites.
 
 Research date: **2026-08-08**. Context: what a commercial mobile-manipulator
 pilot actually requires end to end — data gathering, data generation,
@@ -10,7 +16,7 @@ simulation, sim training, real training, app, deployment, telemetry — and
 where `trainnr` fits in it.
 
 > **TL;DR.** Four tiers. **Tier 0 (safety) and Tier 1 (real-time) stay Rust on
-> the MCU and are what this repo is for.** Tier 2 (autonomy) and Tier 3 (fleet
+> the MCU and were what the rig was for.** Tier 2 (autonomy) and Tier 3 (fleet
 > and learning) are Python, because LeRobot and MuJoCo are, and rewriting them
 > would be the single most expensive mistake available. The policy runs **off
 > the robot**, on a LAN GPU, because the latency budget allows it and onboard
@@ -29,10 +35,7 @@ This document is the map. The twelve that follow it are the territory:
 | [25-deployment-and-fleet-ops.md](25-deployment-and-fleet-ops.md) | serving, logging, OTA, metrics |
 | [26-safety-and-regulation.md](26-safety-and-regulation.md) | what the law requires |
 | [27-open-questions.md](27-open-questions.md) | what we still do not know |
-| [28-wifi-on-the-chip.md](28-wifi-on-the-chip.md) | why the MCU stays tethered |
-| [29-the-company.md](29-the-company.md) | the business thesis and the value chain |
-| [30-the-pipeline.md](30-the-pipeline.md) | the product: twelve stages, three gates |
-| [31-defects.md](31-defects.md) | what review found wrong in all of the above |
+| (four further notes of this pass — the MCU's radio, the business thesis, the twelve-stage pipeline brief and the defects review — stay with the maintainers) | |
 
 ---
 
@@ -49,7 +52,7 @@ organising principle that survives contact with a real deployment.
 ├ TIER 2 · AUTONOMY — a cheap Linux SBC on each robot ─────────────────┤
 │  camera capture · compression · clock and session · link to Tier 3   │
 │  MAY FAIL: yes, IF Tier 1 notices and stops.                         │
-├ TIER 1 · REAL-TIME — the microcontroller. THIS REPO. ────────────────┤
+├ TIER 1 · REAL-TIME — the microcontroller. THE RIG. ──────────────────┤
 │  joint and wheel control · odometry · 50–1000 Hz                     │
 │  MAY FAIL: no. A missed deadline is a physical event.                │
 ├ TIER 0 · SAFETY — same MCU, cannot be overridden by anything above ──┤
@@ -62,7 +65,7 @@ organising principle that survives contact with a real deployment.
 The arrow of trust points **downward only**. Tier 3 may *request* motion;
 Tier 0 decides whether motion happens. Nothing above Tier 1 can widen a limit.
 
-`trainnr` today is a complete Tier 1 with a partial Tier 0 — `CommandWatchdog`
+The rig, at this date, was a complete Tier 1 with a partial Tier 0 — `CommandWatchdog`
 exists and is tested, but no motor has ever been attached to it.
 
 ---
@@ -193,7 +196,7 @@ Three things in that diagram are the difference between a system and a demo:
 
 ---
 
-## 5. What `trainnr` becomes
+## 5. What the rig codebase was to become
 
 This needs saying plainly, because it is the part that is easy to get wrong out
 of attachment.
@@ -203,7 +206,7 @@ of attachment.
 LeRobot, `mujoco.sysid`, every policy, the dataset format, the evaluation
 benchmarks. There is no Rust path to any of it, and building one would consume
 the entire six months to arrive at a worse version of something free. The
-"end-to-end Rust" goal in the README survives *below* the policy, not above it.
+"end-to-end Rust" goal in the rig's README survives *below* the policy, not above it.
 
 ### What survives, and is worth more than it looked
 
@@ -238,7 +241,7 @@ where `CommandWatchdog` already lives. Details in
 - **The two bespoke recording formats.** MCAP is the fleet standard and has a
   mature Rust crate — see [25-deployment-and-fleet-ops.md](25-deployment-and-fleet-ops.md).
 
-None of that is wasted. The Stage 0–2 work bought the two things that cannot be
+None of that is wasted. The rig's early build stages (Stage 0–2 in its own roadmap) bought the two things that cannot be
 bought later: a Tier 0/1 that is actually trustworthy, and the verification
 reflex that makes every number in these documents something we would check
 rather than believe.

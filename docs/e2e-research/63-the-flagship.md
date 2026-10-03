@@ -1,11 +1,15 @@
 # The flagship (C2): microduck's capability, rebuilt so its flaws are impossible
 
-*2026-09-01. The scoping doc for docs/00 Phase C2, redirected
-2026-08-31: not a replica of microduck, but the cross-framework setup
+*2026-09-01. The scoping doc for the second campaign, C2 (the
+microduck walk; C1 was the paired lift study, [62](62-paired-study.md);
+C3 and C4 below are the planned outreach and deployment-manifest
+campaigns), redirected 2026-08-31: not a replica of microduck, but the cross-framework setup
 plus everything microduck taught, built into an improved version that
 serves the any-robot claim. Everything cited here is measured in
 [57](57-bam-source-and-microduck.md) (their code, read line by line)
-or built and tested in this repo. Status: SCOPE — no code yet.*
+or built and tested in this repo. Status: gates G1–G4 (§3) all
+CLOSED by 2026-09-02; the run and its certificates are under
+`docs/artifacts/walk-verdicts/`.*
 
 ## 0. The one-sentence goal
 
@@ -22,7 +26,7 @@ stranger.
 
 | Theirs (measured, 57 §5) | Ours (exists, tested) | What can no longer happen |
 |---|---|---|
-| Fitted params resolve via a private API in one script and `~/Rhoban/bam/params/xl330/m6_new.json` on a laptop in another; no hash, no date; four rival actuator classes named `old`/`new`/`antoine`/`marc` | The certified bundle store: their m6 fit wrapped verbatim with provenance + content-hash stamp (`robots/actuator-bundles/xl330.m6`), `verified_bundle` refusing tampering, the stamp carried on every cfg and record | "Which fit trained this policy" has one answer, checkable by anyone |
+| Fitted params resolve via a private API in one script and `~/Rhoban/bam/params/xl330/m6_new.json` on a laptop in another; no hash, no date; four rival actuator classes named `old`/`new`/`antoine`/`marc` | The certified bundle store: their m6 fit wrapped verbatim with provenance + content-hash stamp (`robots/actuator-bundles/xl330.m6.bundle.json`), `verified_bundle` refusing tampering, the stamp carried on every cfg and record | "Which fit trained this policy" has one answer, checkable by anyone |
 | Five silent no-op DR knobs (frictionloss + damping randomizers the actuator overwrites, an IMU field nothing reads, a mass no-op under 1.3, post-init config writes); a decorator-carrier event every env must remember | `trainnr_mjlab.linter` — DR terms writing overwritten fields REFUSE at construction; the expansion event is auto-registered and its absence raises | Turning a dial that does nothing; forgetting the event |
 | Fitted-treated-as-exact beside hand-guessed ranges (±10 % friction scalar typed by hand; sag and delay ranges undocumented guesses their own testbench contradicts) | `dr_from_bundle` / `declared_ranges`: sampling regions come from the bundle's identified intervals or a caller-DECLARED span whose basis string says so; a point estimate with no span refuses | Randomizing from folklore while calling it measured; un-attributed ranges |
 | Training telemetry: none (mjlab's recorder API is empty; their monitoring is the viewer's reward strip) | `RerunRecorder` → the Studio; the cloud feed tool (`tools/studio-cloud-feed.py`) for rented cards; the status card | Training you cannot watch or archive |
@@ -36,24 +40,24 @@ terminations, the CoM-audit habit. The flagship adopts those, cited.
 ## 2. The slice
 
 Their robot, their task family, our machinery, sim only (hardware
-waits on docs/38):
+waits):
 
 1. **The robot**: microduck's MJCF wrapped as a robot bundle
    (`robots/microduck/`, hash-stamped; acquisition = their public repo,
-   fetched when the network allows or from the Mac's packs). The XL330
+   fetched when the network allows or from the repomix packs). The XL330
    m6 fit is ALREADY in our store as a certified bundle.
 2. **The env**: their velocity-tracking walk expressed as an mjlab task
    consumed through `trainnr_mjlab` — `BamActuatorCfg.from_bundle` (the
    identified law, per-world DR draws from `declared_ranges`), the
    linter green by construction, the RerunRecorder attached.
-3. **Training**: rsl-rl through mjlab, smoke on the box (short-local-
-   runs rule), real scale on a rented card with the Studio watching.
+3. **Training**: rsl-rl through mjlab, a short local smoke first,
+   real scale on a rented card with the Studio watching.
 4. **The verdict**: a locomotion certificate in C1's shape — seeded
    paired episodes, tracking error + fall counts with exact intervals,
    both instruments, the bundle stamp and engine stamp on every row.
 5. **The diff**: one table, their repo vs this run, every row of §1
-   with its evidence — the outreach artifact C3's mjlab/Rhoban
-   conversations lead with.
+   with its evidence — the artifact the planned upstream
+   conversations (C3) lead with.
 
 ## 2.1 The transcription source, pinned (2026-09-01, G2 recon)
 
@@ -132,8 +136,8 @@ the linter's showcase refusal.
 **Curricula** (from §2.1): `standing_envs`, `pose_command_range`,
 `com_range`, ramped reward weights — 1.6 re-expression decided at
 build time (mjlab 1.6 curricula mutate cfg in place; ours must stay
-hashable — the one design tension the transcription must resolve,
-docs/33's "mjlab cannot hash a task" row cuts both ways).
+hashable — the one design tension the transcription must resolve;
+  that mjlab cannot hash a task cuts both ways).
 
 ## 3. Gates, in order
 
@@ -142,14 +146,14 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
 - G2: the env builds through trainnr_mjlab with zero linter findings and
   the m6 bundle's stamp on the cfg; a 2-minute smoke train on the box
   moves in the Studio.
-- G3: the real training run (paid, on the maintainer's go) reaches a walking
+- G3: the real training run (on rented compute) reaches a walking
   gait; recorder + feed archives the run. **CLOSED 2026-09-01**: 8,000
   iterations on a rented RTX PRO 6000 (1 h 30 m ≈ $3.15, 4,096 envs,
   0.70 s/iter, ~140k steps/s), mean reward 108→117.9, fell_over→0;
   live in the Studio through the feed's rsl-rl leg; run archived at
   `runs/microduck-walk/20260901-163412` (identity.json + model_7999.pt
-  + tfevents + log pulled to the box; full checkpoints on the pod
-  volume). Judged on screen via `walk_play` (native viewer + recorder,
+  + tfevents + log kept locally; full checkpoints on the pod
+  volume; the certificates are in `docs/artifacts/walk-verdicts/`). Judged on screen via `walk_play` (native viewer + recorder,
   identity-gated): ducks locomote under command and survive pushes —
   the gait is HOPPING-flavoured, consistent with the recipe (air_time
   weight 3.0 is the largest positive term, nothing rewards left-right
@@ -158,7 +162,7 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
   (nothing in the reward watches head posture; likely ballast). Both
   are §4 gait aesthetics — recorded, not retuned.
 - G4: the certificate, on both instruments, committed with the run's
-  stamps; the §1 diff table lands in docs/33 with dates. **CLOSED
+  stamps; the §1 diff table recorded with dates. **CLOSED
   2026-09-02**: `trainnr_mjlab.walk_verdict` — one seeded episode per
   trial under FULL DR and pushes, two declared milestones (survived;
   tracked = episode-mean planar velocity error closes at least half
@@ -179,9 +183,9 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
   cm/s planar wobble does not shrink — the certificate NAMES the
   gait's weakness (station-keeping) instead of a demo video hiding
   it. Zero falls in 80 episodes under DR and pushes. Artifacts:
-  `runs/microduck-walk/20260901-163412/verdict/` (records-{cuda,cpu}
-  .jsonl + walk-verdict-{cuda,cpu}.json); criterion pinned by
-  `tests/test_walk_verdict.py`. The plain-CPU-MuJoCo third instrument
+  `docs/artifacts/walk-verdicts/` (records-{cuda,cpu}.jsonl +
+  walk-verdict-{cuda,cpu}.json, copied from the run's `verdict/`);
+  criterion pinned by `trainnr-mjlab/tests/test_walk_verdict.py`. The plain-CPU-MuJoCo third instrument
   belongs to C4's deployment manifest, where the policy leaves torch.
 - Each gate is a session-scale unit; G3 is the only one that costs
   money.
@@ -189,15 +193,21 @@ docs/33's "mjlab cannot hash a task" row cuts both ways).
 ## 4. Out of scope, said now
 
 Their exact reward weights and gait aesthetics (we compare processes,
-not policies); hardware deployment (docs/38's arc); ROS/real-time
+not policies); hardware deployment; ROS/real-time
 runtime work; beating their walk speed. The flagship's claim is the
 PIPELINE — measured, stamped, rerunnable — not a better duck.
 
-## 5. Open questions, parked
+## 5. Open questions, as parked on 2026-09-01 (historical)
+
+*All three were settled the same week: the MJCF is vendored at
+`robots/microduck/` from their public tree with its licence; G3 ran
+straight on a rented card after a local smoke; the deployment
+manifest (C4) shipped separately.*
 
 - Which repo the microduck MJCF is vendored from (their public tree
-  vs the Mac's repomix pack), and its license ride-along.
-- Whether G3 runs on this box at reduced scale first (mjlab at 3090 Ti
-  smoke proved in B4) or goes straight to a rented card.
+  vs the repomix pack), and its license ride-along.
+- Whether G3 runs locally at reduced scale first (the mjlab smoke on
+  an RTX 3090 Ti, B4 in the earlier build log) or goes straight to a
+  rented card.
 - Whether the C4 manifest work lands inside C2 (as §1's last row
   assumes) or ships separately first.

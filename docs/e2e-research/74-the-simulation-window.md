@@ -9,7 +9,7 @@ date on every claim; a fifth source is a Repomix bundle of the
 what each source says, per field, with its gaps. §6 is ours: what it
 means for the Studio's rail. Nothing in §6 is a claim about the field.
 
-The standing rule (docs/76 §2): no new vocabulary. Where the field has a
+The standing rule ([docs/76 §2](../76-the-loop.md)): no new vocabulary. Where the field has a
 word for a thing, the Studio uses it; this document is where the words
 were checked.
 
@@ -209,7 +209,7 @@ MuJoCo C library, with a native viewer (re-)written in Rust."
 - **The viewer is a window of its own.** `MjViewer` "can be launched only
   in passive mode… and needs to be periodically 'synced' by the user
   application"; it owns a winit window with a glutin GL context
-  (its winit and glutin base module). Physics may run on another thread through
+  (mujoco-rs's `viewer` module). Physics may run on another thread through
   `ViewerSharedState` (`sync_data`, `sync_model_opt`, …). With the
   `viewer-ui` feature it draws a side panel in **egui 0.36.1** — the
   Studio's own egui — "which tries to replicate the original C++ viewer
@@ -256,7 +256,9 @@ scene plus task (`InteractiveSceneCfg` plus the managers), and the
 runtime (`SimulationCfg`). Gazebo says it in processes: the SDF world,
 the server, the GUI. MuJoCo's `simulate` collapses the three into one
 window because a model file is the whole world. Our rail has Robots
-(assets) and Environments (scene plus task). The runtime has no page.
+(assets) and Environments (scene plus task). The runtime had no page
+when this was written; the Simulator page absorbed the Live view the
+same day ([docs/76 §10.2](../76-the-loop.md)).
 
 **What a runtime page holds, by the sources' own lists.** The common
 core across `simulate`'s Simulation section, Gazebo's World Control and
@@ -286,8 +288,8 @@ as the domain randomization range. Nothing to add.
 Isaac: `--headless` and a WebRTC stream. Gazebo: `-s` and a GUI that
 attaches. MuJoCo: EGL and an offscreen context. Our equivalent exists
 already: the presenter streams into the Live view, and the agent
-screenshots it (docs/76 §10.1). A headless run writes the same
-recording and the window opens it later (docs/76 §10).
+screenshots it ([docs/76 §10.1](../76-the-loop.md)). A headless run writes the same
+recording and the window opens it later ([docs/76 §10](../76-the-loop.md)).
 
 **The words, checked.** Simulation (Isaac: "Simulation Scene",
 "Simulation Steps per Second"; Gazebo: "sim time"; MuJoCo:
@@ -296,7 +298,8 @@ timestep and integrator and solver (MuJoCo, Isaac Lab), real-time
 factor (Gazebo), keyframe (MuJoCo), perturbation (MuJoCo's `mjvPerturb`),
 render interval and decimation (Isaac Lab). None of these is ours.
 
-**Not settled here, and left for the discussion:** whether "Live view"
+**Not settled here, and left for the discussion** (settled the same
+day: the Simulator page, [docs/76 §10.2](../76-the-loop.md)): whether "Live view"
 becomes the runtime page or stays beside it; and how far the viewport's
 subprocess protocol grows (run, pause, step, sliders, keyframes, flags
 are each one tagged stdin message away, on the wire that already carries

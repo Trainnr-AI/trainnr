@@ -1,9 +1,5 @@
 # Deployment, fleet operations and telemetry
 
-> **Archived code.** The Rust crates, firmware and emulator tools this page
-> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
-> on 2026-10-02; the paths below are relative to that repository.
-
 Research date: **2026-08-08**. Question: what does it take to run 2–3 robots at
 a customer site — serving policies, logging, updating, and knowing whether it is
 working?
@@ -16,7 +12,7 @@ working?
 
 > **TL;DR.** Serve from a **LAN GPU over gRPC with real-time chunking**;
 > **quantization is not the lever** at batch size 1. Log to **MCAP**, which has
-> a mature Rust crate and would replace this repo's two bespoke formats.
+> a mature Rust crate and would replace the archived rig's two bespoke formats.
 > **Calibration is device state, not artifact state** — and every episode must
 > record which calibration was active, or your training data is silently
 > corrupted. Rollout goes offline-replay → shadow → canary → fleet, because you
@@ -139,9 +135,9 @@ zstd/lz4 and async via tokio. Version cadence 0.23.3 (Aug 2025) → 0.24.0 (Dec
 the same compatibility promise. **That is a mature, widely-used crate — a
 legitimate foundation, not a science project.**
 
-For this repo specifically: MCAP is the obvious eventual replacement for the two
-bespoke formats behind `crates/hil-host/src/wire.rs` and the perception
-recorder. It keeps replay-as-regression-test, and gains Foxglove, Rerun and
+For the archived rig specifically: MCAP is the obvious eventual replacement
+for the two bespoke formats behind its hil-host wire recorder (crates/hil-host/src/wire.rs) and the
+perception recorder ([Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)). It keeps replay-as-regression-test, and gains Foxglove, Rerun and
 rosbag2 compatibility **without adopting ROS 2**.
 
 ### Volume and cost
@@ -159,8 +155,7 @@ regime.
 
 ⚠️ **That total is this table's own arithmetic, not an industry figure**,
 and it is worth saying so because two independent research passes on
-2026-08-10 went looking for a primary source and found none — see
-`28-wifi-on-the-chip.md` §5. Inverting it gives 4.2–5.6 Mbit/s, which is
+2026-08-10 went looking for a primary source and found none. Inverting it gives 4.2–5.6 Mbit/s, which is
 consistent with one compressed camera plus lidar and odometry, so the
 decomposition holds together. But do not cite it as a measured
 industry-wide number, because nobody appears to have published one.
@@ -200,8 +195,8 @@ web console for the operator.** They are different products for different
 people, and merging them produces something bad at both. The operator console
 needs about six things: which robot, what task, autonomy versus intervention
 state, one live camera, a big stop button, and a take-over button. **A week, not
-a quarter.** Given this repo's Rust/WASM direction, a Rust→WASM console reading
-MCAP-schema'd messages over WebSocket is a coherent fit.
+a quarter.** Given the archived rig's Rust/WASM direction, a Rust→WASM console reading
+MCAP-schema'd messages over WebSocket was a coherent fit.
 
 ---
 

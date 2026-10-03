@@ -1,12 +1,18 @@
 # Isaac Lab Arena: environment definition and agentic environment generation
 
+*Source: the `isaaclab_arena` repository, read 2026-08-26 from a repomix
+bundle made in session (132,303 lines; commit not recorded). The bundle is
+not shipped; every `L<number>` below is a line of that bundle. Our-side line
+numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 *Fifth pass, 2026-08-26. One agent, one field, against a single primary
 source: a repomix bundle of the whole `isaaclab_arena` repository
-(132,303 lines, read in session at the commit stated below; the line
-numbers cited here are lines of that bundle, not of a file in this tree).
-Tests [the loop](../30-the-full-loop.md)
-§3.6 (coding agents write the leaves, gates judge them) and §3.1/①
-(scenes are programs) against the one shipping system that already has
+(132,303 lines, read in session; the line numbers cited here are lines
+of that bundle, not of a file in this tree). Tests two of the loop's
+rules, that coding agents write the leaves and gates judge them, and that
+scenes are programs, against the one shipping system that already has
 an LLM writing evaluation environments behind validation gates.
 Citations are `repo/path.py · arena.md:LINE`: the file inside Arena's
 tree, and the bundle line where the quoted text sits. Nothing below
@@ -23,7 +29,7 @@ library that validates data against typed classes and emits a JSON schema
 from them. A **registry** here is a name→class dictionary filled by decorators.
 **MjSpec** is MuJoCo's programmatic model-building API — what our task builders
 use instead of XML. A **bundle** on our side is a directory identified as
-`name@hash` (`trainnr/bundles/hashing.py::stamp`).
+`name@hash` (`trainnr/trainnr/bundles/hashing.py::stamp`).
 
 ## 1. What Arena does
 
@@ -93,7 +99,7 @@ Measured quality and its limits, in Arena's words: public `openai/gpt-oss-120b` 
 - **The protocol object.** `trainnr/evaluate/harness.py::EpisodeProtocol(trials, steps, control_interval, perturb, success, home)` is our `TaskSpec` + termination + episode length; `perturb(trial, home)` is keyed by trial index so trials are paired across policies (Arena's `placement_seed` role, but deterministic by construction); `home` names the bundle keyframe (docs/31 §2).
 - **Gates.** `score_policies` refuses duplicate policy names and any `source` without `@hash`, then census-gates via `robot/model_checks.py::assert_model_alive(actuators, sensors, geoms, cameras)` — the equivalent of Arena's "fail before the simulator starts", at the model level. `bundles/profile.py::load_profile` rejects unknown keys ("a misspelled field would otherwise fall back to a default and lie quietly") — the same posture as Pydantic strict mode, in stdlib.
 - **Identity.** `bundles/hashing.py::stamp` gives `name@hash`; Arena has no content hash on a spec — its reproducibility claim rests on "the reviewed YAML", unhashed.
-- **The agent layer as practice.** docs/30 §3.6: agents write scene programs, protocols, referee sensors, adapters; three rules (never grade own output; artifacts not forks; envelope off-limits). docs/33's verdict added verifier co-evolution and counterexample-as-feedback — which is exactly Arena's critic loop.
+- **The agent layer as practice.** The loop's rule: agents write scene programs, protocols, referee sensors, adapters, under three rules (1: an agent never grades its own output; 2: artifacts, not forks; 3: the physics envelope is off-limits to the agent). The later verdict added verifier co-evolution and counterexample-as-feedback — which is exactly Arena's critic loop.
 - **Smoke test.** The "limp" floor policy in every harness ladder is Arena's zero-action policy; `tools/kitting-demos.py` filters demos through the referee.
 
 What we do not have: a declarative spec at all (tasks are Python); any catalogue of what an agent may use; any load-time cross-reference check (a misspelled geom name in a referee dies inside MuJoCo, not at the boundary); any placement/reach check before episodes are spent (spawn bands are hand-measured constants, `PART_SPAWN`).
@@ -103,10 +109,10 @@ What we do not have: a declarative spec at all (tasks are Python); any catalogue
 ### Adopt
 
 1. **A task spec, validated at load, hashed as an artifact.** `trainnr/tasks/spec`: a stdlib dataclass (same reason as `RobotProfile` — the bundles layer stays dependency-free) loaded from YAML with fields `bundle` (`name@hash`), `look`, `bodies[] (id, kind: box|…, half, rgba, contact, home)`, `fixtures[]` (static geoms such as slot walls), `cameras[]`, `referees[] (id, sensor type, target geom/site)`, `relations[] (kind, subject, reference, params)` limited to what `perturb` can realise (`is_anchor`, `on`, `spawn_band`, `next_to`), `task (kind, params)` where every string param must be a node id, and `protocol (trials, steps, control_interval, home, hold_steps)`. The builder turns it into the `MjSpec` that `build_kitting` builds today. Load gates, in Arena's order: (a) unknown keys → error; (b) unique ids, every relation endpoint and task param names a node; (c) `task.kind` in a task registry and its required/optional params read from the success builder's signature (`_collect_init_params` pattern, `arena.md:19333-19360`); (d) bundle names exist — `home` is a keyframe in the bundle, every referee target and camera name resolves through `mj_name2id` on the *compiled* model, the analogue of Arena's prim-tree check (`arena.md:20237-20254`). The written spec is stamped `task-<name>@hash` and cited by every certificate — closing the gap Arena leaves open (§2, identity).
-2. **The agent loop shape, without the LLM backend.** Our coding agent edits the YAML (and only the YAML) in a `resolve` step; a `build` step compiles, census-gates, runs the limp policy for N steps, and *then* the scripted expert under the protocol — success from the referee, never from the author (rule 1). Feed the gate's trace lines back as the next prompt, cap at three rounds (`MAX_SPEC_INFERENCE_CALLS`, `arena.md:20566`), and on failure write `invalid_<name>.yaml` with the traces as YAML comments (`arena.md:20772-20791`) so the operator can fix it without re-prompting. Keep Arena's honesty outputs: an `unavailable` list for anything the prompt asked for that the catalogue cannot supply (`arena.md:19486-19494`).
+2. **The agent loop shape, without the LLM backend.** Our coding agent edits the YAML (and only the YAML) in a `resolve` step; a `build` step compiles, census-gates, runs the limp policy for N steps, and *then* the scripted expert under the protocol — success from the referee, never from the author (rule 1, an agent never grades its own output). Feed the gate's trace lines back as the next prompt, cap at three rounds (`MAX_SPEC_INFERENCE_CALLS`, `arena.md:20566`), and on failure write `invalid_<name>.yaml` with the traces as YAML comments (`arena.md:20772-20791`) so the operator can fix it without re-prompting. Keep Arena's honesty outputs: an `unavailable` list for anything the prompt asked for that the catalogue cannot supply (`arena.md:19486-19494`).
 3. **A catalogue that costs nothing.** `--mode schema | catalog | bodies` printing the spec schema, the task/relation/referee vocabulary, and the bundle's body/site/geom/camera/keyframe tree (Arena's `prim_tree`, `arena.md:111032-111051`) — so an agent picks names from a printed tree instead of guessing, and the gate checks them against that same tree. `@agent_ready` becomes an explicit allow-list on our task builders; it costs one attribute (`arena.md:25857-25860`).
 4. **A placement gate with per-check counts.** Before any episode: at each paired start, `mj_forward` and refuse penetrating contacts (what the kitting work found by hand), and run `robot/arm_ik.py::solve_arm_ik` to the grasp target at every spawn corner; print `passed per check: no_overlap=4/4, reachable=3/4` in Arena's format (`arena.md:8652`). Fall back never — a spec whose starts are unreachable is invalid, not "lowest-loss" (`arena.md:8656` is the behaviour to avoid under a certificate).
-5. **Split the agent's write scope the way Arena splits it.** Agent-generated: the spec (objects, fixtures, relations, task kind + params, protocol numbers). Hand-written and registry-gated: success predicates (`success(states, sensors)` bodies, thresholds like `_PART_IN_SLOT_XY_M`), referee sensor kinds, scripted experts and IK choreography (`kitting_waypoints`), and every physics number (the bundle). This is Arena's own line — no asset generation, no motion generation (`arena.md:4078-4087`) — and our rule 3.
+5. **Split the agent's write scope the way Arena splits it.** Agent-generated: the spec (objects, fixtures, relations, task kind + params, protocol numbers). Hand-written and registry-gated: success predicates (`success(states, sensors)` bodies, thresholds like `_PART_IN_SLOT_XY_M`), referee sensor kinds, scripted experts and IK choreography (`kitting_waypoints`), and every physics number (the bundle). This is Arena's own line — no asset generation, no motion generation (`arena.md:4078-4087`) — and our rule 3 (the physics envelope is off-limits to the agent).
 
 ### Skip, with reasons
 

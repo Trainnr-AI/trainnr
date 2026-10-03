@@ -45,10 +45,10 @@
   "flag": "--env.frame_every",
   "tests": "pipeline/tests/test_action_hold.py",
   "after": "docs/findings/visual-dr-lift-2026-09-03.json",
-  "log": "docs/07-progress-log.md, entry 2026-09-04 'the studies'"
+  "log": "the maintainers' log, 2026-09-04 (not public)"
  },
  "sources": {},
- "protocol": "docs/e2e-research/68 \u00a74.1",
+ "protocol": "docs/paper/manuscript.md \u00a75.2",
  "caveats": [
   "The 'before' evaluation's per-trial rows (verdict.sweep.json, *-records.sweep.jsonl) are on the volume under runs/studies/visual-dr-lift, not tracked; the 'after' numbers are the tracked finding."
  ]

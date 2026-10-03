@@ -1,13 +1,19 @@
 # Isaac Lab Arena: the policy interface, and how it evaluates real foundation-model policies
 
+*Source: the `isaaclab_arena` repository, read 2026-08-26 from a repomix
+bundle made in session (132,303 lines; commit not recorded). The bundle is
+not shipped; every `L<number>` below is a line of that bundle. Our-side line
+numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 *Sprint pass, 2026-08-26. One agent, one field, one primary source: a repomix
-bundle of the whole `isaaclab_arena` repository (*arena.md*, 132,303 lines).
+bundle of the whole `isaaclab_arena` repository (132,303 lines).
 Every claim is cited as `path:Lnnnn` — the repository path, and the line number
-of that line INSIDE THE BUNDLE — with a short quote, checkable by
-`sed -n 'nnnnp' arena.md`. Nothing comes from memory of Arena; arithmetic on
+of that line INSIDE THE BUNDLE — with a short quote. Nothing comes from memory of Arena; arithmetic on
 cited facts is marked "derived". Mapped against our harness
 (`trainnr/evaluate/{harness,vision}.py`, `trainnr/physics/mujoco_backend.py`)
-and the pipeline brief (private) and docs/e2e-research/31.*
+and the 2026-08 pipeline brief.*
 
 Terms, defined once. A **policy** is the thing judged: observation in, motor
 command out. A **foundation-model policy** (VLA, vision-language-action model:
@@ -207,6 +213,10 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
 
 ## 3. What to adopt, what to skip
 
+*Status (2026-10-03): the openpi adapter exists,
+`trainnr/trainnr/envs/openpi_policy.py`; T0–T6 are the ALOHA stage ladder of
+[docs/31](../31-aloha2-e2e.md).*
+
 **ADOPT**
 
 1. **An explicit `ActionScheduler` in `VisionPolicy`, executed horizon as a protocol
@@ -224,7 +234,8 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
    (bundle-specific: which sensor slice is state, which camera feeds which key,
    joint order) and `ModelAdapter` (checkpoint-specific: LeRobot local, openpi
    websocket, GR00T ZMQ). The rig adapter becomes bundle content (`adapter@hash`,
-   docs/30 §3.6) — the agent-written leaf onboarding must emit. DreamZero's
+   the rule that agents write the leaves and gates judge them) — the
+   agent-written leaf onboarding must emit. DreamZero's
    `cam2_source` (L97488) belongs here: ALOHA 2 has six cameras, ArmnetBench
    three; the adapter names the mapping.
 3. **One remote path: a `RemoteChunkReplayPolicy` clone over openpi's websocket
@@ -232,8 +243,8 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
    keepalive subclass (L37216). π0/π0.5 in openpi format are exactly what our
    adapter cannot load ("pi0/pi0.5 in openpi format need their own adapter",
    `vision.py:113`); ~120 lines (`remote_policy_base.py:L36790–36942`) with the
-   reconnect-flush rule gives π0.5 on the WSL card while the server runs in its
-   own venv or on the cloud GPU (docs/31 T5 decision).
+   reconnect-flush rule gives π0.5 on the workstation GPU while the server runs in its
+   own venv or on the cloud GPU ([docs/31](../31-aloha2-e2e.md) T5).
 4. **Task description set by the protocol, not the policy** (L34428, YAML L98707).
    Move `task_instruction` from `lerobot_checkpoint_policy(...)` into
    `EpisodeProtocol`, so the wording is hash-stamped with the trials.
@@ -246,11 +257,11 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
 - **`SyncedBatchActionScheduler` and hold-actions.** They keep a GPU batch full
   across N Isaac envs; ours are N=1 per process, and "hold current joint position
   for up to horizon−1 ticks" (L36619–36620) is a physics-visible artifact a
-  certificate would have to explain. Revisit only on MJX-Warp (docs/30 §6).
+  certificate would have to explain. Revisit only on MJX-Warp.
 - **Hydra/typed-config registration and CLI generation** (L6162–6174). Recipes are
   hash-stamped dataclasses already; a second config system is churn.
 - **GR00T's three-YAML joint remap** (L121384). Our bundles fix joint order in the
-  sensor wrapper (docs/31 §1); a by-name remap belongs in the rig adapter (item 2)
+  sensor wrapper ([docs/31](../31-aloha2-e2e.md) §1); a by-name remap belongs in the rig adapter (item 2)
   when policy and sim disagree, not in a GR00T-specific core.
 - **Cosmos's tiled image, DreamZero's session-UUID state.** Model-specific wire
   quirks; adopt the adapter SHAPE, write these only when evaluating those models.
@@ -261,7 +272,7 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
 ## 4. Open questions
 
 1. **Executed horizon at 50 Hz.** Arena's 10–32 were chosen at 15 Hz control; the
-   ACT sim and our kitting data run 50 fps (docs/31 T5). The same wall-clock
+   ACT sim and our kitting data run 50 fps ([docs/31](../31-aloha2-e2e.md) T5). The same wall-clock
    replan (~1 s for π0.5) is ~50 ticks. Nothing in the bundle says whether horizon
    scales with control rate — a paired-trial experiment, not a lookup.
 2. **Horizon as recipe axis or protocol constant.** Per-policy (Arena's choice,
@@ -273,7 +284,7 @@ error in every VLA wrapper (L36843–36846; L121832–121836).
 4. **Match cosmetics before or after the model's letterbox?** Every Arena adapter
    pads-then-resizes to the checkpoint's training size (224², 180×320, 512²); our
    camera matching (`vision.py:17–20`) works at dataset resolution. Unanswered in
-   the bundle; it bears on the cosmetics-vs-dynamics confound docs/31 T1 hit.
+   the bundle; it bears on the cosmetics-vs-dynamics confound [docs/31](../31-aloha2-e2e.md) T1 hit.
 5. **`object_moved_rate`** (gr00t.rst:L16435): a partial-credit companion metric.
-   Worth a standard "object displaced" referee sensor so zero rows (docs/31 T2,
+   Worth a standard "object displaced" referee sensor so zero rows ([docs/31](../31-aloha2-e2e.md) T2,
    T5) still carry information?

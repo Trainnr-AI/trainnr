@@ -119,7 +119,7 @@
    }
   },
   "go2-c3-fit chain": {
-   "training": "fit@0ad6202797c5, 4096 worlds, 1500 iterations, cuda (docs/07 2026-09-25 afternoon)",
+   "training": "fit@0ad6202797c5, 4096 worlds, 1500 iterations, cuda (2026-09-25)",
    "gate": "18/20 [0.683, 0.9877] passed, plain MuJoCo runtime (deploy/go2-c3-fit-deploy/gate.json)",
    "preflight": "7/7 passed in simulation (deploy/go2-c3-fit-deploy/preflight.json)",
    "attribution_cliffs": "kp 0.8x (16/20), kd 2x (17/20), latency 2 ticks (2/20), payload 2 kg (17/20), push 1 m/s (17/20), tilt 8 deg (14/20), joint noise 0.05 rad (17/20), joint friction 0.25 N*m (17/20); survived: friction, armature, joint damping (deploy/go2-c3-fit-deploy/attribution.json)"
@@ -134,12 +134,12 @@
   "n=40 per cell: 'no difference' at the easy rung means the intervals overlap, not that the policies are equal."
  ],
  "artifacts": {
-  "verdicts": "projects/go2-walk/runs/{go2-c2,go2-c3-fit}/verdict/ (the WSL box; projects/ is not tracked)",
+  "verdicts": "docs/artifacts/go2/certificates/ (go2-c2-* and go2-c3-fit-* certificate.json, one per cell); recorded at projects/go2-walk/runs/{go2-c2,go2-c3-fit}/verdict/ (the WSL box; projects/ is not tracked)",
   "studio": "the Evaluations page shows every cell as a card (screenshots in projects/go2-walk/.index/screenshots/)",
   "figure.svg": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.svg",
   "figure.pdf": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.pdf",
   "figure.png": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.png",
   "figure.csv": "docs/figures/go2-fit-cross-and-cliffs-2026-09-25.csv"
  },
- "protocol": "docs/07-progress-log.md 2026-09-25 evening entries"
+ "protocol": "each policy judged in both worlds (the fitted joints and the declared constants) at delays of 0 and 2 control ticks and at 0.8x kp, 40 paired trials per cell, by walk_verdict; run 2026-09-25 (the maintainers' log, not public)"
 }

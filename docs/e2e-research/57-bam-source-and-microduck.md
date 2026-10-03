@@ -1,6 +1,7 @@
-# BAM's code and its first production consumer: the bridge already exists, and it leaks everywhere our discipline is
+# BAM's code and its first production consumer: the bridge already exists, and where provenance and randomization are left to the reader
 
-*2026-08-31. Sources: repomix packs of `Rhoban/bam` (v1.0.2, 125 files)
+*2026-08-31 (versions as of that day: BAM v1.0.2, mjlab 1.6). Sources:
+repomix packs of `Rhoban/bam` (v1.0.2, 125 files)
 and `pollen-robotics/microduck_rl` (163 files), one field agent each,
 primary source only. Companion to [53](53-bam-actuator-identification.md)
 (BAM's paper and published fits) and [56](56-mjlab.md) (mjlab whole).
@@ -96,7 +97,7 @@ mirrored in `microduck:scripts/validate_bam_testbench.py` is ~30 lines.
   `~/Rhoban/bam/params/xl330/m6_new.json` on a laptop in another. No
   committed JSON, no hash, no date. Nothing can answer "which fit was
   this ONNX trained against." Four rival actuator XML classes are named
-  `old`/`new`/`antoine`/`marc`.
+  after versions and individual developers.
 - **Silent no-op DR, five instances:** `dr.dof_frictionloss` and
   `dr.joint_damping` randomize fields the BAM actuator overwrites every
   step; an IMU randomizer wrote a field nothing reads; a mass
@@ -117,7 +118,7 @@ mirrored in `microduck:scripts/validate_bam_testbench.py` is ~30 lines.
   the trained `scale = 1.0`; a kp-ratio default would silently detune
   kp 200→120; the obs-comparison script is hardcoded to a stale 51-D
   layout against the current 61-D contract. All documented only in
-  French plan markdown.
+  prose plan documents.
 - **Verification is one servo on a bench** with thresholds "chosen by
   feel" (`0.01` rad, `1.5×`), validating a *replica* kernel rather than
   the class they train with, reading data from `~/Rhoban/bam`. For the

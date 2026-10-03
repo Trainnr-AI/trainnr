@@ -1,16 +1,16 @@
 # microduck_rl, read code-first: the sim2real recipe of an 800 g servo biped, and what it says about our servo model
 
-> **Archived (2026-09-07).** Written on branch `platform-2026-08-29`, which was retired on 2026-08-31 (docs/07, "a gate dissolved"): the design it describes - the pipeline's own MJX reinforcement-learning package and the actuator law as a runtime module - was superseded by `trainnr_mjlab` (docs/e2e-research/58) and never merged, so code paths named below may not exist on `main`. Restored to `main` unchanged because `trainnr/trainnr/robot/friction_budget.py` and docs/e2e-research/53's successors cite it by number.
+> **Historical (written 2026-08-28, archived 2026-09-07).** A rig-era, code-first read of Pollen's microduck_rl. The design it argued for, the pipeline's own MJX reinforcement-learning package with the actuator law as a runtime module, was superseded by `trainnr_mjlab` ([58](58-cross-framework-setup.md)) and never merged, so code paths named below may not exist. What still holds: §0 (where the industry's SO-101 constants come from), §1–§2 (BAM in a training loop, the backlash twin) and §4 (the deployment contract). Note: `trainnr/trainnr/robot/friction_budget.py` cites "docs/e2e-research/53 §1", which is the BAM read, [53-bam-actuator-identification.md](53-bam-actuator-identification.md), not this file; the two share a number. §8 is the 2026-08-28 to-do list, not a current one.
 
-*2026-08-28, branch `physics-newton-mac-2026-08-27`. Source: a repomix
+*2026-08-28. Source: a repomix
 pack of [pollen-robotics/microduck_rl](https://github.com/pollen-robotics/microduck_rl)
 at `develop` (163 files, 37,007 lines, Apache-2.0; the newest dated
 design doc is 2026-08-04), reviewed locally — every claim below is from
 the pack unless marked FETCHED (PyPI / GitHub, today) or MEASURED (run
 here today). Five field agents read one field each against the pack —
 actuator physics, backlash, RL task design, deployment, process — and
-their reports are §1–§5; §0 is what the operator measured from the
-BAM package itself before they returned.*
+their reports are §1–§5; §0 is what was measured from the BAM package
+itself before they returned.*
 
 **Why this repo.** It is the complete sim2real recipe for a robot in
 our price class — Dynamixel XL330 servos, a Raspberry Pi, ~800 g — with
@@ -54,12 +54,12 @@ scratch venv here (MEASURED):
 
 `kp = 17.8, damping = 0.60` is the pair Lightwheel's `leisaac` and
 Positronic ship for every SO-101 joint and its gripper
-([29 §5](29-the-company.md), [30 §3.3](30-the-pipeline.md)). It is not
+(the 2026-08 company and pipeline briefs). It is not
 a guess: it is one STS3215 identified on a pendulum bench at 7.4 V,
 collapsed to first order by an export BAM now deprecates, then copied
 to six loaded joints, a gripper and a 12 V arm. Our docs said "one
 guess, copied"; corrected today to "one measurement, copied" in
-docs/23, docs/25, 29, 30 and the `so101-nominal` README — the wedge is
+the 2026-08 research agenda, the deployment read ([25](25-deployment-and-fleet-ops.md)), the company and pipeline briefs and the `so101-nominal` README — the wedge is
 unchanged (one servo on a bench is not six joints in an arm at the
 arm's voltage — and BAM's servo is the 7.4 V winding, while the SO-101
 evidence we hold is a 12 V unit, docs/26), the caption is now true. Beside it, `so101-nominal`
@@ -178,7 +178,7 @@ MJX-Warp there is no host code per step today, and BAM's GPU path
 exists only inside mjlab's torch actuator framework; a stamp would have
 to pin the BAM revision as well as the JSON, because the law lives in
 the package (the `vin_drop_*` drift is exactly that failure); and our
-own Newton row in docs/33 — "a conversion layer erases what
+own positioning line on Newton — "a conversion layer erases what
 identification measured" — would apply to us: `edit_spec` discards the
 MJCF's kp/kv. The identified position law and the BAM law are
 alternatives, not layers.
@@ -386,7 +386,7 @@ seed-lucky (1 success / 3 failures with equivalent rewards)" — on warp
 [52 §3](52-warp-determinism-mjwarp.md) existed; float32 is not
 discussed.
 
-**What transfers.** (a) T6: mjlab would give us the manager stack,
+**What transfers.** (a) T6 (the PPO stage of [docs/31](../31-aloha2-e2e.md)'s ladder): mjlab would give us the manager stack,
 tested non-accumulating DR, step curricula, rsl_rl PPO and an ONNX
 export, at the price of a third pinned instrument (torch 2.9.1 / warp
 1.12 / mujoco 3.10 / Python 3.12, CUDA-only, no Mac) that conflicts with
@@ -474,7 +474,7 @@ is refused before a trial is spent; the names are spelled once
 carry `source name@hash` and the instrument `mujoco-3.11.0+x86_64`
 (`trainnr/trainnr/evaluate/records.py`); the firmware-mirror test
 and the wire replays fail the build on drift
-(`trainnr/tests/test_firmware_mirror.py`, docs/24); `train-watch
+(`trainnr/tests/test_firmware_mirror.py`, retired with the rig); `train-watch
 --play` rehearses on the evaluation env itself, so there is no second
 observation assembly. What we lack: a deployable artefact — our
 policies are torch LeRobot checkpoints or an openpi websocket, no ONNX,
@@ -590,18 +590,18 @@ tensorboard logger "to avoid polluting wandb".
 | Verdict | Item | Field | Why |
 |---|---|---|---|
 | ADOPT | The pendulum bench protocol, and BAM's released raw STS3215 logs as a validation corpus for `identify()` | A | real STS3215 data exists today; our fit can be scored on it with zero hardware |
-| ADOPT | Command delay as an explicit integer-lag parameter in `Stepper` | A | already promised (R7); BAM shows the identified 5–10 ms is tick-scale |
+| ADOPT | Command delay as an explicit integer-lag parameter in `Stepper` | A | already promised (R7, the forward pass after each step so sensors describe one instant); BAM shows the identified 5–10 ms is tick-scale |
 | ADOPT | A backlash twin as a series passive hinge with `passive_` naming, the encoder AND the servo loop reading through the play, rewards on the sensor view | B | physically right; the one sim2real convention in the pack worth copying whole |
-| ADOPT | Cfg-style tests: weights with their sign, indices resolved on the compiled model, observation-order parity | C | the same shape as our 303; "index resolved on the real model" is new |
+| ADOPT | Cfg-style tests: weights with their sign, indices resolved on the compiled model, observation-order parity | C | the same shape as our own observation-contract test; "index resolved on the real model" is new |
 | ADOPT | The DR startup/reset split, ranges capped from geometry, non-accumulation as an invariant | C | fits `physics/variations.py` and the batched GPU path |
 | ADOPT | The reward-design lessons, into docs — no code | C | general; the referee is ours, but T6 has rewards |
 | ADOPT | ONNX export with the normaliser folded in, plus the ORT-vs-torch numerical check they lack — when we ship a policy | D | a checkpoint is not an artefact; `ort` is already our named runtime |
 | ADOPT | The single-servo bench pattern: the same policy driving one servo, sim vs real | D | the cheapest true sim2real number this repo can produce |
-| ADOPT | In specs: a decisions-with-rejected-alternatives table and an out-of-scope list; in plans: the expected failure and the expected pass count written before the code; a per-policy handoff page that keeps growing after training | E | cheaper to audit than prose; docs/07 has no per-policy living page |
+| ADOPT | In specs: a decisions-with-rejected-alternatives table and an out-of-scope list; in plans: the expected failure and the expected pass count written before the code; a per-policy handoff page that keeps growing after training | E | cheaper to audit than prose; the progress log has no per-policy living page |
 | ADOPT | In the cloud chain: a 60 s checkpoint watcher, resubmission on transient errors, auto-export in the warm environment, a pinned `uv` in the bootstrap, `--dry-run`, a `requires-python` ceiling | E | each has a dated incident behind it in the pack |
 | ADAPT | BAM's STS3215 M6 as the *prior centre* for our own fit, our intervals on top, the 7.4 V vs 12 V winding declared | A | they publish a point; we publish the interval |
 | ADAPT | The firmware rate-limited target and `error_gain_ratio` into `sts_synth.py`'s corruption model | A | stateful, cheap, likely load-bearing for ACT chunks; absent from docs/26 |
-| ADAPT | The M6 friction budget as a CPU `Stepper` plug-in behind the engine seam, opt-in per bundle | A | keeps the MJX path pure; lets §8.3 measure whether Coulomb + Stribeck + load changes a verdict |
+| ADAPT | The M6 friction budget as a CPU `Stepper` plug-in behind the engine seam, opt-in per bundle | A | keeps the MJX path pure; lets item 3 of §8 measure whether Coulomb + Stribeck + load changes a verdict |
 | ADAPT | Per-joint measured play with DR around it, in a stamped field — not one CLI default for every joint | B | ours is centred on a measurement (0.87° STS3215) and must be distinguishable in a certificate |
 | ADAPT | Sum servo + backlash in the state reader, not in an RL observation function | B | `state_width` and the LeRobot plugin stay untouched |
 | ADAPT | Manager-style cfg-as-data — terminations, curricula, the spawn-mix table with probabilities ramped by iteration — for `KittingSpec` start bands | C | maps onto `KittingSpec` + `EpisodeProtocol` without a framework |
@@ -614,14 +614,14 @@ tensorboard logger "to avoid polluting wandb".
 | SKIP | `bam.mjlab.BamActuator` as-is; supply-sag DR for bench-powered arms; the XM430/XM540 via BAM | A | mjlab-shaped and branch-pinned; no battery; no parameters |
 | SKIP | The regex/sed/six-config variant pipeline; their backlash tests | B | not our toolchain; there are none to adopt |
 | SKIP | mjlab as the T6 framework (now); the symmetry mirror loss; evaluation by wandb means | C | a third pinned instrument against the 3.12 + warp ≥ 1.16 path; off in their own repo; no counts, no intervals |
-| SKIP | Contract versioning by CLI flag; six hand copies of the layout | D | the version belongs in the hash; our recurring-bug shape (docs/24) |
-| SKIP | No dated log, no research index | E | docs/07 and this corpus are strictly more |
+| SKIP | Contract versioning by CLI flag; six hand copies of the layout | D | the version belongs in the hash; our recurring-bug shape |
+| SKIP | No dated log, no research index | E | a dated progress log and this corpus are strictly more |
 
 ## 7. Positioning sentences (each with its evidence; dated 2026-08-28)
 
-1. "The industry's SO-101 constants are one bench servo at 7.4 V, collapsed to first order by an export its own authors deprecate, then copied to six joints, a gripper and a 12 V arm; we identify the joint in the arm at the arm's own supply, with an interval." — §0 (MEASURED with BAM's `to_mujoco`); *leisaac* and Positronic per [30 §3.3](30-the-pipeline.md).
+1. "The industry's SO-101 constants are one bench servo at 7.4 V, collapsed to first order by an export its own authors deprecate, then copied to six joints, a gripper and a 12 V arm; we identify the joint in the arm at the arm's own supply, with an interval." — §0 (MEASURED with BAM's `to_mujoco`); *leisaac* and Positronic per the 2026-08 pipeline brief.
 2. "BAM ships one fitted point per servo model — 17 scalars, no interval, no unit identity, no date; we ship the customer's unit with intervals and NOT-PINNED verdicts." — *bam/params/&lt;motor&gt;/m6.json*; *bam/fit.py* optimises a scalar MAE; ours `trainnr/trainnr/robot/identify.py`, `trainnr/trainnr/robot/fit_record.py`.
-3. "Under BAM the robot's MJCF no longer states its actuator physics — the XML's `kp=0.55` is overwritten into a `<motor>` at load; our bundle's MJCF *is* the identified model on every engine." — *bam/mjlab.py* `edit_spec`; *robot/microduck/joints_properties.xml*; ours `trainnr/trainnr/physics/mjx_backend.py`, the docs/33 Newton row.
+3. "Under BAM the robot's MJCF no longer states its actuator physics — the XML's `kp=0.55` is overwritten into a `<motor>` at load; our bundle's MJCF *is* the identified model on every engine." — *bam/mjlab.py* `edit_spec`; *robot/microduck/joints_properties.xml*; ours `trainnr/trainnr/physics/mjx_backend.py`, the positioning line on Newton.
 4. "Their sim2real gate is a plot and a printed MAE with no threshold; the only numeric pass is kernel-against-kernel at 0.01 rad; we gate on counts, Clopper–Pearson intervals and declared thresholds." — *scripts/testbench_sim2real.py*, *scripts/validate_bam_testbench.py*; ours docs/32.
 5. "microduck injects the same ±1° of play into all 14 servos from a script default, with no measurement in the repo and no test on the mechanism; we put the measured play per joint into a stamped bundle and randomise around it." — *robot/microduck/add_backlash.py* `--backlash-deg 2.0`, `tests/` (one comment); ours *planned*, §2.
 6. "They accept an environment when a 64-env × 5-iteration smoke test builds, steps NaN-free and has 61 observations; we accept a task only when its scripted expert passes every paired start and a hold-still floor passes none." — AGENTS.md step 5; ours `trainnr/trainnr/tasks/acceptance.py`.
@@ -630,15 +630,15 @@ tensorboard logger "to avoid polluting wandb".
 9. "They call a 1-in-4 back recovery 'seed-lucky' on warp 1.12.0, where a deterministic mode does not exist; we measured that RUN_TO_RUN determinism arrives with warp ≥ 1.16 and priced the upgrade." — *tasks/microduck_standup_env_cfg.py*, *pyproject.toml*; ours [52 §3](52-warp-determinism-mjwarp.md).
 10. Credit, and a gap of ours: "They export an artefact the robot loads, with the normaliser inside; we still hand the robot a torch checkpoint." — *scripts/export.py*; ours `trainnr/trainnr/envs/lerobot_policy.py`.
 
-## 8. What to run here (short local runs; the cloud for anything longer)
+## 8. What to run here (the 2026-08-28 list; not current)
 
-1. **Their data, our fit.** Download BAM's raw STS3215 logs (FETCHED: `feetech_sts3215_raw.zip` in BAM's docs), convert BAM's log JSON to our CSV, run `identify()` with our four-parameter servo model on the same logs and report our MAE beside M1 … M6's (replayed through `bam.simulate.Simulator`). Expected: ours ≈ M1; the M1 → M6 gap on real STS3215 data is the number that decides the CPU plug-in. A *tools/bam-replay.py*, ~2 min CPU, zero hardware.
+1. **Their data, our fit.** Download BAM's raw STS3215 logs (FETCHED: `feetech_sts3215_raw.zip` in BAM's docs), convert BAM's log JSON to our CSV, run `identify()` with our four-parameter servo model on the same logs and report our MAE beside M1 … M6's (replayed through `bam.simulate.Simulator`). Expected: ours ≈ M1; the M1 → M6 gap on real STS3215 data is the number that decides the CPU plug-in. A *tools/bam-replay.py* (retired with the actuator-law branch), ~2 min CPU, zero hardware.
 2. **The structured-residual test docs/26 §4 wants.** Synthetic STS3215 data from BAM's M6, fitted with our four parameters: the intervals will report "pinned" on a wrong model — frictionloss absorbing `K_c + K_cs`, damping absorbing `K_v` plus the load terms. A real target for the residual-whiteness diagnostic.
-3. *(Built and measured for M1, 2026-08-29 — [36 §5](../36-actuator-law.md), `tools/servo-ab.py`, retired with the actuator-law branch: 4/4 → 2/4; M6 awaits its parameter fetch.)* **Does M6 change a verdict?** The SO-101 lift/reach scripted expert, nominal `<position>` against `bam.mujoco.MujocoController(feetech_sts3215_7_4V, m6)` on the same bundle and paired starts; hold droop and settle hysteresis in both viewers. Expected: a ±`friction_base`-wide hold band (0.053 N·m ≈ 1–2° at the shoulder) invisible in the linear model. And the cost: `Stepper.advance` with and without the per-step controller, steps/s and `lerobot-eval` s/episode.
+3. *(Built and measured for M1, 2026-08-29 with a servo A/B script since retired with the actuator-law branch: 4/4 → 2/4; M6 awaits its parameter fetch.)* **Does M6 change a verdict?** The SO-101 lift/reach scripted expert, nominal `<position>` against `bam.mujoco.MujocoController(feetech_sts3215_7_4V, m6)` on the same bundle and paired starts; hold droop and settle hysteresis in both viewers. Expected: a ±`friction_base`-wide hold band (0.053 N·m ≈ 1–2° at the shoulder) invisible in the linear model. And the cost: `Stepper.advance` with and without the per-step controller, steps/s and `lerobot-eval` s/episode.
 4. **The backlash twin, A/B.** `add_backlash` on `so101` at 0.87° and at 2°; first the wind-through check in the viewer (actuator on the servo joint vs a tendon: the link must lag by exactly the play in the first case and not the second), then `tasks/acceptance.py`, 20 starts, nominal vs twin — the number that says whether play changes a verdict.
-5. **Observation realism.** A 1-tick joint-velocity lag and a 3–6-tick action delay in `envs/`, the T5 policy re-run through the harness; the funnel shift is their named sim2real footgun measured on our task.
+5. **Observation realism.** A 1-tick joint-velocity lag and a 3–6-tick action delay in `envs/`, the T5 policy ([docs/31](../31-aloha2-e2e.md)'s ACT checkpoint) re-run through the harness; the funnel shift is their named sim2real footgun measured on our task.
 6. **Their DR widths through our sensitivity test.** CoM ±15 mm, friction 0.9–1.1, mass ±5 % on kitting via `trainnr/trainnr/stats/effects.py` — SENSITIVE or not at their ranges.
 7. **The artefact.** Export the T5 ACT checkpoint to ONNX (opset 18), compare ORT against torch on 1,000 recorded observations (max abs action error — the check their pipeline lacks), and time one tick under `ort` with one intra-op thread.
-8. **Process items, each an hour.** *trainnr/tests/test_pins.py* reading `pyproject.toml` and `uv.lock`; a `requires-python` ceiling matching the tested venvs, both suites re-run; a pinned `uv` + `UV_LINK_MODE=copy` in `tools/_pod-bootstrap.sh`, bootstrap timed before and after; a 60 s checkpoint watcher tested against `run --deadline-min` killing the job mid-run.
+8. **Process items, each an hour.** *trainnr/tests/test_pins.py* (retired) reading `pyproject.toml` and `uv.lock`; a `requires-python` ceiling matching the tested venvs, both suites re-run; a pinned `uv` + `UV_LINK_MODE=copy` in `tools/_pod-bootstrap.sh`, bootstrap timed before and after; a 60 s checkpoint watcher tested against `run --deadline-min` killing the job mid-run.
 9. **When arms are in hand.** The STS3215 hysteresis loop — a slow ±3° triangle at three amplitudes, `present_position` against an external reference — separating mechanical play from the firmware dead zone that docs/27 lumps; then a BAM-style pendulum at 7.4 V and at 12 V, `bam.fit` and `identify()` on identical logs: the interval BAM does not publish, and the winding delta.
 

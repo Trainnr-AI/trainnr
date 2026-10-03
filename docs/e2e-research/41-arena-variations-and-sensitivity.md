@@ -1,11 +1,18 @@
 # Isaac Lab Arena: variations and sensitivity analysis, read code-first
 
+*Source: the `isaaclab_arena` repository, read 2026-08-26 from a repomix
+bundle made in session (132,303 lines; commit not recorded). The bundle is
+not shipped; every `L<number>` below is a line of that bundle. Our-side line
+numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 *Fifth pass, 2026-08-26. One agent, one field, one primary source: the
 full `isaaclab_arena` repository as a repomix bundle (132,303 lines).
 Every claim cites `path:line` into that bundle with a quoted fragment;
 nothing is filled from memory. Mapped against our harness
-(`trainnr/evaluate/harness.py`), our certificate
-(`trainnr/stats/`), and our domain randomisation
+(`trainnr/evaluate/harness.py`, now `trainnr/trainnr/protocol.py`), our
+certificate (`trainnr/stats/`), and our domain randomisation
 (`tools/kitting-demos.py`, `tools/show-many.py`). Field: how Arena
 parameterises an environment, sweeps it, and turns per-episode results
 into "which factors break the policy".*
@@ -185,11 +192,11 @@ assumes"; one policy/task per JSONL.
 
 | Arena | Ours | Where |
 |---|---|---|
-| Run-time variation of object pose at reset | `EpisodeProtocol.perturb(trial_index, home)`, deterministic per trial; ALOHA's cube walks spawn-box corners (`_corner_fraction(trial, inset=0.1)`) | `harness.py:45-67`, `trainnr/trainnr/tasks/aloha2/kitting.py:338-347` |
+| Run-time variation of object pose at reset | `EpisodeProtocol.perturb(trial_index, home)`, deterministic per trial; ALOHA's cube walks spawn-box corners (`_corner_fraction(trial, inset=0.1)`) | `harness.py:45-67`, `trainnr/trainnr/tasks/aloha2/kitting.py` (lines as of 2026-08-26) |
 | Paired trials | Built in: "policy A's trial 7 starts exactly where policy B's trial 7 starts"; perturb "receives the trial index (not an RNG)". Arena has no equivalent — its samplers hit the global RNG at reset | `harness.py:5-7, 49-51` |
 | Dynamics variation | ±span scaling of joint damping and actuator gains around the bundle's identified values, per episode (`damping_scale`, `gain_scale`) and per world (`randomise()`) | `tools/kitting-demos.py:99-108`, `tools/show-many.py:126-144` |
 | Per-episode record | `manifest.json` per kept demo: `seed, attempt, draws, dr_span, damping_scale, gain_scale, verdict` — Arena's row shape, but only for *kept demos*, never for evaluation trials | `tools/kitting-demos.py:168-185` |
-| Outcome statistics | Exact Clopper-Pearson/Wilson, Spearman with Fisher-z and exact permutation p, `top_pick_probability`, pooling with Cochran's Q — stdlib only. Arena ships none (the pipeline brief's §⑧ correction, private) | `trainnr/stats/intervals.py`, `ranking.py`, `pooling.py` |
+| Outcome statistics | Exact Clopper-Pearson/Wilson, Spearman with Fisher-z and exact permutation p, `top_pick_probability`, pooling with Cochran's Q — stdlib only. Arena ships none | `trainnr/stats/intervals.py`, `ranking.py`, `pooling.py` |
 | The certificate | `Certificate` binds bundle hashes, per-policy intervals, rank interval, gate bit | `trainnr/evaluate/certificate.py:50-96` |
 
 What we lack, precisely: (a) a *declared, enumerable* variation space —
@@ -199,6 +206,10 @@ trials)` (`harness.py:135-143`), so which start produced which outcome
 is gone when the loop ends; (c) any factor-to-outcome analysis.
 
 ## 3. Adopt / skip
+
+*Status (2026-10-03): §3.1 is `trainnr/trainnr/evaluate/variations.py` and
+`trainnr/trainnr/physics/variations.py`; §3.3's statistic is
+`trainnr/trainnr/stats/effects.py`.*
 
 ### 3.1 ADOPT — a variation schema as data (new module `trainnr/evaluate/variations`)
 
@@ -233,7 +244,8 @@ budget-splitting. First factor set, centred on identified values (the
 show-many rule, never a guess): `damping_scale`, `gain_scale` within
 the sysid interval, `cube.mass`, `cube.pose_xy`, `top.cam_offset`
 (±3 cm, Arena's workflow range), `light.diffuse`. The dynamics factors
-are the ones Arena lacks and Paper 2 turns on.
+are the ones Arena lacks and the span paper (docs/paper/manuscript.md)
+turns on.
 
 ### 3.2 ADOPT — the per-trial record
 
@@ -305,7 +317,7 @@ keep discovery only as a fallback reader for someone else's JSONL.
 2. **Sweep design.** Independent uniform draws per factor (Arena) or a
    Latin hypercube by trial index (balanced in continuous factors too)?
    Either way the design goes into the protocol hash.
-3. **Paper 2 hook.** Sweeping `damping_scale`/`gain_scale` across the
+3. **The span paper's hook.** Sweeping `damping_scale`/`gain_scale` across the
    sysid *interval* turns dynamics uncertainty into a measured factor
    effect: a policy INSENSITIVE across the interval has a sim rank that
    holds wherever reality sits in it. Certificate field or separate report?

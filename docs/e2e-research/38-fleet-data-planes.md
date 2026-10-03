@@ -1,9 +1,12 @@
 # Fleet data planes as practiced, 2024–2026
 
 *Fourth pass, 2026-08-25. Researched by one agent against primary
-sources, per the one-agent-per-field discipline. Tests
-[docs/30-the-full-loop.md](../30-the-full-loop.md) §3.3's tier-0/1/2
-upload design against what deployed fleets actually do. Headline: the
+sources, per the one-agent-per-field discipline. Tests a three-tier
+upload design against what deployed fleets actually do. The upload tiers,
+as the design named them: **upload tier 0** = always-on low-rate
+telemetry; **upload tier 1** = intervention episodes, uploaded on the
+event; **upload tier 2** = batched full logs. (Unrelated to the rig's
+safety tiers in [19](19-the-system.md).) Headline: the
 tier structure is confirmed by convergent practice, with five
 amendments — and the calibration/certificate measurement chain is
 AHEAD of practice. The agent's report follows verbatim.*
@@ -98,16 +101,16 @@ Method note: VERIFIED = the primary page/abstract was fetched and states this. C
 - **Protocols** — CLAIMED: MQTT for low-rate uplink, with **VDA 5050** (MQTT+JSON, `state`/`order`/`factsheet` topics) the only true standard, AGV-only; WebRTC universally for teleop; Zenoh Tier-1 in ROS 2 Kilted (2025-05); OpenTelemetry-for-robotics is one-person glue code — **no standard exists for robot health/status semantics**.
 - **Calibration/config history as versioned telemetry: no format, no vendor, no convention.** MCAP's schema-with-data solves half; nobody publishes the other half.
 
-## (b) Verdict on the Tier 0/1/2 design
+## (b) Verdict on the upload-tier design
 
 **Confirmed by practice in structure.** The three-tier shape is exactly what every mature fleet converged on independently: comma (qlog always / interventions marked / full logs wifi-batched, since 2019), Tesla (drive summaries + disengagement reports / trigger snippets / wifi-only), Formant/Foxglove (0.5–5 Hz cloud streams / events / import-on-demand), Figure 03 (dock-batched offload), 1X (consent-gated intervention episodes). Treating takeovers as labeled demos is now the consensus of both industry (RECAP, 1X Expert Mode) and literature (RaC's linear scaling, SOP). The per-class transport split ($7 MCU = status only; Jetson = nightly batches) mirrors the Mobileye-to-Zoox spectrum precisely. The calibration/certificate measurement chain is **ahead of practice** — a published gap, so keep it as a differentiator.
 
 **Five amendments:**
-1. **Decimate Tier 0 on the wire.** 50 Hz is the right *local recording* rate, but nobody ships 50 Hz to the cloud continuously: practice is 0.5–5 Hz cloud streams (Formant) or per-episode summaries (Tesla buckets, comma qlog ≈ 0.2% of data). Make Tier 0 a 50 Hz on-robot ring buffer with a decimated/summarized uplink, burstable on anomaly.
-2. **Tier 1 must fire without a human.** The 2025-26 literature's biggest addition is the autonomous failure detector as an upload trigger (Sentinel/STAC's cheap-on-robot + expensive-in-cloud split, FLOAT, FAIL-Detect's conformal guarantees, Sirius-Fleet's self-tightening thresholds). Operator takeover is one Tier-1 trigger among several; detector-flagged episodes with no takeover are equally food.
+1. **Decimate upload tier 0 on the wire.** 50 Hz is the right *local recording* rate, but nobody ships 50 Hz to the cloud continuously: practice is 0.5–5 Hz cloud streams (Formant) or per-episode summaries (Tesla buckets, comma qlog ≈ 0.2% of data). Make Tier 0 a 50 Hz on-robot ring buffer with a decimated/summarized uplink, burstable on anomaly.
+2. **Upload tier 1 must fire without a human.** The 2025-26 literature's biggest addition is the autonomous failure detector as an upload trigger (Sentinel/STAC's cheap-on-robot + expensive-in-cloud split, FLOAT, FAIL-Detect's conformal guarantees, Sirius-Fleet's self-tightening thresholds). Operator takeover is one Tier-1 trigger among several; detector-flagged episodes with no takeover are equally food.
 3. **Capture more than the correction trace.** Log the takeover *timestamp* even when no clean corrective trace exists (RLIF: timing alone is a reward label), the pre-intervention failure prefix (RaC rewinds to an in-distribution state — the approach matters), and operator confidence (SiLRI). An intervention episode = prefix + takeover marker + correction + outcome label.
-4. **Add a campaign/retro-pull channel to Tier 2.** Batched-around-events is necessary but not sufficient: the server must be able to push new predicates and pull historical segments still sitting in device buffers (Tesla triggers, Foxglove import-on-demand, comma's prioritized interactive uploads). And label autonomous batches with outcome/value — unlabeled success logs are the lowest-yield bytes in the pipeline (Mirchandani; RECAP fixes this with value labels).
-5. **Make retention a negotiated bundle parameter too.** Practice retains broadly and retrains on ~1% (Ambi), and continual-learning results show replay data is a compute asset (2605.26820) — so the bundle should carry a retention/replay budget per embodiment, including a weights-not-data fallback (FLEET-MERGE, on-device Redwood) for privacy-constrained deployments like homes.
+4. **Add a campaign/retro-pull channel to upload tier 2.** Batched-around-events is necessary but not sufficient: the server must be able to push new predicates and pull historical segments still sitting in device buffers (Tesla triggers, Foxglove import-on-demand, comma's prioritized interactive uploads). And label autonomous batches with outcome/value — unlabeled success logs are the lowest-yield bytes in the pipeline (Mirchandani; RECAP fixes this with value labels).
+5. **Make retention a negotiated parameter of the robot's configuration bundle too.** Practice retains broadly and retrains on ~1% (Ambi), and continual-learning results show replay data is a compute asset (2605.26820) — so the bundle should carry a retention/replay budget per embodiment, including a weights-not-data fallback (FLEET-MERGE, on-device Redwood) for privacy-constrained deployments like homes.
 
 ## (c) The single most load-bearing AV pattern to copy
 

@@ -24,7 +24,7 @@
  },
  "caveats": [
   "These are equality counts, not success rates.",
-  "Traced into a record on 2026-09-25 from docs/77 §4's table (the measurement is of 2026-09-24): the numbers gate had no record behind docs/33's row."
+  "Traced into a record on 2026-09-25 from docs/77 §4's table (the measurement is of 2026-09-24): the numbers gate had no record behind the sentence that quoted it."
  ],
  "protocol": "docs/e2e-research/77-usd-import-2026-09.md §4-§5"
 }

@@ -2,10 +2,10 @@
 
 *Fourth pass, 2026-08-25. Researched by one agent against primary
 sources (arXiv, GitHub, vendor pages), per the one-agent-per-field
-discipline. Tests the verdict of [docs/30-the-full-loop.md](../30-the-full-loop.md)
-§3.2: is a recipe engine — walking (policy family × data mixture ×
-hyperparameters), judged only by statistically-gated evaluation —
-novel, partially claimed, or crowded? The agent's report follows
+discipline. The question tested: is a recipe engine — walking (policy family × data
+mixture × hyperparameters), judged only by statistically-gated evaluation —
+novel, partially claimed, or crowded? Such an engine is not built; the
+platform's evaluation layer is [docs/32](../32-evaluation-layer.md). The agent's report follows
 verbatim.*
 
 ---
@@ -18,7 +18,7 @@ Legend: **VERIFIED** = abstract/page fetched directly. **CLAIMED** = from search
 
 **Finding: no published system automatically selects a policy family/architecture for a given task+embodiment.** Four separate query formulations (AutoML robot learning, NAS-for-VLA, policy architecture search, LLM-agent recipe selection) returned nothing that does this end-to-end. What exists is adjacent:
 
-- **robomimic study** (Aug 2021, [arXiv:2108.03298](https://arxiv.org/abs/2108.03298), [study page](https://robomimic.github.io/study/)) — the canonical large design-space sweep for imitation learning; also the canonical evidence that **validation loss does not predict rollout success** (best-val policy 50–100% worse than best policy; more val data doesn't help). VERIFIED via study page. This is the strongest published argument that recipe judgment *must* be rollout-eval-gated — i.e., the venture's premise.
+- **robomimic study** (Aug 2021, [arXiv:2108.03298](https://arxiv.org/abs/2108.03298), [study page](https://robomimic.github.io/study/)) — the canonical large design-space sweep for imitation learning; also the canonical evidence that **validation loss does not predict rollout success** (best-val policy 50–100% worse than best policy; more val data doesn't help). VERIFIED via study page. This is the strongest published argument that recipe judgment *must* be rollout-eval-gated — i.e., the premise.
 - **AutoRL survey** (JAIR 2022, [paper](https://www.jair.org/index.php/jair/article/download/13596/26808/30767)) — AutoML for RL (hyperparameters + architectures), never extended to imitation/VLA. CLAIMED.
 - **AutoLLMResearch** (May 2026, [arXiv:2605.11518](https://arxiv.org/abs/2605.11518)) — trains research agents to automate *LLM* experiment configuration with a multi-fidelity "learn from cheap, optimize expensive" gym. The recipe-engine concept exists in LLM land, not robotics. CLAIMED.
 - **StarVLA** (Apr 2026, [arXiv:2604.05014](https://arxiv.org/pdf/2604.05014)) — "Lego-like" modular VLA codebase; enables walking the architecture space, doesn't automate the choice. CLAIMED.
@@ -41,7 +41,7 @@ Legend: **VERIFIED** = abstract/page fetched directly. **CLAIMED** = from search
 - **"A Mechanistic Analysis of Sim-and-Real Co-Training"** (Apr 15 2026, [arXiv:2604.13645](https://arxiv.org/abs/2604.13645), Lei, Liu, Maddukuri, Jiang, Zhu — UT Austin/NVIDIA lineage of the original co-training recipe) — first *explanatory* account: performance is governed by structured representation alignment (primary) and importance reweighting (secondary); a **band of "balanced mixing ratios"** exists where alignment emerges implicitly, and domain discernibility must be preserved. Motivates a method that beats prior ratio-picking. VERIFIED (fetched). This directly reframes the "optimal ratio flips per task" landmine: the target is a detectable band, not a scalar.
 - **RLinf-Co** (Feb 2026, [arXiv:2602.12628](https://arxiv.org/html/2602.12628v3)) — RL-based sim–real co-training for VLAs (interactive sim instead of static sim demos, preserving real capabilities). CLAIMED.
 - **Grounding Sim-to-Real Generalization for VLAs** (Mar 2026, [arXiv:2603.22876](https://arxiv.org/pdf/2603.22876)) — empirical sim-to-real study with VLAs. CLAIMED.
-- Baseline for both: **Sim-and-Real Co-Training** (Mar 2025, [arXiv:2503.24361](https://arxiv.org/abs/2503.24361), [site](https://co-training.github.io/)) — already in the standing knowledge (docs/20).
+- Baseline for both: **Sim-and-Real Co-Training** (Mar 2025, [arXiv:2503.24361](https://arxiv.org/abs/2503.24361), [site](https://co-training.github.io/)) — already in the standing knowledge ([23 §4](23-simulation-and-real2sim.md)).
 
 ### Q4 — Recipe/hyperparameter search at VLA scale
 
@@ -80,7 +80,7 @@ Every pillar exists in isolation, none are composed:
 | Architecture/family selection | **Gap — nothing found** | robomimic/TRI manual studies; AutoLLMResearch is the LLM-domain analogue |
 | The integrated recipe engine | **Unclaimed** | AutoLLMResearch (2605.11518) proves the concept is "in the air" — for LLMs |
 
-The "recipe engine judged by certificates" is **novel as a system**: no one walks (policy family × mixture × hyperparameters) with the winner chosen solely by statistically certified paired evaluation. The moat is thinnest on the eval layer (crowded and productizing fast — NVIDIA's Aug 2026 Arena roadmap) and thickest on the search/optimizer layer sitting on top of it. Two supporting facts strengthen the premise: validation loss provably fails as a judge (robomimic), and 0/13 recent VLA papers even report CIs (PhAIL) — the field is not doing this itself.
+The "recipe engine judged by certificates" is **novel as a system**: no one walks (policy family × mixture × hyperparameters) with the winner chosen solely by statistically certified paired evaluation. The claim is thinnest on the eval layer (crowded and productizing fast — NVIDIA's Aug 2026 Arena roadmap) and thickest on the search/optimizer layer sitting on top of it. Two supporting facts strengthen the premise: validation loss provably fails as a judge (robomimic), and 0/13 recent VLA papers even report CIs (PhAIL) — the field is not doing this itself.
 
 ## (c) Two techniques to implement first
 

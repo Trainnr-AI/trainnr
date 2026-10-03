@@ -7,7 +7,12 @@ four papers it is built on read at their arXiv abstracts the same day:
 RL Token [9] (2604.23073), Real-Time Chunking [1] (2506.07339),
 training-time RTC [2] (2512.05964) and concurrent control [35]
 (2004.06089). Every number below is theirs unless marked *ours*.
-Written on branch `smooth-rl-2026-09-05`.
+
+*Labels used here: "campaign 3" and "campaign 4" are the third and
+fourth teacher→student distillation runs on the microduck walk (240
+episodes at 60k steps; the same recipe re-pressed), as recorded in
+docs/68-findings.md; E0–E2 are this document's three experiments, not
+the manuscript's E1–E7.*
 
 ## 0. What the paper is, in one paragraph
 
@@ -146,8 +151,9 @@ certificate we have issued.
 
 **Their evaluation is our positioning.** Our walk rows are 40 matched
 trials per policy with exact intervals, repeated on a second instrument
-(docs/07 2026-09-02, 2026-09-04); the SmoothRL rows are single draws of
-10–18 episodes from one run. The comparison writes itself (docs/33).
+(2026-09-02 and 2026-09-04, docs/68-findings.md); the SmoothRL rows
+are single draws of 10–18 episodes from one run. The comparison
+writes itself.
 
 **Their smoothness number is the shape ours should take.** RMS
 acceleration and jerk per chunk is a fine metric; one rollout is not a
@@ -158,7 +164,7 @@ interval, is a small change.
 **The residual-RL story lands on our teacher–student gap.** The
 campaign 4 student scores 27/40 against the teacher's 33/40, and the
 rows say the gap is tracking, not falling (near-threshold `err_ratio`
-misses, docs/69 §2). That is precisely "the last millimeter": a bounded
+misses). That is precisely "the last millimeter": a bounded
 residual on top of a frozen base, trained by a value gradient with the
 certificate's own criterion as the sparse reward, is the paper's recipe
 applied where we already have a measured, stamped base. Our DAgger
@@ -176,11 +182,13 @@ small and late, so the regime fits, but the bound is a knob to report.
 
 | # | what | cost | what it decides |
 |---|---|---|---|
-| E0 | smoothness as a certificate column: RMS velocity, acceleration and jerk of the executed targets per trial, with an interval; the teacher and the campaign 3–4 students | an hour, this box | whether our students are rougher than the teacher, with a number instead of a video |
-| E1 | the latency-budget certificate: emulate an inference budget `n ∈ {0, 1, 2, 4, 8}` ticks in the scheduler (the previous chunk keeps executing while the new one is "inferred"); certify the campaign 4 student at each `n` | 2 hours, this box or the pod | how much of a student's certificate survives real inference latency — the paper's motivation, measured with intervals; a new protocol field, hashed with the trials |
+| E0 | smoothness as a certificate column: RMS velocity, acceleration and jerk of the executed targets per trial, with an interval; the teacher and the campaign 3–4 students | an hour on an RTX 3090 Ti | whether our students are rougher than the teacher, with a number instead of a video |
+| E1 | the latency-budget certificate: emulate an inference budget `n ∈ {0, 1, 2, 4, 8}` ticks in the scheduler (the previous chunk keeps executing while the new one is "inferred"); certify a student at each `n` (campaign 3's was the one certified, §4b) | 2 hours, local or on a pod | how much of a student's certificate survives real inference latency — the paper's motivation, measured with intervals; a new protocol field, hashed with the trials |
 | E2 | SmoothRL-lite in sim: frozen ACT student + residual TD3 actor/critic on `[state, reference chunk]`, gradient truncation to `[n, 2n)`, BC anchor to the reference, the smoothness penalty, sparse reward = the certificate's criterion, rollouts under the timed loop in 48 worlds over the bridge; judged on the same 40 seeds as DAgger round 1 | 2–3 days to build; a pod-hour per run | whether value-gradient residual RL closes the tracking gap where DAgger's +4 did not, and whether truncation matters (we can ablate it, which they did not) |
 
-E2's design, so the next session can start it: two processes over the
+E2's design (status 2026-10-03: the objective is transcribed in
+`trainnr/trainnr/rl/smooth_rl.py`, pure numpy; no E2 result is
+recorded): two processes over the
 existing bridge, as in their Algorithm 1 - the rollout side (mjlab venv)
 runs the timed loop and appends transitions `(s_t, ã[0,n), a[n,2n),
 a_target, r, s_{t+2n}, ã'[0,n))` to a replay directory; the learner side
@@ -190,7 +198,7 @@ tracked` at episode end, plus optionally the per-interval tracking error
 as a dense shaping term reported separately. The ablation that the paper
 lacks costs one flag: truncate or not.
 
-## 4b. Results, 2026-09-05: E0 and E1 on the walk (this box, RTX 3090 Ti)
+## 5. Results, 2026-09-05: E0 and E1 on the walk (RTX 3090 Ti)
 
 Record `docs/findings/walk-latency-budget-2026-09-05.json`, figure
 `docs/figures/walk-latency-budget-2026-09-05.svg`; 40 matched trials
@@ -216,6 +224,13 @@ and its teacher (`model_7999`), one control tick = 20 ms.
 at 50 Hz). Under a budget the jerk rises 9 % as the duck goes down.
 Smoothness is now a column on every certificate row, three engines.
 
+*The teacher's 32/40 here against 33/40 in the walk-verdict record
+(2026-09-04, commit d25fb30), and the student's 25/40 against 24/40
+there: same policies, same seed, two harnesses one commit apart (the
+latency certificate, commit 39568b2, drives the policy through the
+scheduler's timed loop at budget 0; the walk verdict steps it
+directly); one trial in forty moved, inside both intervals.*
+
 **E1.** One tick of inference budget takes the student from 25/40 to
 0/40 (every duck down, median fall at tick 61; effect −0.625, p 2e-10),
 and so does every larger budget. The two controls separate the causes:
@@ -234,7 +249,7 @@ student that will run on hardware. Every walk certificate issued so
 far was a synchronous one; a certificate should also be issued at the
 deployment latency.
 
-## 4a. Building E2 without their code: the transcription protocol
+## 6. Building E2 without their code: the transcription protocol
 
 SmoothRL ships no code (checked 2026-09-05: no repository linked from
 the arXiv page or the project page; RL Token's page links none either).
@@ -284,7 +299,7 @@ actuator law was transcribed from BAM and pinned at both ends.
    simulation; the sparse reward is the certificate's criterion, exact
    and free, instead of an operator's call.
 
-## 5. Sources
+## 7. Sources
 
 - Astribot Team, SmoothRL, arXiv:2608.29768v1, 2026-08-30 - §§1–5, Figures
   1–8, Table 1, Algorithm 1 (read in full).

@@ -1,8 +1,13 @@
 # Open questions: where this research stops
 
-> **Archived code.** The Rust crates, firmware and emulator tools this page
-> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
-> on 2026-10-02; the paths below are relative to that repository.
+> **Archived.** Historical (written 2026-08-08, second pass 2026-08-15, last touched
+> 2026-08-28). The open questions of the 2026-08 research pass, in their
+> state at that date; several were answered since. The rig they refer to
+> lives in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig); `trainnr` in the text means that rig codebase. §5
+> (actuator identifiability) was answered by [53](53-bam-actuator-identification.md),
+> [docs/26](../26-sts3215-synthetic-identifiability.md) and the findings
+> ledger ([docs/68](../68-findings.md)); Warp under WSL by [49](49-gpu-path-mjxwarp.md).
+> Kept as the record.
 
 Research date: **2026-08-08**; **second pass 2026-08-15** (six field agents,
 one per doc). Entries below carry their post-second-pass state. This is the
@@ -33,7 +38,7 @@ well** — the biggest gap of the first pass is closed — but leaves one standi
 blind spot: **announcements that exist only as vendor blogs or trade press**
 (commercial teleop kits, price moves, non-arXiv product launches).
 
-**First action next pass: a vendor/commercial-news sweep with search actually
+**First action of the next pass, as planned 2026-08-15: a vendor/commercial-news sweep with search actually
 available** — teleop kit vendors, Jetson street prices, RealSense/Orbbec/PiPER
 stores (fetches to those were denied this pass), and anything in
 [20 §5](20-policies-and-models.md) still marked "not yet."
@@ -67,9 +72,9 @@ any single cell — the signal is the 9-for-9 direction.
 
 **What remains open:** nobody has run it for a *video-model* generation
 pipeline (the expensive kind), and nobody has run it dollar-matched on a cheap
-arm. **Our own A/B — fix a task, N hours of augmentation versus N hours of
-collecting, ≥50 rollouts per arm — is still worth running, now with LEGS as the
-published precedent to compare against.**
+arm. **An A/B of our own — fix a task, N hours of augmentation versus N hours of
+collecting, ≥50 rollouts per arm — was still worth running as of 2026-08-15,
+with LEGS as the published precedent to compare against; it has not been run.**
 
 ---
 
@@ -229,12 +234,12 @@ stays open; the broader one (has anyone even tried, does it converge at all)
 is closed.
 
 **The nonlinearity budget now has numbers (added 2026-08-23).** From a
-third-party bench test of one STS3215-12V (operator-supplied video summary,
+third-party bench test of one STS3215-12V (a video summary,
 not archived — re-grade when linked):
 
 | Quantity | Measured | Against |
 |---|---|---|
-| Encoder resolution | 12-bit, 4,096 counts/rev = **0.088°/count** | 4.3× finer than the rig drivetrain's 960 ticks/rev — Paper 0's ~2%/~5% quantization bias should shrink accordingly |
+| Encoder resolution | 12-bit, 4,096 counts/rev = **0.088°/count** | 4.3× finer than the rig drivetrain's 960 ticks/rev — the planned identifiability paper's (which became [docs/26](../26-sts3215-synthetic-identifiability.md)) ~2%/~5% quantization bias should shrink accordingly |
 | Backlash | **0.0151 rad ≈ 0.87°** (~10 counts) | ~2× the < 0.5° datasheet spec |
 | Firmware dead zone | **10 encoder counts ≈ 0.88°** | motions inside it are *invisible to the encoder output by firmware choice*, not physics |
 | Repeatability | ±0.17° (~2 counts) on a 10 cm arm | the effective noise floor |
@@ -261,7 +266,11 @@ mechanisms, similar magnitude, both ~10 counts).
 
 ---
 
-## 6. This repo's recordings cannot be used for system identification yet
+## 6. The rig's recordings could not be used for system identification yet
+
+*This section is about the rig's own recordings (`recordings/`), made by the
+archived crates; the platform identifies robots from their telemetry
+instead ([docs/76](../76-the-loop.md)).*
 
 **Unknown:** nothing — this one is known and blocking, and it is written here so
 it is not rediscovered.
@@ -273,7 +282,7 @@ model is circular.**
 
 Three prerequisites, all real work:
 
-1. **Real wheels and real encoders on a real motor** — H4.
+1. **Real wheels and real encoders on a real motor** — H4 of [23](23-simulation-and-real2sim.md).
 2. **Absolute timestamps in the recorder.** Today time is inferred from a fixed
    tick interval, which holds under lock-step and breaks under free-running
    hardware.
@@ -292,8 +301,8 @@ duty cycle and safety case.
 cannot be aimed without an object set, and [26](26-safety-and-regulation.md)'s
 risk assessment cannot be written without a workspace.
 
-*Context, 2026-08-15:* the strategy conversation of this date sketched the
-company shape the wedge must serve — customer scan → sim-first training →
+*Context, 2026-08-15:* the plan of this date sketched the
+loop the wedge must serve — customer scan → sim-first training →
 on-site teleop calibration, hardware-agnostic via a per-robot identification
 onboarding step. The wedge question is unchanged by it, but any candidate
 wedge should now also be scored on how well it fits that loop (scan-able site,
@@ -318,23 +327,23 @@ time per day**, or it is the wrong wedge for this hardware generation.
 
 ## 8. Smaller open items
 
-**Does MuJoCo Warp (and `mjwarp-render`) run under WSL2?** (filed 2026-08-23)
-Now the load-bearing infrastructure question, replacing the ManiSkill3-WSL
-finding whose force decayed when Gate A moved to MuJoCo
-([24 §1](24-compute-and-hardware.md)): the owned 3090 Ti lives under WSL, the
-corpus records ✅ only for CPU MuJoCo and MJX, and Warp's Vulkan/CUDA
-requirements under WSL are unrecorded anywhere in it. One afternoon on the
-owned machine settles it and decides whether dual-booting Ubuntu matters at
-all. Related and also unrecorded: whether a fitted model from ② runs under
-Warp's supported actuator subset, or falls back to CPU rollouts
-([30 §③](30-the-pipeline.md)).
+**Does MuJoCo Warp (and `mjwarp-render`) run under WSL2?** (filed 2026-08-23;
+**answered 2026-08-27**: Warp runs on the WSL GPU, [49](49-gpu-path-mjxwarp.md)
+postscript 2). It replaced the ManiSkill3-WSL finding whose force decayed when
+Gate A (the go/no-go gate on simulated-versus-real ranking) moved to MuJoCo
+([24 §1](24-compute-and-hardware.md)). The related question, whether a fitted
+model runs under Warp's supported actuator subset or falls back to CPU
+rollouts, was answered by the identified-actuator work in
+[docs/76](../76-the-loop.md).
 
 **Is π0.5 LoRA actually trainable on a 24 GB card?** **Updated 2026-08-15:**
 still unresolved, and the evidence tilts worse. openpi's README is unchanged
 (LoRA >22.5 GB), and openpi issue #677 is a live OOM report **on a 4090
 running the LoRA variants**, with `gradient_checkpointing=True` as the
 maintainers' standard remedy — no published user config confirms a
-comfortable fit. **MolmoAct2 has strengthened from fallback toward default**:
+comfortable fit. **MolmoAct2 strengthened as the fallback** (not the default: the later
+read, [24 §2](24-compute-and-hardware.md) of 2026-08-23, holds — on ArmnetBench
+it scores 18.9% against π0.5's 47.6%):
 its numbers now live in official LeRobot docs, an even cheaper
 action-expert-only fine-tune exists at 16.5 GiB @ bs8, and a ready-made
 zero-shot SO-100/101 checkpoint (`lerobot/MolmoAct2-SO100_101-LeRobot`) runs
@@ -393,8 +402,8 @@ Recorded because they are the entries most likely to be wrong again.
 - **The Tier 0 safety work has a regulatory value nobody was designing for.**
   Keeping the ML out of the safety path is the difference between self-
   certification and a Notified Body, and it resolves the AI Act at the same
-  time. That was built for engineering reasons and turns out to be the most
-  commercially valuable thing in the repository.
+  time. That was built for engineering reasons in the archived rig and turned out
+  to carry a regulatory value of its own.
 - **Regulatory claims decay fastest of anything measured in this doc set.**
   Doc 26's own in-force-date warning ("unsettled… verify before relying on
   it") settled within a week, and the underlying mechanism it described

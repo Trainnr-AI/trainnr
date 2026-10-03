@@ -148,7 +148,11 @@ identification on a hobby-servo arm.** The identify-first-randomise-second
 position is still open — but the ecosystem is circling it, so it is a head
 start measured in months, not years.
 
-### What `trainnr` already has, and the one thing that blocks it
+### What the archived rig already had, and the one thing that blocked it
+
+*The crates named in this section (`hil-protocol`, `sim-core`, `wire.rs`)
+are the 2025–26 rig's, now in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig);
+the platform's identification lives in `trainnr/trainnr/robot/`.*
 
 The audit finding: **the repo already logs the exact input/output pair system
 identification needs.** From `crates/hil-protocol/src/lib.rs`, every 20 ms tick
@@ -184,7 +188,7 @@ asymmetry. The rig's own protocol note said so out loud:
 *"motor dynamics are a first-order lag model, not a real motor."*
 
 **The honest summary: this repo has the mechanism for real→sim and has never
-pointed it at reality.** H4 — measuring the real robot when a motor arrives — is
+pointed it at reality.** H4 (this document's fourth hypothesis: measuring the real robot when a motor arrives) is
 therefore not a chore. It is the first system identification, and it is worth
 building as a repeatable procedure with a written acceptance threshold rather
 than as an afternoon of tuning.
@@ -235,7 +239,7 @@ SplatSim's headline — **86.25% average zero-shot sim2real versus 97.5% for
 policies trained on real data** — is the strongest splat-based number in the
 literature, and it is a *rendering* result layered on conventional physics.
 
-**Practical reading: splatting is a phase-7 visual-gap optimisation, after you
+**Practical reading: splatting is a late visual-gap optimisation, after you
 have a working policy.** For collision, hand-author primitives from a floorplan
 and a tape measure. A warehouse aisle *is* boxes; thirty minutes of measuring
 beats an hour of mesh cleanup and produces something a solver can actually use.
@@ -328,7 +332,7 @@ fidelity is worst exactly where the policy is most interesting will produce
 ranking noise and call it a result** — the failure §5 exists to prevent.
 
 **Two working MuJoCo+3DGS precedents exist, both permissive**, which adds a
-third option to the fork in [30 §①](30-the-pipeline.md): **DISCOVERSE**
+third option to the scene-source fork: **DISCOVERSE**
 (MIT, IROS 2025, MuJoCo physics + 3DGS rendering, no INRIA or NVIDIA code in
 its dependency chain) and **MuGS** (Apache-2.0; MuJoCo renders robot and
 objects, gsplat renders background, alpha-composited; **515 Hz** end-to-end at
@@ -596,6 +600,9 @@ them out of the box, which is convenient and is not evidence about your robot.
 
 ## 6. Engine choice, 2026
 
+*Versions as of 2026-08-17; later reads are [36](36-newton-status.md),
+[47](47-newton-docs-review.md) and [50](50-newton-delta-probe.md).*
+
 | Engine | Version / date | Licence | GPU | macOS | Verdict |
 |---|---|---|---|---|---|
 | **MuJoCo** | **3.11.0, 2026-07-27** | Apache-2.0 | CPU-native | ✅ | **Primary.** Best contact model for a compliant arm; **only stack with first-party sysid** |
@@ -617,8 +624,8 @@ islands.
 
 ### NVIDIA's own architecture slide, and what it settles (2026-08-17)
 
-An **NVIDIA SIGGRAPH 2026 "Architecture Overview" slide** (shared by the
-operator; a photographed slide, not a fetched URL — grade accordingly) draws
+An **NVIDIA SIGGRAPH 2026 "Architecture Overview" slide** (a photographed
+slide, not a fetched URL — grade accordingly) draws
 the whole stack, and it is the clearest confirmation yet of the conclusions
 above. Reading it top-down:
 
@@ -785,11 +792,13 @@ app — same binaries, same licence, friendlier packaging.
 ⚠️ **ManiSkill3's GPU simulation does not work under WSL** (re-verified
 2026-08-15, install-matrix unchanged: "WSL | ✅ CPU | ❌ GPU Sim | ❌
 Rendering") — see [24-compute-and-hardware.md](24-compute-and-hardware.md).
-This is the single most actionable infrastructure finding in the whole research
-pass.
+When written this was called the single most actionable infrastructure
+finding of the pass; superseded 2026-08-23 ([24 §1](24-compute-and-hardware.md)):
+the evaluation harness moved to MuJoCo, and Warp runs on the WSL GPU
+([49](49-gpu-path-mjxwarp.md)).
 
-This supersedes nothing in [../05-simulation-ros2-wasm.md](../05-simulation-ros2-wasm.md);
-it extends it. That document's conclusions — MuJoCo adopted, Isaac skipped for
+This supersedes nothing in the earlier simulation note; it extends it. That
+document's conclusions — MuJoCo adopted, Isaac skipped for
 lack of macOS support, Genesis "watch, don't build on" — have all held up.
 
 ---
@@ -809,7 +818,9 @@ lack of macOS support, Genesis "watch, don't build on" — have all held up.
    optimisation-based control rather than RL throughput.
 5. **MuJoCo Warp / mjlab as the starting point.** Migrate later if throughput
    binds — it will not at this scale, when Playground trains pick-cube-from-pixels
-   in 10 minutes on one 4090.
+   in 10 minutes on one 4090. *Reversed 2026-09: mjlab became the platform's
+   trainer for the legged work; see [56](56-mjlab.md) and
+   [58](58-cross-framework-setup.md).*
 6. **Waiting for Newton to mature.** It already did; it just is not a workflow.
 7. **RoboVerse or RoboCasa as a real2sim *method*.** RoboVerse reports no
    sim2real numbers; RoboCasa365 reports none either. Mine RoboCasa for assets.

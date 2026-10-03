@@ -37,11 +37,11 @@
   "task": "aloha2 kitting"
  },
  "artifacts": {
-  "log": "docs/07-progress-log.md, entry 2026-08-27 (the T5 chain end to end)"
+  "log": "the maintainers' log, 2026-08-27 (not public)"
  },
  "sources": {},
  "protocol": "docs/32 (the evaluation layer): paired starts, exact interval, milestone funnel",
  "caveats": [
-  "A smoke-scale run whose purpose was the chain, not the policy; kept because docs/33 quotes its funnel as the example of a row of zeros made legible."
+  "A smoke-scale run whose purpose was the chain, not the policy; kept because its funnel is the example of a row of zeros made legible."
  ]
 }

@@ -31,7 +31,7 @@
  "protocol": "docs/78-the-scene-loop.md §4 E2",
  "caveats": [
   "One world on a CPU: the field's GPU number for splats is still unpublished and ours waits for the box (E0).",
-  "The policy is the smoke checkpoint (0/4 on a plane, docs/07 2026-09-20); nothing here says anything about walking on the course. The assay's cliff is unmeasurable until go2-c2 runs here.",
+  "The policy is the smoke checkpoint (0/4 on a plane, measured 2026-09-20); nothing here says anything about walking on the course. The assay's cliff is unmeasurable until go2-c2 runs here.",
   "The camera gate's 0/1 is not a verdict either: one trial, an unevaluated policy, no evaluation cited.",
   "The head camera is placed by hand (38 cm ahead of the base, 6 cm up); the Go2's real camera pose is not read from the bundle yet."
  ]

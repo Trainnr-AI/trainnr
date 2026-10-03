@@ -33,7 +33,7 @@
   "pod_hours_total_estimate": 78.7,
   "dollars_estimate": {
    "rtx_pro_6000": "~77.1 h x $2.09 = ~$161",
-   "b200": "94 min x $6.79/h = ~$10.6 (docs/07 2026-08-27)",
+   "b200": "94 min x $6.79/h = ~$10.6 (2026-08-27)",
    "total": "~$170"
   },
   "per_result_cost": {
@@ -57,10 +57,10 @@
  },
  "inputs": {
   "rate_source": "RunPod pod list, costPerHr field",
-  "hours_source": "docs/07 entries and study logs (stage timestamps)"
+  "hours_source": "the maintainers' dated log entries (not public) and the study logs' stage timestamps"
  },
  "artifacts": {
-  "log": "docs/07-progress-log.md",
+  "log": "the maintainers' log (not public)",
   "pod_list": "tools/cloud-gpu.py machines"
  },
  "protocol": "docs/34-cloud-gpu.md",

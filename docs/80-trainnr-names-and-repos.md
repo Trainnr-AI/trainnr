@@ -1,11 +1,10 @@
 # trainnr: the names and the repositories
 
-*A proposal, 2026-10-01, for the maintainer's decision. It settles what every
-surface is called and where every module lives before a single rename is
-made. It follows the 2026-09-07 decision (the name is trainnr, the org is
-Trainnr AI) and two structural studies made today against
-primary sources: Rerun (rerun-io/rerun) and goose (aaif-goose/goose).
-The full audit of our current names is in §6.*
+*Decided 2026-10-01 to 2026-10-03. What every surface is called and
+where every module lives. It follows the 2026-09-07 decision (the name
+is trainnr, the organisation is Trainnr AI) and two structural studies
+against primary sources: Rerun (rerun-io/rerun) and goose
+(aaif-goose/goose). The audit of the former names is in §5 and §6.*
 
 ## 0. The two models we studied, in one paragraph each
 
@@ -41,16 +40,8 @@ code in core. Apache-2.0, governance files from day one.
   company and the GitHub organisation (`github.com/Trainnr-AI`); the site
   is trainnr.ai. Capitalised only where an operating system demands it
   (`Trainnr.app`).
-- One line (2026-10-02, the maintainer's framing, tightened the same night
-  so it names the work: simulation, reinforcement and imitation learning,
-  policies, datasets, deployment): *the end-to-end robotics platform, run
-  from your coding agent: real-to-sim, train, sim-to-real, and back.* The turns, in the order a developer meets them: capture,
-  real-to-sim, build data, train, evaluate, sim-to-real, deploy and watch,
-  query and learn. The earlier line, *measure your robot, train on the
-  measurement, certify, deploy*, is turns 2 to 6 of it. The honesty rule
-  holds in every sentence: what has run is simulation end to end on the
-  Go2; the hardware step is the vendor's runtime; no real deployment is
-  claimed until one is on the record.
+- The line and the loop's eight turns are the root README's. Its honesty
+  rule holds here too: no real deployment is claimed until one is on the record.
 - No "robotiq" anywhere a person reads (§5 lists the one identifier that
   must stay, and why). "Robotiq" the gripper vendor keeps its name in the
   2F-85 asset, because it is theirs.
@@ -60,9 +51,9 @@ code in core. Apache-2.0, governance files from day one.
 Names say what the thing does, the Rerun rule. Internal words that a user
 never needed ("the doors", "the press", "the referee") become the industry's.
 
-| Today | Proposed | Why |
+| Former word | The name | Why |
 |---|---|---|
-| the Studio | **trainnr Studio** (decided 2026-10-03) — the app you install; binary `trainnr-studio`, command `trainnr studio`, app id `ai.trainnr.studio` | "Desktop" was the proposal (goose's word, neutral); Prakhar chose Studio: the tools are already `launch_studio`, `describe_studio`, `set_studio_theme` and `$TRAINNR_STUDIO` names the binary, so the user-facing name and the API now agree. The app is not a viewer only: it lists the project, runs the simulator, mirrors jobs. Inside it, the words are exact: **the viewer** (the embedded Rerun viewer), **the simulator** (the MuJoCo window), **the pages** (Robots … Monitoring). |
+| the Studio | **trainnr Studio** (decided 2026-10-03): the app you install; binary `trainnr-studio`, command `trainnr studio`, app id `ai.trainnr.studio` | The tools were already `launch_studio`, `describe_studio`, `set_studio_theme`, and `$TRAINNR_STUDIO` names the binary, so the user-facing name and the API agree. The app is not a viewer only: it lists the project, runs the simulator, mirrors jobs. Inside it the words are exact: **the viewer** (the embedded Rerun viewer), **the simulator** (the MuJoCo window), **the pages** (Robots … Monitoring). |
 | the doors (MCP tools) | **tools** of the **trainnr MCP server** | MCP's own word. Tool prefix `mcp__trainnr__*` from a checkout's `.mcp.json`, `mcp__plugin_trainnr_trainnr__*` through the plugin. |
 | the press | **data generation** (`generate_demos`) | W&B / LeRobot vocabulary; "press" stays as the module name only. |
 | the referee | **success criterion** / **judge** | Gymnasium vocabulary. |
@@ -72,10 +63,10 @@ never needed ("the doors", "the press", "the referee") become the industry's.
 | the presenter | (internal) | Never user-facing. |
 | the instrument | **trainnr** | Drop the metaphor from tool descriptions. |
 | the rail | (internal) | The sidebar. |
-| "the loop" | **the pipeline** (Sim-to-real pipeline, as the Overview says) | |
+| "the loop" | **the loop** | The README's word; the Overview's strip is labelled the sim-to-real pipeline. |
 
-The alternative was "Desktop" (goose's word); the decision of 2026-10-03,
-recorded in the table above, closed it in favour of Studio.
+"Desktop" (goose's word) was the alternative; the decision of 2026-10-03
+chose Studio.
 
 ## 3. The repositories (organisation `Trainnr-AI`)
 
@@ -93,10 +84,10 @@ split would take.*
 |---|---|---|
 | **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the Studio (`crates/trainnr-studio`), the CLI and tools, the actuator library and the five robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
 | a hosted service (not in this repository) | a control plane: registry, scheduler, organisations | Different owners and cadence; it extends the tool through its plugin seams (`trainnr.mcp_tools`). |
-| the website | trainnr.ai; reads `docs/` from the product repo at a pinned commit, Rerun's `landing` pattern | Vercel deploys; a designer's repo. |
+| the website | trainnr.ai; reads `docs/` from the product repo at a pinned commit, Rerun's `landing` pattern | Its own build and release cadence. |
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
 | **`mjsim`** (public, planned; docs/84) | the MuJoCo simulator window: the egui widget (Rust) and the simulation stream (Python), one version; the Studio and `trainnr` depend on it | its own cadence and its own users (any egui app, any MuJoCo user); the name is free on PyPI and crates.io |
-| **`trainnr-identified-dr`** (public; one repository per paper, docs/81) | the manuscript, its LaTeX, figures, the per-trial artifacts with their history, a frozen snapshot of the finding records it cites, the paper build tools; depends on `trainnr` at a pinned commit | A paper freezes at submission and is cited by DOI; its evidence is most of the product history's weight (docs/80 §8). |
+| a paper repository | not created; the paper lives in `docs/paper/` | Considered so a paper could freeze at submission and be cited by DOI; deferred with the other splits. |
 | **`rig`** (public archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
 | **`.github`** (public) | the organisation profile README | GitHub's convention. |
 
@@ -129,19 +120,22 @@ Rules:
 - **Layers.** L0 never imports L1 or L2; L1 imports L0; L2 talks to L0 by
   files and processes only. A script (a layer check under tools/, after
   Rerun's crate-layer check) greps imports and fails CI on a
-  violation. Today the one violation is that L0 shells out to L1 by path
-  (`mcp_actions.py`); it becomes an entry point L1 registers
+  violation. *Target:* L0 still shells out to L1 by path
+  (`mcp_actions.py`); the plan is an entry point L1 registers
   (`trainnr.trainers`), so L0 needs no path to L1.
 - **Own installs.** Each Python package builds and installs alone:
   `pip install trainnr` (core), `pip install trainnr[mcp,deploy,viz]`,
-  `pip install trainnr-mjlab` (pins `trainnr==x.y`). In the repo they are a
-  `uv` workspace, so development uses the path; a release uses the pin.
+  `pip install trainnr-mjlab` (pins `trainnr==x.y`). *Target:* a `uv`
+  workspace at the root; today there is no root pyproject, and
+  `trainnr-mjlab` reaches `trainnr` through a path dependency.
 - **One protocol between the app and the core.** The Studio reads
   `.index/*.json` and drives the pipeline through the MCP server's tools;
   it owns no state. Every path it assumes today (`spawn.rs` markers) is
   replaced by "the `trainnr` package on PATH" plus `$TRAINNR_REPO` for
   development.
-- **One version, one tag.** `version` lives in one place and is written
+- **One version, one tag.** *Target.* Today 0.1.0 is written by hand in
+  three files (both pyprojects and the Studio's Cargo.toml). The plan:
+  `version` lives in one place and is written
   into both pyprojects, the Cargo workspace and the Studio's about box;
   a tag `vX.Y.Z` builds wheels, the Studio for three platforms, and the
   source bundle; a floating `stable` tag, goose's way. Alphas pinned exact.
@@ -206,24 +200,9 @@ in its own archive. A push happens only after the rename has landed,
 `tools/verify.sh` is green on a cold clone, a new user's agent has walked
 the Go2 loop from that clone, and the README is the Go2 path.
 
-## 9. Order of work
+## 9. Status
 
-*Status 2026-10-02 (night): 1 decided in this document; 2 landed (the
-rename commit); 3 landed (NOTICE, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT,
-GOVERNANCE, CITATION.cff, CODEOWNERS, CHANGELOG, the README, the org
-profile), with the plugin manifest and the MCP Registry `server.json`
-beside them; 4 landed (the rig extracted to its archive with history:
-177 commits, 195 files, the crates' tests and a firmware build green);
-5 done: pushed 2026-10-02 to `Trainnr-AI/trainnr` (cold gate 16 of 16),
-`Trainnr-AI/rig` (archived) and `Trainnr-AI/.github` (the profile).*
-
-1. This document decided (the Studio name, the robots split timing, the
-   logs) and is the standing decision.
-2. The rename, one commit: directories, packages, entry points, the MCP
-   server, the Studio, the ids, the env vars, the docs; the layer check
-   added. (The compat shims for the two import names and the task
-   namespace were added and then removed the same day: nothing outside
-   this repository ever used the old names.)
-3. Governance files, NOTICE, README, CITATION; the org profile.
-4. The rig extracted to its own repository with history.
-5. The public edition built and its cold-clone run; then the first push.
+Everything this document decided has landed: the rename, the governance
+files and NOTICE, the rig extracted to its archive with history, and the
+public edition built, gated on a cold clone and walked by a new user's
+agent (2026-10-02 and 2026-10-03).

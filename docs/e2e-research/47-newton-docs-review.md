@@ -1,6 +1,6 @@
 # Newton, read docs-first: the solver stable and our parity ledger
 
-*2026-08-27, branch `physics-newton`. Source: a repomix pack of
+*2026-08-27. Source: a repomix pack of
 [newton-physics/newton](https://github.com/newton-physics/newton) at
 `main`, version `1.6.0.dev0` (post-v1.5.0 development), reviewed
 locally — every claim below is from the repo's own docs/source unless
@@ -62,7 +62,7 @@ Two mode switches matter:
 
 - `use_mujoco_cpu=True` — classic CPU MuJoCo instead of mujoco_warp.
   This plus "macOS (CPU only)" in the tested-configurations table means
-  Newton (engine) runs on this Mac, GPU-free.
+  Newton (engine) runs on an Apple M1 (arm64), GPU-free.
 - `use_mujoco_contacts` — `True` (default) uses MuJoCo's own collision
   pipeline and preserves imported `contype/conaffinity` masks verbatim
   (single-import case); `False` feeds Newton's pipeline (non-convex
@@ -77,7 +77,7 @@ enumerate it. The docs enumerate it themselves
 
 | MuJoCo feature | Fate in Newton (engine) | What breaks for us |
 |---|---|---|
-| **`<keyframe>`** | **not imported** | our entire episode protocol starts from `neutral_pose` keyframes (`EpisodeProtocol.home`); the ALOHA reset-state jam (docs/22) is exactly what keyframes protect us from |
+| **`<keyframe>`** | **not imported** | our entire episode protocol starts from `neutral_pose` keyframes (`EpisodeProtocol.home`); the ALOHA reset-state jam ([docs/31](../31-aloha2-e2e.md) §T1 notes) is exactly what keyframes protect us from |
 | **`<sensor>`** | **not imported** — Newton has its own sensor pipeline | the whole harness contract ("policies observe sensors"), the referee framepos sensors, the bundle's jointpos/jointvel census, `LEFT_GRIPPER_POS_SLICE` — all of it would need re-plumbing through Newton sensors |
 | Cameras/lights in MJCF | ignored (own viewer pipeline; `SensorTiledCamera` instead) | our vision harness renders MJCF-declared cameras per step |
 | `<plugin>`, `<composite>`, `<flex>`, `<skin>` | not supported/imported | unused by us today |
@@ -112,7 +112,8 @@ MuJoCo scenes verbatim (the semantics are MuJoCo's own):
   is corrected (timeconst/dampratio); `solimp` = how much authority the
   constraint has (impedance curve d(r): d0, dmax, width, midpoint,
   power). Direct format `solref=(-stiffness,-damping)` is called out as
-  "clearer for system identification" — relevant to Paper 0/sysid work.
+  "clearer for system identification" — relevant to system identification (the planned identifiability study,
+  which became [docs/26](../26-sts3215-synthetic-identifiability.md)).
 - **"Make harder vs make stable" are different actions**: harder =
   raise ke / cut timeconst / raise dmax / cut width, costs stability
   margin; stable = raise kd toward critical, cut dt, fix geometry.
@@ -134,7 +135,7 @@ MuJoCo scenes verbatim (the semantics are MuJoCo's own):
   per-world, tuned to the busiest world; a marginally-stable parameter
   diverges in *some* world at 2048 worlds even if most are fine.
 
-## 5. Governance and stability, updated
+## 5. Governance and stability, updated (as of 2026-08-27)
 
 - Versioning is now formally documented (docs/guide/compatibility.rst):
   major.minor.micro; deprecations live at least one full minor cycle;
@@ -178,14 +179,14 @@ path.
    "late-2026". Watch it, don't act on it.
 2. The engine's tuning documentation (§4) is adoptable **today** at
    zero integration cost, because it documents MuJoCo semantics. The
-   solver-study harness this branch builds should measure exactly the
+   solver-study harness should measure exactly the
    axes those docs name: solver × cone × integrator × dt, judged by
    referee outcome + penetration + solver iterations on our scenes.
 
 ## 7. MEASURED (2026-08-27): the sweep §6.2 called for
 
 `tools/solver-study.py`, one scripted kitting episode (trial 0, proven
-band) per config on this Mac, judged by the task's own referee.
+band) per config on an Apple M1 (arm64), judged by the task's own referee.
 pen = worst contact interpenetration; niter = mean constraint-solver
 iterations per 50 Hz tick:
 
@@ -264,7 +265,7 @@ penetration figure differs (baseline 1.5 mm there, 2.39 mm here; the
 pyramidal Newton row 4.7 vs 2.95). Same engine version, same inputs,
 different CPU architecture — arm64's and x86-64's floating point do
 not agree to the last bit, and a pinch grasp amplifies the last bit
-through contact (the mechanism docs/07 measured the night before
+through contact (the mechanism measured the night before
 between MuJoCo builds: bit-identical for 84 steps, then a box-box
 contact, then centimetres).
 
@@ -279,7 +280,7 @@ outright" does not. And the instrument stamp learned from it: every
 because a version alone did not name the thing the verdict depends
 on.
 
-### 7.3 The second pass, re-measured on x86-64 (WSL, 2026-08-27, the same sweep with the diagnostics)
+### 7.2 The second pass, re-measured on x86-64 (WSL, 2026-08-27, the same sweep with the diagnostics)
 
 | solver | cone | integ | impratio | verdict | pen mm (arm64 → x86) | slip mm/s (arm64 → x86) | grip N (arm64 → x86) |
 |---|---|---|---|---|---|---|---|

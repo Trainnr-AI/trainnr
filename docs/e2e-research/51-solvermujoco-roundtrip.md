@@ -1,8 +1,7 @@
 # SolverMuJoCo round-trip, measured: not the same robot
 
-*2026-08-27, the queue's "probe SolverMuJoCo (save_to_mjcf diff,
-deterministic mode)" item, run on this Mac in the newton-probe scratch
-venv (newton 1.5.0, mujoco 3.11.0 — matching the repo's lock).
+*2026-08-27, a probe of SolverMuJoCo (save_to_mjcf diff, deterministic
+mode), run on an Apple M1 (arm64) in a scratch venv (newton 1.5.0, mujoco 3.11.0 — matching the repo's lock).
 Method: `so101.xml` → `ModelBuilder.add_mjcf` →
 `SolverMuJoCo(use_mujoco_cpu=True, save_to_mjcf=...)` → compile BOTH
 files with the same MuJoCo and diff the compiled arrays. Everything
@@ -68,8 +67,8 @@ drop is specific and fixable upstream: the importer should resolve
 `acc0` from) or carry the ratio through to the target-mode rebuild.
 `mujoco.rst`'s own "Unsupported MuJoCo features" list names sensors,
 cameras, lights, keyframes, composites, skins, plugins and user data —
-and not this; it is a bug, not a documented limit. Filed against
-nothing yet; the issue text is this paragraph.
+and not this; it is a bug, not a documented limit. Not filed upstream as of
+2026-10-03; the issue text is this paragraph, against newton 1.5.0.
 
 Combined verdict, sharpening docs/e2e-research/47 §3: crossing into Newton (engine)
 costs sensors, keyframes, visual geoms, the integrator choice, the

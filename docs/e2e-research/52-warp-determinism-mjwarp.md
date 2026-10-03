@@ -1,6 +1,7 @@
 # Warp determinism × mujoco_warp: read at the source, one probe from settled
 
-*2026-08-27. Source: local repomix packs of NVIDIA/warp (main; the
+*2026-08-27 (versions as of that day: mujoco 3.12.0, mujoco_warp 3.12.0,
+warp 1.16.0). Source: local repomix packs of NVIDIA/warp (main; the
 determinism guide `docs/user_guide/execution_and_performance/
 deterministic_execution.rst`) and google-deepmind/mujoco_warp (main),
 both reviewed here. This resolves docs/e2e-research/48's open flag #2 and upgrades
@@ -43,7 +44,7 @@ low-contention cases pay 10–24×. Slot allocation pays ~6–8×.
 | implicitfast? | **RESOLVED (docs/e2e-research/48 flag #2): supported.** Regression tests exist ("implicitfast + tendon on serial chain must not NaN"), and their own benchmark scenes run `integrator="implicitfast"`. Only the *midpoint feature* of implicitfast is unsupported — the README's ambiguous line meant the sub-feature, not the integrator |
 | Where does non-determinism live? | Hot-path reductions are `wp.atomic_add`: constraint ×52, smooth ×33, solver ×14, passive ×11, sensor ×9 (their _src modules) — **all Warp Pattern 1**. Contact/constraint row allocation is slot-style — **Pattern 2**. Exactly ONE `atomic_cas` in the tree: the island module's union-find, which is result-deterministic by construction (union-by-min converges to the same forest regardless of race order) — INFERENCE, from reading the kernel |
 | Do they acknowledge it? | Their own tests sort efc rows before comparing ("Precompute sorting for efc fields to avoid non determinism") — constraint-row ORDER varies today under the default `NOT_GUARANTEED` mode. An RK4 repeatability test exists for the integrator side |
-| Benchmarks | Nightly, published per scene (aloha_pot/clutter/sdf/cloth, unitree_g1, myoarm, franka, humanoid) at google-deepmind.github.io/mujoco_warp/nightly — the page fetches were blocked in earlier sessions; the harness ships in their repo (benchmarks/run) so the WSL box can produce OUR numbers directly |
+| Benchmarks | Nightly, published per scene (aloha_pot/clutter/sdf/cloth, unitree_g1, myoarm, franka, humanoid) at google-deepmind.github.io/mujoco_warp/nightly — not read here; the harness ships in their repo (benchmarks/run), so our own numbers can be produced directly on the GPU |
 
 ## 3. The upgraded verdict on GPU determinism (revises docs/e2e-research/49)
 
@@ -111,7 +112,7 @@ add on one output array, and Warp's deterministic codegen will not
 take that. The verdict: **deterministic GPU certificates are blocked
 upstream**, in mujoco_warp 3.12.0, not in anything we control; the
 fix is theirs (split the kernel, or a build without the tactile
-sensor path) and is worth an issue. Until then docs/e2e-research/49's statistical
+sensor path) and is worth an issue (not filed upstream as of 2026-10-03). Until then docs/e2e-research/49's statistical
 treatment stands, and the stamp `mjx-warp-3.12.0+warp-1.16.0+gpu+x86_64`
 says exactly which non-repeatable instrument produced a number. Cost
 of learning it: the probe's first mode spent ~10 minutes compiling
@@ -130,6 +131,6 @@ It sized `naconmax` to 262,144 for 64 worlds by its own estimate (our
 backend refuses to guess and asks for the numbers; this is what the
 numbers look like at that batch). For scale: Playground's
 AlohaHandOver on Warp reached 36k env-steps/s at 2,048 worlds on this
-card (the box memory); our scene at 64 worlds is half that per step
+card; our scene at 64 worlds is half that per step
 with 32× fewer worlds — the batch, not the scene, is the lever.
 

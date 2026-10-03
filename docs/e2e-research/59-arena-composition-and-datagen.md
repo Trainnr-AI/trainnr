@@ -84,7 +84,7 @@ episode records carry seed + variation draws but no config hash, no
 git SHA, no Isaac version stamp — `get_isaac_sim_version()` exists in
 the tree and is never written into a result.
 
-## 5. The data factory (the part our synthetic-data phase reads twice)
+## 5. The data factory (the part the synthetic-data design leans on most)
 
 Teleop (keyboard/spacemouse/OpenXR incl. Vision Pro) → Isaac Lab's
 `arena:record_demos.py` with an Arena callback → **success-only HDF5**

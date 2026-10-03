@@ -1,12 +1,19 @@
 # Arena experiments and the evaluation runner: what to take, what to leave
 
+*Source: the `isaaclab_arena` repository, read 2026-08-26 from a repomix
+bundle made in session (132,303 lines; commit not recorded). The bundle is
+not shipped; every `L<number>` below is a line of that bundle. Our-side line
+numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 *Fifth pass, 2026-08-26. One agent, one field — how NVIDIA Isaac Lab Arena
 specifies an "experiment", runs it locally and across nodes, records each
 episode, and aggregates — read from the ACTUAL code (repomix bundle of
 `isaaclab_arena`, 132,303 lines). Citations are `<repo path>:L<bundle line>`;
-the number is the bundle's line, findable with one `sed -n`. Mapped against
-our harness (`trainnr/trainnr/evaluate/`), certificate (`stats/`) and
-bundles (`bundles/`). Nothing below comes from memory of Isaac Lab.*
+the number is the bundle's line. Mapped against our harness
+(`trainnr/trainnr/evaluate/`), certificate (`stats/`) and bundles
+(`trainnr/trainnr/bundles/`). Nothing below comes from memory of Isaac Lab.*
 
 ---
 
@@ -203,6 +210,10 @@ any way to run policies on more than one machine.
 
 ## 3. Adopt / skip
 
+*Status (2026-10-03): items 1–2, the per-episode record and its exit
+status, are `trainnr/trainnr/evaluate/records.py`; the rest below is as
+written on 2026-08-26.*
+
 ### ADOPT
 
 1. **The per-episode JSONL record, plus the pairing key Arena lacks.** New
@@ -235,7 +246,8 @@ any way to run policies on more than one machine.
    `build_experiment_output`'s shape: copy completed dirs, keep failed statuses
    "without partial Run artifacts" (`:L126197-126200`), rebuild the JSON. This
    makes multi-node trivial — each cloud job is the local runner on a
-   single-run experiment (`:L127665`); SkyPilot (docs/37) stands in for OSMO.
+   single-run experiment (`:L127665`); a rented GPU per job (docs/34-cloud-gpu.md)
+   stands in for OSMO.
    Keep the wrapper discipline: write `{execution_status, process_exit_code}`
    and exit 0, so no scheduler retry hides a policy crash (`:L127054-127067`).
 5. **Aggregate by recomputing from raw records, never by averaging rates**
@@ -248,12 +260,13 @@ any way to run policies on more than one machine.
 - **Hydra/OmegaConf composition** — the stats/bundles layer is stdlib-only so
   a signed report recomputes anywhere (`bundles/profile.py:L9-12`); same rule.
 - **OSMO** — NVIDIA-internal pools (`pool="isaac-dev-l40s-04"`, `:L128148`);
-  docs/37 chose SkyPilot. Take the shape, not the tool.
+  the platform rents one GPU per run instead (docs/34-cloud-gpu.md). Take the
+  shape, not the tool.
 - **`num_rebuilds` + seed offsets** — exist because build-time variation draws
   apply to every episode (`variation_recorder.py:L90978-90983`); ours are
   per-trial functions. **`--chunk_size`** — an Isaac Sim memory-leak
   workaround (`:L33618`). **torchrun sharding** (`:L34505-34546`) — our sim is
-  CPU MuJoCo; the GPU path is MJX-Warp (docs/36), a different batching shape.
+  CPU MuJoCo; the GPU path is MJX-Warp ([36](36-newton-status.md), [49](49-gpu-path-mjxwarp.md)), a different batching shape.
 - **`success: None` dropped from the denominator** (`:L92485-92487`) — an
   unscored episode is a protocol bug for us; refuse it.
 - **HTML report + mp4 per episode** — Rerun is the viewer; a funnel table
@@ -265,7 +278,7 @@ any way to run policies on more than one machine.
 1. **Remote policy servers.** Arena's client/server split with a co-scheduled
    server per run (`:L127670-127682`) is how π0.5-class models are evaluated
    outside the sim process; ours is in-process (`vision.py:L103-170`). When the
-   first cloud-GPU checkpoint (docs/31 T5) needs judging, do we add a
+   first cloud-GPU checkpoint ([docs/31](../31-aloha2-e2e.md) T5) needs judging, do we add a
    `remote_host/port` PolicySpec — and does server latency count in the protocol?
 2. **Where the language instruction lives.** Arena: environment builder
    (`:L98764`), pushed at reset (`:L34428`). Ours: a policy constructor argument.
@@ -275,4 +288,4 @@ any way to run policies on more than one machine.
    collector must merge by `task`. Decide before the record schema freezes.
 4. **Real-side records.** Arena has no real-robot half. `join_with_real` takes
    bare `(successes, trials)`; real trials deserve the same `EpisodeRecord`
-   (operator, takeover timestamp — docs/38) so both halves share one shape.
+   (operator, takeover timestamp; [38](38-fleet-data-planes.md)) so both halves share one shape.

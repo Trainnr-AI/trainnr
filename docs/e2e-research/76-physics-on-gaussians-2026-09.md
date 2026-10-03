@@ -107,7 +107,7 @@ no automated parameter identification.
 | Genesis Nyx | Genesis | static light field, no runtime placement | n/a | unspecified | none | Apache-2.0 | 2026-06-08 | VERIFIED docs |
 | Isaac Sim NuRec | PhysX / Newton | static background | mesh | unspecified | none | closed renderer | 2026-09-11 | CLAIMED |
 | GSWorld (ICRA 2026) | SAPIEN | gaussians bound to URDF links and objects | mesh | unspecified | "zero-shot", unquantified | no licence file | 2026-02-27 | partial |
-| Neverwhere | MuJoCo 3.1.6 CPU | static | OpenMVS mesh | one env | paired real trials (docs/75 §3) | MIT | 2026-09-16 | VERIFIED |
+| Neverwhere | MuJoCo 3.1.6 CPU | static | OpenMVS mesh | one env | paired real trials ([75 §3](75-scene-capture-2026-09.md)) | MIT | 2026-09-16 | VERIFIED |
 
 Camera fidelity, VERIFIED in code: mujoco_warp composites
 `hit_color = splat_color + hit_color · transmittance`, splats unlit and

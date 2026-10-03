@@ -1,7 +1,9 @@
 # BAM: a published, working answer to our own open question
 
-*2026-08-28, read from two operator-supplied repomix packs:
-[Rhoban/bam](https://github.com/Rhoban/bam) (ICRA 2025, Duclusaud &
+*2026-08-28, read from two repomix packs of the repositories:
+[Rhoban/bam](https://github.com/Rhoban/bam) (ICRA 2025: Duclusaud, Passault, Padois and Ly, "Extended Friction
+Models for the Physics Simulation of Servo Actuators", pp. 12091–12097;
+the vendored `PROVENANCE.json` carries the citation; Duclusaud &
 Passault, Apache-2.0) and a downstream user, `mjlab_microduck` (an
 RL locomotion project consuming BAM through
 [mjlab](https://github.com/mujocolab/mjlab)). Every claim below is
@@ -50,7 +52,8 @@ ICRA 2025 paper). BAM provides:
   the same discipline our own `pin_nominal_options` doctrine follows
   (the rig's discretization is part of the identified artifact, not
   incidental).
-- Seven shipped, pre-identified actuators: Dynamixel MX-64, MX-106,
+- Eight shipped, pre-identified actuators (seven at the first read; the
+  Waveshare ST3025 counted at the postscript): Dynamixel MX-64, MX-106,
   XL-320, XL-330, eRob80:50, eRob80:100, and **Feetech STS3215
   (7.4V)**. Raw recorded trajectories are downloadable from
   HuggingFace for STS3215 and three others (`feetech_sts3215_raw.zip`
@@ -81,8 +84,12 @@ smoothing would shape every fast setpoint change our choreography
 issues, and would be indistinguishable from "the arm is a bit
 sluggish" without knowing to look for it specifically.
 
-**Identified parameters** (`bam/params/feetech_sts3215_7_4V/`), the
-two ends of the model hierarchy:
+**Identified parameters** (`bam/params/feetech_sts3215_7_4V/`, the
+repository's files at the read; the vendored copies under
+`robots/actuators/` carry these values, while
+[53-microduck](53-microduck-rl.md) §0 quotes the 1.0.2 wheel's slightly
+different STS3215 M1 set, `kt = 1.2116`), the two ends of the model
+hierarchy:
 
 ```
 m1 (Coulomb-Viscous, MuJoCo-native equivalent):
@@ -124,7 +131,7 @@ once a `MujocoController` drives that joint. Also models an optional
 battery-sag term (`V_eff = V_in − R_drop·I`, current drawn as a
 signed sum across all joints on one controller, clamped at zero so
 regeneration can't raise the modeled bus voltage) — something our
-rig's own SG90/STS setup has never modeled.
+archived rig's SG90/STS setup never modeled.
 
 **MJX-Warp via mjlab** (`bam.mjlab.BamActuatorCfg`, PyPI
 `better-actuator-models[mjlab]`): fully vectorized over parallel
@@ -137,7 +144,7 @@ extra pins `mujoco-warp>=3.7,<3.8` and `warp-lang>=1.12,<1.13`
 raises `ls_parallel was removed`"). Our pin is `mujoco~=3.11.0` /
 measured `warp-lang 1.14.0` (docs/e2e-research/49, docs/e2e-research/52). Trying `bam[mjlab]`
 against our stack today would hit exactly the kind of breakage
-Tuesday night's accidental 3.11→3.12 bump caused on our own suite —
+an accidental 3.11→3.12 MuJoCo bump caused on our own suite —
 this is not speculative, it's the same failure shape, pinned in their
 own comment. A comparison would need an isolated old-stack venv (the
 newton-probe pattern), not a same-env install.
@@ -178,7 +185,7 @@ bundle currently models at all.
   whether it converges on *our* arm, in *our* rig configuration, with
   *our* electronics — a different, narrower question than "has anyone
   ever tried."
-- **docs/23's "no published `mujoco.sysid` application to any hobby
+- **The research agenda's claim, "no published `mujoco.sysid` application to any hobby
   servo" stands, narrowly** — BAM does not use `mujoco.sysid`; it has
   its own CMA-ES rollout-matching optimizer against a from-scratch
   friction-budget simulator. The claim about `mujoco.sysid`
@@ -202,7 +209,7 @@ bundle currently models at all.
 3. **Backlash modeling** — the `BacklashEncoderBamActuator` pattern is
    directly reusable MJCF-and-signal-routing knowledge independent of
    BAM itself: an extra passive hinge, position read through it,
-   velocity not. Worth remembering whenever the deferred feedback-arm
+   velocity not. Worth remembering whenever a feedback-equipped arm
    purchase happens and identification on our own hardware begins.
 4. **Do nothing yet** — this is research, not a blocker; nothing here
    changes what's shippable today.

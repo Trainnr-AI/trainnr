@@ -1,7 +1,7 @@
 # Scene capture for the loop: the 2026-09-22 pass
 
-*Sixth pass on captured scenes, and the first one asked as a product
-question rather than a physics one. Six agents, one per field, against
+*The 2026-09-22 pass on captured scenes, and the first one asked as a
+product question rather than a physics one. Six agents, one per field, against
 primary sources on 2026-09-22 (the web-search budget was exhausted that
 day, so every agent worked from direct fetches of arXiv, GitHub, PyPI,
 readthedocs and vendor pages; VERIFIED means the number was read in the
@@ -89,8 +89,9 @@ New since August (VERIFIED abstracts unless noted): VGGT-Ω
 MapAnything (Apache code and weights, metric output), WorldMirror-2.0
 (Tencent licence excludes the EU and UK), BLASt3R (NAVER,
 non-commercial), COLMAP 4.2.0 with the global mapper and learned
-features (BSD-3, 2026-09-01), gsplat 1.5.3, the latest on PyPI and in tags as of 2026-09-24 — the "1.6.0" this note first cited does not exist (sparse, multi-GPU, LiDAR
-rasterization, Apache), LichtFeld Studio 0.5.3 (GPLv3), Brush
+features (BSD-3, 2026-09-01), gsplat 1.5.3 (sparse, multi-GPU, LiDAR
+rasterization, Apache; 1.5.3 is the latest on PyPI and in tags as of
+2026-09-24 — the "1.6.0" this note first cited does not exist), LichtFeld Studio 0.5.3 (GPLv3), Brush
 (Apache, Rust/wgpu, "faster than gsplat" CLAIMED). Nerfstudio's last
 release is 2024-11-11. Geometry-accurate trainers (2DGS/PGSR class):
 nothing new after February 2026. Object and articulation: SimFoundry
@@ -170,7 +171,7 @@ only Neverwhere and GS-Playground have a downloadable repository.
 | mujoco_warp splat renderer (PR 1585, 2026-08-19) | static splat scene + mesh robot, RGB and depth, thousands of worlds, occlusion inside one ray tracer | Apache-2.0 | 3.13.0 | small: pass four arrays |
 | mjlab `CameraSensor` | the splat arguments into its render context | Apache-2.0 | main | small patch, upstream it |
 | Rerun `GaussianSplats3D` | the scene in the Studio | Apache/MIT | 0.36.0+, experimental | small |
-| gsplat | movable per-body splats, fisheye, depth modes | Apache-2.0 | 1.6.0 | medium |
+| gsplat | movable per-body splats, fisheye, depth modes | Apache-2.0 | 1.5.3 (corrected from 1.6.0, see above) | medium |
 | DISCOVERSE `gaussian_renderer` | MuJoCo body-to-splat binding, 240 FPS RGB-D on a 3060 (REPORTED) | MIT | 0.2.0 | medium |
 | 3DGRUT | capture to PLY/USD, mesh packed as collider | Apache-2.0 | 2.0.0 | medium (CUDA training) |
 | wgpu-3dgs-viewer / brush | splats in the egui shell itself | MIT/Apache | 0.8.0 / main | large |
@@ -263,7 +264,7 @@ piece no one has built is the one our loop is shaped for: scene
 physics identified with an interval where a robot touches, declared
 with a stated span where it does not, the randomization width set from
 the interval, and a drift check that re-judges the scene from fresh
-telemetry. The experiment is docs/78.
+telemetry. The experiment is [docs/78](../78-the-scene-loop.md).
 
 ## 8. Not verified, collected
 

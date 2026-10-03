@@ -4,10 +4,11 @@
 current `main`/`master` code of each repository fetched raw from GitHub, plus two
 Hugging Face pages. Every claim is cited as `path:Lnn` — path inside that
 repository, line number as the fetch reported it (approximate, ±5) — with a
-short quote. Where a fetch failed or a grep found nothing, that is stated.
+short quote, fetched 2026-08-26 from each repository's `main` (no commit
+recorded). Where a fetch failed or a grep found nothing, that is stated.
 Nothing from memory. Mapped against `trainnr/trainnr/evaluate/harness.py`,
-`trainnr/trainnr/evaluate/vision.py` and docs/30 §7 (Arena is covered
-there and in e2e-research/39–44; not repeated).*
+`trainnr/trainnr/evaluate/vision.py` and the loop's evaluation design
+(Arena is covered in e2e-research/39–44; not repeated).*
 
 Terms, defined once. An **environment** (env) is the simulated task as code: it
 holds state, accepts an **action** (motor command), returns an **observation**
@@ -24,8 +25,8 @@ one model call. A **hub** is a git-hosted repository on huggingface.co.
 ### 1.1 Gymnasium — the substrate everyone else assumes
 
 - **Version.** `gymnasium/__init__.py:L1-40` on main: `__version__ = "1.4.0"`; released tags
-  newest-first v1.3.0 (22 Apr), v1.2.3, v1.2.2, v1.2.1, v1.2.0 (27 Jun), v1.1.1, v1.1.0 (26 Feb),
-  v1.0.0 (08 Oct) (github.com/Farama-Foundation/Gymnasium/releases).
+  newest-first v1.3.0 (22 Apr 2026), v1.2.3, v1.2.2, v1.2.1, v1.2.0 (27 Jun 2025), v1.1.1, v1.1.0 (26 Feb 2025),
+  v1.0.0 (08 Oct 2024) (github.com/Farama-Foundation/Gymnasium/releases).
 - **Env contract.** `def step(self, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]`
   (`gymnasium/core.py:L91-93`); terminated = "Whether the agent reaches the terminal state (as
   defined under the MDP of the task)", truncated = "Whether the truncation condition outside the
@@ -71,7 +72,7 @@ one model call. A **hub** is a git-hosted repository on huggingface.co.
 
 ### 1.3 NVIDIA Isaac-GR00T — flat `video./state./annotation.` dicts, ZeroMQ, a printed mean
 
-- **Layout (the brief's paths moved).** *scripts/eval_policy.py* → HTTP 404 on main; `scripts/eval/` holds
+- **Layout (the paths moved since the earlier read).** *scripts/eval_policy.py* → HTTP 404 on main; `scripts/eval/` holds
   only *check_sim_eval_ready.py*. `gr00t/eval/` = *_horizon_contract.py*, *open_loop_eval.py*, *rollout_policy.py*,
   *run_gr00t_server.py*, `sim/` (LIBERO, SimplerEnv, robocasa, robocasa365, robocasa-gr1-tabletop-tasks, `wrapper/`), `real_robot/SO100/`.
 - **Policy contract.** `get_action(self, observation: dict[str, Any], options=None) -> tuple[dict[str, Any], dict[str, Any]]`
@@ -233,7 +234,7 @@ The smallest task interface all six can drive, as exact names:
 6. **Artifact in LeRobot's shape, widened**: eval_info.json with `per_episode[i] = {episode_ix, seed, success,
    sum_reward, max_reward, episode_length, policy, task, perturb_hash, bundle, protocol}` and
    `aggregated = {pc_success, successes, trials, ...}` — a superset of LeRobot's keys, robomimic's `Horizon` /
-   `Num_Success`, GR00T's `episode_lengths`, and docs/30 §7's `EpisodeRecord`. `SimScore(successes, trials)`
+   `Num_Success`, GR00T's `episode_lengths`, and the loop's own `EpisodeRecord`. `SimScore(successes, trials)`
    (`trainnr/trainnr/evaluate/harness.py:80`) becomes a fold over it.
 
 ## 4. What none of them provides

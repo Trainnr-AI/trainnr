@@ -713,7 +713,7 @@
   "figure.csv": "docs/figures/walk-mismatch-matrix-2026-09-04.csv"
  },
  "sources": {},
- "protocol": "docs/70 \u00a79 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)",
+ "protocol": "the mismatch matrix: tools/walk-mismatch-matrix.sh judges every C1 policy pinned at fit x s and under drawn spans, 40 paired trials per cell (docs/paper/manuscript.md \u00a75.5)",
  "caveats": [
   "Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately \u2014 the per-axis matrices (--judge-param) are the slices.",
   "One robot, one gait, one recipe; the policies are the C1 runs (three per arm).",

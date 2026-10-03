@@ -92,7 +92,7 @@
   "base_records": "docs/artifacts/walk-verdicts/records-student-cuda.jsonl (policy student-last@6b6cef16e54f rows)"
  },
  "sources": {},
- "protocol": "docs/66 \u00a76 (DAgger on the walk: tools/walk-dagger-round.sh)",
+ "protocol": "DAgger on the walk: tools/walk-dagger-round.sh drives the student, labels every visited state with the teacher, keeps the referee-passed episodes and retrains on the union (docs/paper/manuscript.md \u00a75.6)",
  "caveats": [
   "One round, one training run per student, 40 trials each: a direction, replicate before a sentence.",
   "The round student trained 20k steps on 360 episodes; the base trained 60k on 240 \u2014 steps per episode differ.",

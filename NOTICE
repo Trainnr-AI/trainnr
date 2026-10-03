@@ -76,3 +76,8 @@ Software this product depends on (no source copied)
   original simulator's spawn box, cube contact parameters and top-camera
   placement so released checkpoints see the scene they were trained on.
 - Gymnasium (Farama Foundation, MIT).
+
+- docs/paper/latex/neurips_2023.sty: the NeurIPS 2023 LaTeX style file,
+  fetched 2026-09-08 from media.neurips.cc and redistributed unmodified
+  for the paper's layout. The file states no licence of its own; it is the
+  conference's public style file, used as the conference publishes it.

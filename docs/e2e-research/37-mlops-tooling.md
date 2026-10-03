@@ -2,12 +2,17 @@
 
 *Fourth pass, 2026-08-25. Researched by one agent against primary
 sources (repo code at HEAD, license texts, pricing pages), per the
-one-agent-per-field discipline. Answers
-[docs/30-the-full-loop.md](../30-the-full-loop.md) §3.4's open
-decision (tracking, orchestration, what stays custom). Headline:
-wandb is the universal tracker in robot learning; keep the DAG
-custom, execute on SkyPilot; the registry stays ours. The agent's
-report follows verbatim.*
+one-agent-per-field discipline. Answers the then-open decision on
+tracking, orchestration and what stays custom. Headline: wandb is the
+universal tracker in robot learning; keep the DAG custom, execute on
+SkyPilot; the registry stays ours. The agent's report follows verbatim.*
+
+*Historical (2026-08-25). What shipped differs from the recommendation:
+training writes TensorBoard event files, which the Studio reads
+(`tensorboard` under the `viz` extra); wandb is disabled in the chain
+(`tools/_lab.py`, `--wandb.enable=false`); there is no SkyPilot and no
+recipe registry; runs are plain directories under a project. Kept as the
+record of the survey.*
 
 ---
 
@@ -52,19 +57,19 @@ Researched 2026-08-25. **VERIFIED** = I read the code, license text, or vendor p
 ### Q5 — Robotics-specific MLOps products (all CLAIMED from vendor/press, 2026)
 
 - **Foxglove** ([foxglove.dev](https://foxglove.dev/)) — repositioned as "agentic data platform for Physical AI" (Aug 2026): fleet data triage, semantic search over unlabeled robot data via NVIDIA Cosmos, dataset curation for training ([press](https://theaiinsider.tech/2026/08/18/foxglove-launches-agentic-data-platform-for-physical-ai-collaborates-with-nvidia-on-semantic-search/)).
-- **Rerun 0.32** (~May 2026, [blog](https://rerun.io/blog/data-layer-for-robot-learning)) — "data layer for robot learning": SQL/dataframe queries over .rrd, **PyTorch dataloader training directly on .rrd files** (random access, DDP, multi-worker prefetch), plus **Rerun Hub** commercial catalog/storage in private preview. Directly relevant — the rig is already Rerun-native.
+- **Rerun 0.32** (~May 2026, [blog](https://rerun.io/blog/data-layer-for-robot-learning)) — "data layer for robot learning": SQL/dataframe queries over .rrd, **PyTorch dataloader training directly on .rrd files** (random access, DDP, multi-worker prefetch), plus **Rerun Hub** commercial catalog/storage in private preview. Directly relevant — the archived rig was already Rerun-native.
 - **NVIDIA OSMO** (above) doubles as the robotics-specific orchestrator.
 - These are fleet-data/curation platforms; none replaces an evidentiary artifact registry — none has per-value provenance or certification semantics.
 
 ## (b) Recommendation stack
 
 **Tracking: W&B SaaS (free tier now, Pro $60/mo when >5 seats) — but coded strictly against the wandb API.**
-Reasoning: it is the only tracker with ecosystem gravity in robot learning (VERIFIED in all four codebases); LeRobot's `WandBLogger` works out of the box (`--wandb.enable=true`); free tier covers a 1–2 person team today. The CoreWeave-ownership and Neptune-sunset risks are neutralized by two things to make policy: (1) the standing rule already in force — W&B holds only disposable high-churn debugging telemetry, all decision-grade data lives in the hash-stamped registry, so losing the tracker loses nothing evidentiary; (2) use only the `wandb.init/log/finish` surface so **Trackio (MIT, wandb-API drop-in) is a one-line migration** if pricing or ownership turns hostile. Wire the two systems by ID, not by data: log `robot@hash / scene@hash / policy@hash / recipe@hash` as wandb config+tags on every run, and store the wandb run URL in the bundle's provenance record. One-way references, no authority transfer.
+Reasoning: it is the only tracker with ecosystem gravity in robot learning (VERIFIED in all four codebases); LeRobot's `WandBLogger` works out of the box (`--wandb.enable=true`); free tier covers a 1–2 person team today. The CoreWeave-ownership and Neptune-sunset risks are neutralized by two things to make policy: (1) the rule already in force — W&B holds only disposable high-churn debugging telemetry, all decision-grade data lives in the hash-stamped registry, so losing the tracker loses nothing evidentiary; (2) use only the `wandb.init/log/finish` surface so **Trackio (MIT, wandb-API drop-in) is a one-line migration** if pricing or ownership turns hostile. Wire the two systems by ID, not by data: log `robot@hash / scene@hash / policy@hash / recipe@hash` as wandb config+tags on every run, and store the wandb run URL in the bundle's provenance record. One-way references, no authority transfer.
 
 **Orchestration: keep the DAG custom; execute with SkyPilot managed jobs; scale within-stage with Ray only when needed.**
 Reasoning: the recipe@hash registry *is* the pipeline definition — the stage graph, inputs, and outputs already have provenance semantics that Dagster/Prefect/Flyte would duplicate and dilute (their artifact stores would compete with the registry's evidentiary authority). What's actually missing is *execution*: getting a stage onto a burst cloud GPU reliably. SkyPilot does exactly that (Apache-2.0, spot-preemption recovery with checkpoint resume, 25+ clouds, no K8s to operate) and its unit of work — "run this container/command on this hardware, mount these artifacts" — composes cleanly under a thin custom driver that resolves hashes → S3 paths before launch and stamps outputs after. For the very first cloud runs, `lerobot-train --job.target=a10g-large` on HF Jobs is zero setup and already in the framework. Ray Train/Tune enters later, *inside* the eval stage, when batched MuJoCo rollouts outgrow one node — not as pipeline infrastructure.
 
-**Keep custom: the artifact registry, certified evals, per-value provenance, and stage wiring.** Nothing surveyed threatens or replaces it; every commercial "robot data platform" (Foxglove, Rerun Hub) is a curation/debugging layer, and every orchestrator's artifact store is weaker than what exists. The standing rule stands: W&B curves never reach a customer.
+**Keep custom: the artifact registry, certified evals, per-value provenance, and stage wiring.** Nothing surveyed threatens or replaces it; every commercial "robot data platform" (Foxglove, Rerun Hub) is a curation/debugging layer, and every orchestrator's artifact store is weaker than what exists. The standing rule stands: W&B curves never reach a user.
 
 ## (c) Defer, and until when
 

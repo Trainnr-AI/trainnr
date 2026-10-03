@@ -1,11 +1,16 @@
 # Isaac Lab Arena: metrics, progress tracking, predicates and composite tasks
 
+*Source: the `isaaclab_arena` repository, read 2026-08-26 from a repomix
+bundle made in session (132,303 lines; commit not recorded). The bundle is
+not shipped; every `L<number>` below is a line of that bundle. Our-side line
+numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 *Research pass, 2026-08-26. One agent, one field, one primary source: a
 repomix bundle of the whole `isaaclab_arena` repository (132,303 lines),
-read in session at the commit stated below; the line numbers cited here
-are lines of that bundle, not of a file in this tree.
-Every claim cites `<repo path>:<line>`, the line in that bundle
-(*scratchpad/arena.md*), with the bundle's text quoted; nothing is filled
+read in session; every claim cites `<repo path>:<line>`, the line in that
+bundle, with the bundle's text quoted; nothing is filled
 from memory of Isaac Lab in general. The field: how Arena decides an
 episode succeeded, scores partial progress, records episodes, and judges
 multi-stage tasks — mapped against our harness (`trainnr/evaluate/`),
@@ -196,6 +201,11 @@ and it keeps every trial the same length, which paired trials need.
 
 ## 3. What to ADOPT and what to SKIP
 
+*Status (2026-10-03): A1, A3 and A4 were built the next day (the postscript
+of [42](42-arena-placement-and-relations.md)); the per-episode row (A2) is
+`trainnr/trainnr/evaluate/records.py`; A5, per-subtask success as a list,
+was not built.*
+
 ### Adopt
 
 **A1. Milestone chains on the protocol, computed offline over the
@@ -222,11 +232,11 @@ part (Arena's dict of groups, `logical=ALL`). ~40 lines, no dependency.
 (`common_terms.py:38059-38067`, `progress_terms.py:38273-38298`) maps to
 `{policy, trial, success, progress, events, steps, robot_bundle, scene, protocol_hash}`.
 `score_policies` keeps returning counts (the certificate's input is
-unchanged) and additionally writes rows — the audit trail `recipe@hash`
-(docs/30 §3.2) needs, and the input to A3/A4.
+unchanged) and additionally writes rows — the audit trail a
+reproducible recipe needs, and the input to A3/A4.
 
 **A3. `object_moved` as milestone zero, and the funnel.** The rows of
-zeros in docs/31 (T1, T2, T5 all 0/4) hid the one useful fact until a
+zeros in [docs/31](../31-aloha2-e2e.md) (T1, T2, T5 all 0/4) hid the one useful fact until a
 filmstrip showed it: the cube never moved. Arena's rule
 (`object_moved.py:36144`) is one line over our states,
 `np.any(speed > threshold)`. With A1, the funnel "reached stage k of n"
@@ -274,8 +284,8 @@ failure is attributed to an arm. The verdict stays the AND.
    recorded in the row, so re-tuning a milestone does not invalidate a
    certificate.
 2. **Real-side milestones.** Sim milestones read privileged state; on
-   the rig the only referee is a human label. Paper-2
-   sub-question: does sim `progress` rank policies the way real success
+   the rig the only referee is a human label. A sub-question for the
+   span paper (docs/paper/manuscript.md): does sim `progress` rank policies the way real success
    does — a cheaper early signal?
 3. **Progress inside the recipe engine.** `mean_progress` could order
    candidates before any policy succeeds (the zero-row problem) — a

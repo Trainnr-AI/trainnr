@@ -17,9 +17,9 @@ sentence: Isaac Lab "provides a comprehensive manager-based API … but
 requires the Omniverse runtime"; MuJoCo Playground is "minimal
 abstractions and monolithic environment definitions"; "mjlab fills this
 gap. It adopts Isaac Lab's manager-based design … and pairs it with
-MuJoCo Warp" (`docs/source/motivation.rst`). Velocity: 11 releases in
+MuJoCo Warp" (`docs/source/motivation.rst`). Velocity (as of 2026-08-31): 11 releases in
 6.5 months (1.0.0 on 2026-01-28 → 1.6.0 on 2026-08-08), minor releases
-roughly monthly. Ecosystem: 13 downstream repos including an *official*
+roughly monthly. Ecosystem (as of 2026-08-31): 13 downstream repos including an *official*
 Unitree port and PAL Robotics — and the pattern is that vendors **fork**
 mjlab rather than plug in (`docs/source/faq.rst`: the plugin guide is "a
 future release"). Three robots ship (Unitree G1, Go1, i2rt YAM) and they
@@ -76,10 +76,10 @@ reports `overhead_pct` so a manager-layer regression is visible when
 physics is flat; every row stamped with a 7-char commit, appended to a
 JSON series, rendered to a public gh-pages chart. Two blind spots we
 must not copy: no hardware fingerprint on the series (one box,
-`/home/kevin`), and **no thresholds — it asserts nothing**. Ours keys
+a developer's local path), and **no thresholds — it asserts nothing**. Ours keys
 on `(gpu, driver, cuda, engine version)` — we already measured the same
 engine version giving different verdicts on two architectures
-(docs/33) — and gates.
+([47 §7.1](47-newton-docs-review.md)) — and gates.
 
 Scaling facts for our WSL/3090 Ti context: Linux + CUDA 12.4+ for
 training (below 12.4 you silently lose graph capture); WSL "tested less

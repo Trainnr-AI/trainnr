@@ -1,98 +1,140 @@
 # tools/
 
-The lab bench. Shell tools run from the repo root; Python tools run
-from `trainnr/` so uv picks up its environment:
+The lab bench: the gates, the scripts the MCP tools spawn, the studies
+behind the paper, and the paper build. Shell tools run from the repository
+root; Python tools run from `trainnr/` so uv picks up its environment:
 
 ```sh
 cd trainnr && uv run --extra sim --extra viz python ../tools/<name>.py
-# on the WSL box, the GPU routing lives in ONE file:
+# on WSL2 the GPU routing lives in one file:
 cd trainnr && uv run --env-file wsl.env --extra sim --extra viz python ../tools/<name>.py
-# tools that need the train venv (LeRobot):
+# tools that need the train environment (LeRobot):
 cd trainnr && ../tools/wsl-run.sh .venv-train/bin/python ../tools/<name>.py
 ```
 
-`_lab.py` is the shared bench (path bootstrap, Rerun session plumbing)
-and the shared MuJoCo→Rerun mirror lives in `trainnr/trainnr/viz.py`; neither is a tool.
+Every tool's own docstring or header is the authority on its flags; this
+page says what each one is for.
 
-## Gates — run these before pushing
+## Gates
 
 | Tool | What it proves |
 |---|---|
-| `verify.sh` | Everything, one command: the Studio crate's fmt/clippy/tests, the doc, layer and unsafe gates, the Python packages (ruff, mypy, both unit suites), the USD import suite. The firmware, emulator and wire-replay steps moved with the rig to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig) (2026-10-02). `--serial <port>` adds real silicon |
-| `check-docs.py` | No doc names code that no longer exists |
-| `install-brush.py` | Brush's release binary for this machine (macOS arm64, Linux x86_64, Windows x86_64) into a user bin directory, its SHA-256 checked, no root: the splat trainer the capture chain runs |
-| `install-gsplat.py` | gsplat, the capture chain's CUDA splat trainer, into the train environment with CUDA's compiler wheels pinned to torch's build, its kernels built once; Linux and Windows, no system toolkit (a Mac uses Brush) |
-| `check-unsafe-gates.py` | `unsafe` stays forbidden in every crate's manifest (one crate since the rig left) |
-| `coverage.sh` | Rust line coverage |
-| `loc-report.py` | Line counts by area |
+| `verify.sh` | Everything, one command: the Studio crate's fmt, clippy and tests; the doc, layer, number and unsafe gates; the Python packages (ruff, mypy, both unit suites); the USD import suite. Nothing here needs hardware. |
+| `check-docs.py` | No document names a path that no longer exists; every link resolves. |
+| `check-layers.py` | A lower layer never imports a higher one (`trainnr` ← `trainnr-mjlab` ← the Studio), lazy imports included. |
+| `check-numbers.py` | Every k/n success figure in the manuscript and the ledgers exists in a finding record under `docs/findings/`. |
+| `check-unsafe-gates.py` | `unsafe` stays forbidden in the crate's manifest. |
+| `findings.py` | Renders `docs/findings/*.json` into `docs/68-findings.md`; `--check` fails when the page is stale. The ledger is generated, never hand-edited. |
+| `coverage.sh` | Rust line coverage for the Studio crate. |
+| `loc-report.py` | Line counts by area. |
 
-## Rig sessions (hardware on the desk)
+## The loop's doors
 
-| Tool | What it does |
-|---|---|
-| `rig-rerun.py` | THE session viewer: live wire → Rerun dashboard + MuJoCo twin |
-| `udp-wire-bridge.py` | WiFi telemetry (UDP 9870) → the same `.wire` stream the USB path writes |
-| `replay-errand.py` | A recorded `.wire` session through the same viewers, offline |
-| `sim-errand.py` | The errand mission in pure sim (the firmware's hand-mirror; a test holds the two together) |
-
-The firmware builds, the rp2040js emulator harness, the HIL runs and the
-wire replays against the Rust crates moved with the crates to the rig
-archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
-2026-10-02; that repository's own `tools/verify.sh` runs them.
-
-## Sim sessions (no hardware)
+The scripts the MCP server spawns, in the loop's order. Each runs as a job
+with its log beside the artifact it writes.
 
 | Tool | What it does |
 |---|---|
-| `show-aloha2.py`, `show-cargo-chaos.py` | One scene each, MuJoCo viewer + Rerun (the rule: every session gets both) |
-| `show-rig.py`, `show-yellow.py` | The car+arm rig and the yellow arm in the MuJoCo passive viewer only — their Rerun mirror is queued (docs/32 §10.1) |
-| `show-many.py` | Batched domain-randomized worlds side by side |
-| `show-2f85-isaac.py` | The USD-born 2F-85 bundle closing on a cube between its pads: MuJoCo stills (`--stills`) and the Rerun stream (the Studio when it listens, a recording always); exits 0 when the cube is held (docs/e2e-research/77 §4.1) |
-| `show-gripper-pick.py` | The `gripper-pick` task on the USD-born 2F-85: the acceptance ladder's rungs (pick, no-close, limp) run through the task's expert, then REPLAYED from the judged rows in the MuJoCo viewer and streamed to the Studio (10 Hz, one clock; a recording always); `--stills` writes grasp/hold/failure PNGs; exits 0 when only the expert rung succeeds |
-| `pod-volume.py` | a RunPod network volume over its S3 API: `du` by prefix, `ls`, and `rm` (a dry run unless `--yes`) — the door that works when the pod is stopped; credentials are a RunPod S3 API key pair as `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or `--env-file` lifting exactly those two names |
-| `planner-demos.py` | The planner data lane (D3): the planner expert presses an SO-101 task (`lift`, `block_stack`, `tool_insert`) — beats written from each seated scene, executed by chained IK, kept by the task's referee, every declared camera captured, the batch stamped `planner@<knobs>`; streams to the Studio by default; `--shards N --parallel M` presses in N runs with disjoint ranges and seeds and merges them (docs/66 D4: the datasheet then states the keep rate exactly) |
-| `kitting-demos.py` | T5's data source: referee-filtered scripted kitting episodes drawn over the task's whole declared band with ±30% DR — trajectories + frames + manifests, each manifest carrying the expert's own stamp (`expert_stamp`); `--first-episode K` shards one batch across parallel generators, or `--shards N --parallel M` does it for you and merges the records |
-| `camera-match.py` | Sim renders beside released real frames — camera placement is calibration, not decoration |
-| `studio-render-stream.py` | MuJoCo's own render as a subprocess service for `crates/trainnr-studio`: frames out on stdout, orbit/zoom/size commands in on stdin — the app's 3D viewport without linking MuJoCo's C API into Rust; a scene is a preview task, the walk, or a deployment (`deploy:<name>` live, `:gate:<runtime>:<i>`, `:preflight:<i>`; `--project=<root>`, docs/77 §11) |
-| `mcp-server.py` | The instrument's MCP surface over stdio: bundles (name@hash, fit records, SPREAD), the actuator library, task/engine registries, run manifests — read-only tools for any MCP client; the Studio's agent panel and `.mcp.json` both point here |
-| `studio-instrument-view.py` | The instrument's records into the Studio's embedded Rerun viewer, one shot with a blueprint: eval funnels as bar charts with readings, fit parameters as estimate+interval series per sweep with SPREAD verdicts, the STS3215 M1-vs-M6 friction budget on a real velocity axis |
-| `gen-app-icon.py` | Generates the Studio's dock icon (`crates/trainnr-studio/assets/icon-256.rgba` + PNG preview) — the committed asset's provenance; re-run and commit both together if the mark changes |
+| `capture-telemetry.py` | A robot's telemetry live into a project: `sources` lists the adapters; `record <name> --source dds --network <if> --seconds 60` on a Unitree robot records `rt/lowstate` and `rt/lowcmd` as one recording; `--standin <deployment>` rehearses on Unitree's simulator. |
+| `public-log.py` | Public recordings of real robots: `list` the registry with each log's licence state, `fetch` one with every byte count and digest checked, `ingest` one into a project with its provenance. |
+| `capture-scene.py` | A phone video or a folder of frames into a scene: ffmpeg, COLMAP, Brush, alignment, the collision proxy, the see-versus-touch gap, the record. |
+| `install-brush.py`, `install-gsplat.py` | The two splat trainers the capture chain uses: Brush's release binary for this machine (checksum verified), or gsplat into the train environment with CUDA wheels pinned to torch's build. |
+| `import-usd.py` | A USD robot asset (Isaac Sim, Omniverse) into a hash-stamped bundle through Newton's importer; `--fetch owner/repo@commit:path` for a public asset at a pinned commit. |
+| `audit-bundle.py` | What the importer changed: a bundle's compiled model against the description it came from, each change explained or UNEXPLAINED; exit 1 on an unexplained change. |
+| `actuator-bundle.py` | Wrap vendored BAM fits into certified actuator bundles; verify anyone's (stamps, rail and floor checks, honesty advisories). |
+| `sync-bam-actuators.py` | Vendor new or changed servos from a BAM checkout into `robots/actuators/`; refuses a changed file with no `--version`. |
+| `fit-report.py` | A bundle's fit records: intervals, cross-run spread, EXCEEDS verdicts. |
+| `show-legged-fit.py` | A legged-joints fit in both viewers: measured, rigid and modelled torque per joint, residuals and bootstrap histograms; MuJoCo stills under the fitted terms. |
+| `accept-task.py` | The acceptance critic: a manipulation task's scripted expert must pass its referee on every paired trial and the do-nothing floor on none; a walk task's robot bundle is checked for the walk's shape, then the learnability smoke runs. Exit 1 on rejection. |
+| `kitting-demos.py` | Referee-filtered scripted kitting episodes over the task's declared band with randomization, each manifest carrying the expert's stamp; shards across parallel generators. |
+| `planner-demos.py` | The planner expert presses an SO-101 task (`lift`, `block_stack`, `tool_insert`): beats per seated scene, chained IK, kept by the referee, every declared camera captured; `--shards N --parallel M` presses in disjoint ranges and merges. |
+| `press-multiply.py` | Multiply kept kitting seeds into new episodes at device scale on MJX-Warp. |
+| `study.py` | A study with its arms as data: press, convert, train, judge, paired. |
+| `paired-study.py` | The guessed-versus-identified randomization study's two datasets. |
+| `e2e-smoke.py` | The imitation chain in one command: demos, LeRobot v3, `lerobot-train` with in-loop evaluation through our env, `lerobot-eval` with records, the fold; `--scale smoke` or `--scale cloud`; any contiguous slice of the stages. |
+| `train-watch.py` | A training run as a live Rerun dashboard, from its files: the run manifest, losses, in-loop and final evaluation funnels, GPU samples; `--rrd` saves the stream. |
+| `rl-watch.py` | Reinforcement learning watched live: thousands of worlds on the GPU, sixteen on screen. |
+| `gate-deployment.py` | The sim-to-sim gate on a project's deployment: the exported ONNX policy driven through its manifest alone under `--runtime mujoco` or `dds` (Unitree's simulator), judged the evaluation's way. |
+| `preflight-deployment.py` | Before the first tick on a robot: seven checks refused by name with their numbers (policy widths, joint order, gains, a dry rollout's targets and torques, compute per tick, the robot's state against the SDK's watchdogs), then the ramp-in and the stops measured; `preflight.json` beside the manifest. |
+| `attribute-deployment.py` | Which parameter breaks a deployment first: a passing gate re-run with one dynamics knob at a time up its ladder, the cliff per knob against the certificate's lower bound. |
+| `assay-deployment.py` | The perturbation assay: a deployment on a captured scene, nominal and moved, each stage gated with one seed. |
+| `mcp-server.py` | A forwarder to `trainnr mcp`: the MCP server over stdio, 76 tools, for a client configured before the console script existed. |
+| `studio-present.py` | The presenter: the one Python process the Studio asks to show things; watches the project's index and streams the chosen artifact into the embedded viewer. |
+| `studio-render-stream.py` | MuJoCo's own render as a subprocess service for the Studio's simulator: frames out on stdout, camera commands in on stdin; a scene is a preview task, a walk, or a deployment. |
+| `studio-instrument-view.py` | The instrument's records into the Studio's viewer with a blueprint: evaluation funnels, fit parameters as estimate and interval series, the friction budget. |
+| `studio-cloud-feed.py` | A rented card's training live in the Studio: tails the remote log over ssh and streams the trainer's metrics to the Studio's ingest port. |
+| `gen-app-icon.py` | Generates the Studio's icon asset; re-run and commit together with the asset. |
 
-## Fitting and studies
+## Scenes in the viewers
 
 | Tool | What it does |
 |---|---|
-| `cloud-gpu.py` | A rented GPU as a runbook: `offers` (priced, in stock, CUDA ≥ 13 hosts) → `launch` → `push` (rsync, never `.env`) → `bootstrap` (the train venv, the WSL recipe) → `run` → `pull` → `terminate`; every vendor behind `trainnr/cloud`'s provider seam, Runpod first (docs/34); `follow <id> NAME --watch` mirrors a running pod run's light files every 20 s and opens the dashboard on them |
-| `walk-axes-on-box.sh [axes] [scales] [date]` | The per-axis walk mismatch matrices where a GPU is free: the nine walk C1 checkpoints tracked under `docs/artifacts/walk-c1/<run>/train/` are judged on each axis at each scale and the certificates land beside the tracked ones; then one fold per axis. Needs the launch environment (`trainnr/wsl.env`) exported first |
-| `walk-refit-rejudge-on-box.sh [rejudge_date] [aside_dir]` | Re-judges the refit arms' withdrawn certificates with the fixed DR seam (pins and declared spans built from the bundle's params): the at-fit certificates stand, every other certificate of the six runs is moved aside and re-run, then both folds rewrite their records in place with a `revised` note, so the manuscript's citations keep resolving |
-| `studio-cloud-feed.py <ssh-door> <remote-log>` | A rented card's training live in the Studio: tails the remote `run.log` over ssh, parses the trainer's metric lines with the pipeline's parsers and streams `cloud/train/*` and `cloud/gpu/*` to the Studio's ingest port, so one window holds the local and the cloud run |
-| `train-watch.py --follow <runs/NAME-act>` | The run as a live Rerun dashboard, from its files (no torch needed): the chain's run manifest as a text panel — every parameter and the dataset's stamps — `train/*` (loss, grad norm, lr, samples, update/dataloading seconds), `eval/inloop/*` and `eval/final/*` (success rate and the milestone funnel per checkpoint, the eval videos), `machine/gpu_*` (nvidia-smi samples), the trainer's resolved config at each checkpoint; `--rrd FILE` saves the stream; `--play-checkpoints` adds both viewers (train venv). Works on a mirrored pod run (`cloud-gpu follow`) |
-| `e2e-smoke.py` | The T5 chain in one command: demos → LeRobot v3 → `lerobot-train` with in-loop eval through our env → `lerobot-eval` with records → the fold. `--scale smoke` (default: minutes on the WSL card) or `--scale cloud` (the ACT sim recipe: 50 demos, 100k steps, checkpoints every 20k, 20 paired starts); any knob overrides its preset; `--from <stage>`/`--until <stage>` run any contiguous slice of the four stages — the CPU-bound demos and convert on this box, the GPU-bound train and eval on a rented card (docs/34); it writes `runs/NAME-watch/` from its first second (the run manifest, every stage's output teed into `chain.log`, nvidia-smi samples) for the dashboard |
-| `determinism-probe.py` | Is MJX-Warp bit-repeatable, at what cost? Subprocess-per-mode (compile option); the verdict needs the WSL CUDA device |
-| `preflight-deployment.py` | Before the first tick on a robot: seven checks refused by name with their numbers (policy widths, joint order, gains against the scene and Unitree's YAML, a dry rollout's targets and torques against the ranges, compute per tick, the robot's state against the SDK's watchdogs), the ramp-in and the stops measured; `--runtime dds` reads the state from Unitree's simulator in their fixed stand; Ctrl-C there is their Passive chord; `preflight.json` beside the manifest (docs/77 §10) |
-| `attribute-deployment.py` | Which parameter would break a deployment first: a passing plane gate re-run with one dynamics knob at a time up its ladder (latency, friction, payload, kp, kd, encoder noise, tilt, pushes), the cliff per knob against the certificate's lower bound, the knobs ranked, the fall pictured; `attribution.json` beside the manifest (docs/77 §9) |
-| `accept-task.py` | The critic loop as a command: the scripted expert must pass a task's referee on every paired trial and the do-nothing floor must pass none; prints the verdict, the funnel and every reason, exits 1 on rejection (`--tray-y`, `--in-slot-xy` compose kitting variants) |
-| `solver-study.py` | Constraint-solver sweep on the kitting scene: solver × cone × integrator plus an impratio sweep, judged by the referee, with penetration, solver iterations, peak pad slip and peak grip force per row |
-| `fit-report.py` | A bundle's fit records: intervals, cross-run spread, EXCEEDS verdicts |
-| `audit-bundle.py` | What the importer changed: a bundle's compiled model against the description it came from (MJCF, URDF or USD by suffix), per body, joint and element class, each change with the reader's explanation or UNEXPLAINED; the audit every onboarding door runs, for a bundle already on disk; `--json`, `--write` (moves the stamp), exit 1 on an unexplained change |
-| `import-usd.py` | A USD robot asset (Isaac Sim, Omniverse) into a hash-stamped bundle: Newton reads the stage, its MuJoCo bridge writes the MjSpec, our writer makes the bundle (leaf names, mesh files, sensors, a home key, provenance); `--variant Set=Choice`, `--root fixed|free`, `--grip-options`, `--fetch owner/repo@commit:path` for a public asset at a pinned commit (docs/e2e-research/77 §6); the same door the Studio's `onboard_robot` opens |
-| `show-legged-fit.py <bundle> <recording> [--stills DIR]` | A `legged-joints` fit in both viewers: measured, rigid and modelled torque per joint, residuals and bootstrap histograms into the Studio and `.viewer/fit-legged.rrd` beside the recording; MuJoCo stills of the bundle under the fitted terms |
-| `actuator-bundle.py` | Wrap vendored BAM fits into certified bundles; verify anyone's (stamps, rail/floor checks, honesty advisories) |
-| `sts-study.py` | The STS3215 benchmark ingest (YouTube-sourced) → parameter fits |
-| `capture-telemetry.py` | A robot's telemetry live into a project: `sources` lists the registry (`udp` the rig, `dds` Unitree's `rt/lowstate` + `rt/lowcmd` as one recording); `record <name> --source dds --network eth0 --seconds 60` on the robot; `--standin <deployment>` rehearses it on Unitree's own simulator and controller (basis simulation) |
-| `public-log.py` | Public recordings of real robots: `list` the registry (the readable ones and the ROS 1 ones refused, each with its licence state), `fetch` one (every piece's byte count and digest checked; a whole archive, members of a remote zip by byte range, or one file; cached under `runs/public-logs/`), `ingest` one into a project with its basis and provenance so the stages read "public log" |
-| `sts-figure.py` | The study's figure, from `sts-study.py`'s JSON |
-| `sync-bam-actuators.py` | Vendor new/changed servos from a BAM checkout or repomix pack into `robots/actuators/` — refuses a changed file with no `--version` |
-| `train-watch.py`, `rl-watch.py` | Watch a training run / RL policy roll out live in Rerun |
-| `debug-inference.sh` | Runs any command with ONNX Runtime's and Rust's logging gates open (`ORT_LOG`, `RUST_LOG`) so execution-provider diagnostics show — e.g. the vision crate's bench (rig archive) |
+| `show-aloha2.py`, `show-cargo-chaos.py` | One scene each in the MuJoCo viewer and Rerun. |
+| `show-many.py` | Batched domain-randomized worlds side by side. |
+| `show-2f85-isaac.py` | The USD-born 2F-85 bundle closing on a cube: MuJoCo stills and the Rerun stream; exits 0 when the cube is held. |
+| `show-gripper-pick.py` | The `gripper-pick` task's acceptance rungs (pick, no-close, limp) through the expert, replayed from the judged rows; exits 0 when only the expert rung succeeds. |
+| `camera-match.py` | Simulated renders beside released real frames: camera placement is calibration. |
+| `solver-study.py` | A constraint-solver sweep on the kitting scene, judged by the referee, with penetration, iterations, slip and grip force per row. |
+| `determinism-probe.py` | Is MJX-Warp bit-repeatable, at what cost? One subprocess per mode; the verdict needs a CUDA device. |
 
-## Repo plumbing (not tools, but they live here)
+## Studies and campaigns behind the paper
+
+| Tool | What it does |
+|---|---|
+| `lift-envelope-cell.py` | One cell of the lift's expert envelope: the scripted pick at a damping and gain scale, N trials, one process per cell. |
+| `walk-c1-arm.sh` | One arm of the walk study on one pod: train the teacher under a declared randomization span, judge it at the bundle's point fit on 40 matched trials. |
+| `walk-c1-refit-pods.sh` | The identified-interval arms of the walk study on six pods in parallel, on the refit bundle. |
+| `walk-c1-fold.py` | Fold the walk arms' certificates into one finding and its figure. |
+| `walk-mismatch-matrix.sh`, `walk-matrix-fold.py` | Every walk policy judged in each mismatched world (the actuator pinned at the fit times a scale, or drawn from a wide span), and the fold into a finding. |
+| `walk-axes-on-box.sh` | The per-axis mismatch matrices where a GPU is free: the nine tracked walk checkpoints judged on each axis at each scale, then one fold per axis. |
+| `walk-refit-rejudge-on-box.sh` | Re-judges the refit arms' certificates with the fixed randomization seam; both folds rewrite their records with a `revised` note so the manuscript's citations keep resolving. |
+| `walk-envelope.sh` | One policy certified at a grid of actuator-parameter scales around the fit: where it fails. |
+| `walk-latency-fold.py` | The latency-budget certificates folded into one finding: the same student under an inference budget of n control ticks. |
+| `walk-dagger-round.sh`, `dagger-fold.py` | One DAgger round on the walk on a pod, and its fold: base student versus round student on the same 40 trials. |
+| `campaign-distill.sh` | The distillation campaign on a rented card: press teacher demonstrations, export, train a vision student, certify it. |
+| `bam-bootstrap.py` | A fitted interval for a BAM actuator from Rhoban's public bench logs: refit, bootstrap, the record. |
+| `sts-study.py`, `sts-figure.py` | The STS3215 benchmark ingest and its parameter fits; the study's figure. |
+
+## The paper build
+
+| Tool | What it does |
+|---|---|
+| `paper.py` | Derives `docs/paper/paper-1.md` (the reading copy with figure list and provenance appendix) from `docs/paper/manuscript.md`; `--check` fails when stale. |
+| `paper-tex.py` | The manuscript as LaTeX into `docs/paper/latex/main.tex`, figures copied beside it; `--pdf` compiles with latexmk. |
+| `finding-figure.py` | Draws the figure of one or more finding records into `docs/figures/` and writes the paths onto the record. |
+| `paper-figures.py` | The designed composite figures into `docs/figures/paper/`. |
+| `paper-stills.py`, `paper-lift-stages.py`, `paper-walk-stages.py` | The paper's robot stills from the simulator, never a screenshot: the lift at its stages, the microduck walking and falling. |
+| `paper-figure-sheet.py` | A review sheet: each figure with its title, caption and the paragraphs that cite its record, one HTML page. |
+
+## Cloud
+
+| Tool | What it does |
+|---|---|
+| `cloud-gpu.py` | A rented GPU as a runbook: `offers`, `launch`, `push` (rsync, never `.env`), `bootstrap`, `run`, `pull`, `terminate`; `follow <id> NAME --watch` mirrors a running pod's light files and opens the dashboard. RunPod first, behind `trainnr/cloud`'s provider seam (docs/34). |
+| `_pod-bootstrap.sh`, `_pod-resume.sh` | Sent over ssh by `cloud-gpu.py`: the train environment on a fresh machine, and a fresh pod over a network volume made ready in one line. |
+| `pod-volume.py` | A RunPod network volume over its S3 API: `du`, `ls`, `rm` (dry run unless `--yes`); works when the pod is stopped. |
+
+## The archived rig
+
+These tools read and replay the recordings of the 2025–26 rig under
+`recordings/`. The rig's firmware and crates live in
+[Trainnr-AI/rig](https://github.com/Trainnr-AI/rig); the live paths need
+that checkout's `hil-host`, the replays run from here.
+
+| Tool | What it does |
+|---|---|
+| `rig-rerun.py` | A rig session's `.wire` file as a live Rerun dashboard with the rig drawn in 3D from its odometry. |
+| `replay-errand.py` | A recorded fetch errand replayed whole: MuJoCo window and Rerun stream side by side. |
+| `sim-errand.py` | The errand in pure simulation under the firmware's own state machine, as the prediction the real run was judged against. |
+| `udp-wire-bridge.py` | The rig's WiFi telemetry (UDP 9870) into a growing `.wire` file. |
+| `show-rig.py`, `show-yellow.py` | The car-and-arm rig and its yellow arm in the MuJoCo viewer. |
+| `debug-inference.sh` | Runs any command with ONNX Runtime's and Rust's logging gates open, so execution-provider diagnostics show. |
+
+## Plumbing (not tools, but they live here)
 
 | File | What it is |
 |---|---|
-| `_lab.py` | The shared bench the Python tools import (the 3D mirror lives in `trainnr/trainnr/viz.py`). `running(project_root, name=, viewport=, viewer=)` puts a tool's run in the project's job table while it runs (`trainnr.mcp_jobs.track`), so the Studio's Running now panel shows its stage and progress; `trial_reporter(run)` is the gate's per-trial line |
-
-| `wsl-run.sh` | Runs a command under `trainnr/wsl.env`, the WSL2 GPU routing in one file |
-| `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (the Studio crate's fmt/clippy/tests, docs, layers, numbers, unsafe, ruff over `trainnr/` and `tools/`, the unit suite) |
-| `.ruff.toml` | Extends the pipeline's lint contract to `tools/`, with the per-file exceptions and their reasons |
-
+| `_lab.py` | The shared bench the Python tools import: path bootstrap, Rerun session plumbing, `running(...)` to put a tool's run in the project's job table so the Studio shows its progress. The MuJoCo-to-Rerun mirror lives in `trainnr/trainnr/viz.py`. |
+| `wsl-run.sh` | Runs a command under `trainnr/wsl.env`, the WSL2 GPU routing in one file. |
+| `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate: the crate's fmt, clippy and tests, docs, layers, numbers, unsafe, ruff over `trainnr/` and `tools/`, the unit suite. |
+| `.ruff.toml` | Extends the package's lint contract to `tools/`, with the per-file exceptions and their reasons. |

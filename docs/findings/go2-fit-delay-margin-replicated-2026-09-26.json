@@ -361,12 +361,12 @@
   "Delay is walk_verdict's Delayed wrapper (the whole action late by whole control ticks of 20 ms)."
  ],
  "artifacts": {
-  "verdicts": "projects/go2-walk/runs/<run>/verdict/ (the WSL box; projects/ is not tracked)",
+  "verdicts": "docs/artifacts/go2/certificates/ (go2-c2-s100*, go2-c3-fit-s100*, go2-c4-fit-lag-* certificate.json, one per cell); recorded at projects/go2-walk/runs/<run>/verdict/ (the WSL box; projects/ is not tracked)",
   "log": "the batch driver's log (scratchpad, not tracked)",
   "figure.svg": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.svg",
   "figure.pdf": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.pdf",
   "figure.png": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.png",
   "figure.csv": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.csv"
  },
- "protocol": "docs/07-progress-log.md 2026-09-26 night"
+ "protocol": "the cross-and-cliffs protocol of go2-fit-cross-and-cliffs-2026-09-25 repeated for two more training seeds per recipe; run 2026-09-26 (the maintainers' log, not public)"
 }

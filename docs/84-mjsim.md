@@ -1,24 +1,19 @@
-# 84 — mjsim: the MuJoCo simulator window as its own package
+# mjsim: the MuJoCo simulator window as its own module
 
-*2026-10-03. The ask: keep the MuJoCo simulator window as its own module,
-importable by the app and improved on its own, under a name that is not
-"viewport" (mjsim, mjlab or mujoco were offered). `mjlab` is
-mujocolab's trainer, which we depend on and cite; `mujoco` is
-DeepMind's; `mjsim` is free on PyPI, crates.io and the organisation
-(checked 2026-10-03), so **mjsim** it is: the crate `mjsim`, the
-package `mjsim`, the module `mjsim`; a repository of its own is deferred
-(below). docs/80 §3's rule is satellites only where the lifecycle
-differs; this one's does: a MuJoCo simulator window for egui apps, with
-the simulation streaming into it from a Python process, is useful to any
-egui app and to any MuJoCo user, and it moves on its own cadence
+*Status: planned, not started; mjsim stays a module inside this
+repository; no separate repository for now (2026-10-03).*
+
+The MuJoCo simulator window is to become its own module, importable by
+the app and improved on its own. The name is **mjsim**: `mjlab` is
+mujocolab's trainer, which we depend on and cite; `mujoco` is DeepMind's;
+`mjsim` is free on PyPI, crates.io and the organisation (checked
+2026-10-03). The crate `mjsim`, the package `mjsim`, the module `mjsim`.
+The case for a module of its own: a MuJoCo simulator window for egui apps,
+with the simulation streaming into it from a Python process, is useful to
+any egui app and to any MuJoCo user, and it moves on its own cadence
 (rendering, the drawer, the follow rules, the ring). In prose it is "the
-simulator" (the page already says so); the old word leaves the vocabulary
-with the extraction, and the heartbeat's `viewport_*` fields with the
-next schema version. This was the plan for a repository; decided 2026-10-03 that no
-repository splits off for now ("lets use just trainnr for now"), so
-mjsim is the simulator's **module** inside trainnr: the same cut, the same
-contract, under `crates/mjsim` and `mjsim/` when steps 1 and 2 run; step
-3 waits until a split is needed.*
+simulator"; the old word leaves the vocabulary with the extraction, and
+the heartbeat's `viewport_*` fields with the next schema version.
 
 ## 1. What mjsim is today
 
@@ -37,7 +32,7 @@ list it offers comes in as an argument.
 
 ## 2. The cut
 
-- **`mjsim`**, one repository, two packages with one version:
+- **`mjsim`**, one module, two packages with one version:
   - the Rust crate `mjsim`: `Simulator` (the reader and the picture), `transport`, `overlays`, `drawer`, `shortcuts`, the
     `Action` enum, and a `Launcher` trait the app implements to start
     the stream (so the crate spawns nothing itself and the app keeps its

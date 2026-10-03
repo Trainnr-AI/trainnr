@@ -25,8 +25,14 @@
    "dds_gate_after_fixes": {
     "successes": 20,
     "trials": 20,
-    "ci95": [0.83, 1.0],
-    "err_ratio_range": [0.11, 0.41]
+    "ci95": [
+     0.83,
+     1.0
+    ],
+    "err_ratio_range": [
+     0.11,
+     0.41
+    ]
    }
   },
   "causes": [
@@ -35,9 +41,18 @@
    "the base quaternion was read off SportModeState, which their bridge fills with position and velocity only, so every velocity was judged in the world frame and no fall ever registered; the bus now takes the IMU quaternion from LowState"
   ],
   "per_axis_probe_under_their_controller": {
-   "forward_m_s": [0.68, 0.8],
-   "sideways_m_s": [0.59, 0.8],
-   "yaw_rad_s": [0.18, 0.5],
+   "forward_m_s": [
+    0.68,
+    0.8
+   ],
+   "sideways_m_s": [
+    0.59,
+    0.8
+   ],
+   "yaw_rad_s": [
+    0.18,
+    0.5
+   ],
    "note": "measured against commanded; their PD and rate track less tightly than our runtime, within the rule"
   },
   "judged_against_the_certificate": {
@@ -56,8 +71,8 @@
   "note": "the stamps are in the manifests and gate records on the box; not transcribed here"
  },
  "artifacts": {
-  "mujoco_gate": "projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
-  "dds_gate": "projects/go2-walk/deploy/go2-c2-deploy-cited/gate-dds.json (the WSL box)",
+  "mujoco_gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
+  "dds_gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate-dds.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate-dds.json (the WSL box)",
   "their_controller_log": "projects/go2-walk/deploy/go2-c2-deploy/unitree/logs/controller.log (the WSL box)"
  },
  "sources": {

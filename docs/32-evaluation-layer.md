@@ -1,6 +1,11 @@
 # The evaluation layer, minimum lines: standard on the outside, ours on the inside
 
-*Written 2026-08-26, the evening T5's loop closed. The question was how
+*§1–8 are the plan as written on 2026-08-26; §9–10 are what was built.
+This covers the manipulation/LeRobot gymnasium path; the walk verdict is
+in docs/77.*
+
+*Written 2026-08-26, the evening T5's loop closed (T5 = the kitting
+training rung, docs/31 §3). The question was how
 to build the most standard, ecosystem-fit, production-grade evaluation in
 the fewest lines: what open source already provides, what has to be
 built, within the coding standards. This is the answer, built on three
@@ -10,7 +15,7 @@ LeRobot's evaluation contract from the installed package
 ecosystem interfaces from their repositories
 ([46](e2e-research/46-ecosystem-eval-interfaces.md)), and a line-by-line
 audit of our own surface (numbers below are from it), on top of the
-Arena sweep (the operator's brief, folded into [the loop](76-the-loop.md)).
+Isaac Lab Arena reads ([e2e-research/39–44](e2e-research/39-arena-metrics-and-progress.md)).
 Written as a plan; §9 records what was built, and §10 the review of it.*
 
 Terms, defined once. An **environment** (env) is the simulated task as
@@ -54,7 +59,7 @@ and the control rate each defined once instead of three or four times.
 | Plugin registration without forking | `register_third_party_plugins()` imports any installed distribution named `lerobot_env_*` (*lerobot/utils/import_utils.py* L223–236); or `--env.discover_packages_path=<module>` on the CLI (*lerobot/configs/parser.py* L43, L126–128) | both verified in the installed package |
 | Sharing the env with others | the EnvHub door: a repo with *env.py* exposing `make_env(n_envs, use_async_envs, cfg)` (46 §1.5) | Arena publishes this way; the contract is the code above |
 | Recording rollouts as data | `--eval.recording=true` writes a LeRobotDataset with `next.success` per frame (45 §1.7) | the DAgger/correction loop's raw material, free |
-| Tracking | wandb API surface (docs/30 §6, decided) | unchanged |
+| Tracking | wandb API surface only, off by default | unchanged |
 
 ## 3. What nothing upstream provides (keep, and it is already written)
 
@@ -65,7 +70,7 @@ From the audit's "must stay" table, with line counts as measured:
   stdlib only.** Every system in 46 aggregates with a plain mean.
 - `evaluate/certificate.py` — gate on the lower bound, stamps, n, exact
   p: **171.** No counterpart anywhere.
-- `evaluate/armnetbench.py` — the real side of Gate A: **120.**
+- `evaluate/armnetbench.py` — the real side of the go/no-go gate (Gate A, 2026-08: simulated evaluation must rank policies the way reality does): **120.**
 - `robot/model_checks.py` — the census gate (actuators, sensors, geoms,
   cameras alive before an episode is spent): **46.** Gymnasium's env
   checker validates spaces, not that a robot exists; LeRobot disables
@@ -82,7 +87,9 @@ Total essential ≈ 1,470 lines, and none of it changes shape.
 
 ## 4. What to build (about 300 lines, three files)
 
-**4.1 The env — `trainnr/envs/lerobot` (~220 code lines).** One
+**4.1 The env — planned as `trainnr/envs/lerobot`, built as
+`trainnr/trainnr/envs/gymnasium_env.py` and `envs/lerobot_plugin.py` (§9)
+(~220 code lines).** One
 class per rig, not per task: `TrainnrEnv(task, ...)` where `task` is
 the existing `build_transfer_cube()` / `build_kitting()` result.
 
@@ -98,7 +105,8 @@ the existing `build_transfer_cube()` / `build_kitting()` result.
   episode *i* with `seed + i` (45 §3).
 - `step(action)`: advance `control_interval` physics steps with the
   same-instant rule (`mj_forward` after `mj_step`, measured one-tick
-  sensor lag — the R7 rule, one place); keep the physics-rate
+  sensor lag: a forward pass after each step so the sensors describe one
+  instant, one place); keep the physics-rate
   `(steps, nstate)` history because every referee reads the last
   `_HOLD_STEPS`; on the last tick `ok = protocol.success(states, sensors)`;
   return `truncated=True`, `terminated=False`, `reward=float(ok)`, and
@@ -131,7 +139,7 @@ stepping loop existing three times (audit §2.1 item 2).
 `EpisodeRecord` appended as each trial finishes: `task, policy, trial,
 seed, success, steps, source (name@hash), protocol_hash, perturb_hash,
 robot_bundle, scene_bundle, physics_backend (with version), timestamp,
-events` (milestones, 30 §7). `SimScore(successes, trials)` becomes a
+events` (milestones, 4.4 below). `SimScore(successes, trials)` becomes a
 ~25-line fold over records that refuses unseeded rows and unequal trial
 sets; `certify()` is unchanged. Written by a ~30-line `gym.Wrapper` (or
 the env's own `step`), not by `lerobot-eval`, whose `per_episode` row
@@ -141,7 +149,8 @@ a collector folds `eval_info.json` rows into the same `SimScore` by seed.
 **4.4 Milestones (~40 lines, after 4.3).** `EpisodeProtocol.milestones`
 as an ordered chain of predicates evaluated offline over the arrays the
 env already keeps; the funnel and the `success ≠ all_complete` flag from
-Arena (30 §7 row 39). `object_moved` is milestone zero — the fact the T1,
+Arena (the rule adopted from Arena's progress tracker: a chain is judged
+offline, one milestone at a time). `object_moved` is milestone zero — the fact the T1,
 T2 and T5 rows of zeros hid.
 
 ## 5. What to delete (~430 lines, plus ~110 optional)
@@ -172,8 +181,8 @@ collapse to one each.
 - **`state_width` is caller-supplied** though the task knows it; the two
   task dataclasses (`SO101Task`, `ALOHA2Task`) become one
   `Task(name, spec, protocol, cameras, state_width, instruction)`.
-- **The instruction moves into the protocol** (Arena verdict, 30 §7 row
-  43): hash-stamped with the trials, exposed by the env as
+- **The instruction moves into the protocol** (the rule adopted from
+  Arena: the task's sentence is part of the task's identity): hash-stamped with the trials, exposed by the env as
   `task_description`.
 
 ## 7. The standards, applied
@@ -189,14 +198,14 @@ collapse to one each.
 | No silent default where a wrong value is possible | `state_width` from the task; `gate_threshold` still required |
 | Heavy imports lazy behind extras | gymnasium/lerobot imported inside the env module only |
 | Fail loudly | `info["is_success"]` computed, never defaulted; unseeded or unequal trial sets refused by the fold |
-| Every decision into docs + the log; `check-docs` gates it | this document; the log entry the same day |
+| Every decision written down; `check-docs` gates it | this document |
 | Both viewers for every rig session | `train-watch` keeps its viewers, loses its loop |
 | Apache-2.0 tree | gymnasium MIT, LeRobot Apache-2.0 |
 
 ## 8. Order of work, with the test that proves each step
 
 1. **Stepper extraction** — `_closed_loop` rewritten over it; the
-   existing sim tests (Gate A pendulum, ALOHA ladders) must pass
+   existing sim tests (the go/no-go pendulum, ALOHA ladders) must pass
    unchanged. No new behaviour.
 2. **`TrainnrEnv` + `TrainnrEnvConfig`** — test: gymnasium's
    `check_env`; `preprocess_observation(env.reset()[0])` yields exactly
@@ -207,20 +216,20 @@ collapse to one each.
    (`--env.type=trainnr_aloha2 --env.discover_packages_path=trainnr.envs.lerobot --seed=1000 --eval.n_episodes=4`)
    — must reproduce the 0/4 of the same day, and write `eval_info.json`.
 4. **Records + fold** — `score_policies` becomes the fold; `certify()`
-   unchanged; the Gate A dry run passes on records; the §6 fixes land
+   unchanged; the go/no-go dry run passes on records; the §6 fixes land
    with their pins.
 5. **Delete** the §5 rows; `train-watch` plays checkpoints through the
    env; `kitting-demos` uses the Stepper.
 6. **Milestones + funnel**; then the variation schema and the
-   main-effects table (30 §7 order), each a separate change.
+   main-effects table, each a separate change.
 
-Steps 1–4 are one working day on either machine; the WSL card is only
-needed for step 3's checkpoint.
+Steps 1–4 are one working day on either machine; a GPU is only needed
+for step 3's checkpoint.
 
 ## 9. Progress (2026-08-26, evening — steps 1–3 done)
 
 - **Step 1, the Stepper**: `physics/mujoco_backend.py::Stepper` — seat,
-  `advance(control, substeps)`, the R7 rule, the rows. `_closed_loop` is
+  `advance(control, substeps)`, the same-instant rule, the rows. `_closed_loop` is
   now four lines over it; the kitting choreographer's `advance` lost its
   hand-rolled inner loop. A pin: the Stepper reproduces
   `closed_loop_rollout` bit for bit on the pendulum, including the short
@@ -302,8 +311,9 @@ needed for step 3's checkpoint.
   one string read by the exporter and the task. All six tasks — the
   four SO-101 and the two ALOHA 2 — register as `trainnr/<task>-v0` on
   their own bundles' stamps. 199 sim tests.
-- **The variation schema and the sensitivity table** (docs/30 §7 row
-  41): `evaluate/variations.py` — `Variation(host, name, sampler,
+- **The variation schema and the sensitivity table** (the Arena read's
+  "variations and sensitivity", [e2e-research/41](e2e-research/41-arena-variations-and-sensitivity.md)):
+  `evaluate/variations.py` — `Variation(host, name, sampler,
   enabled)` with `Uniform` boxes and `Choice` labels, `draw(trial,
   protocol_hash)` from a SHA-256 of (protocol, key, trial, component)
   so every policy sees the same factor vector on trial *k* and choices
@@ -328,9 +338,11 @@ needed for step 3's checkpoint.
 - Done on screen: `train-watch --play … --task kitting` on the T5
   checkpoint, both viewers (the train venv needs `.venv/bin` on `PATH`
   for the Rerun viewer binary).
-- docs/32 is complete. What follows is docs/30 §7's remaining order:
-  placement validators, the scheduler/adapter split and the remote
-  client for π0.5, the task spec and critic loop.
+- docs/32 is complete. What followed, in order: placement validators
+  (`physics/placement.py`), the scheduler/adapter split
+  (`evaluate/scheduler.py`) and the remote client for π0.5
+  (`envs/openpi_policy.py`), the task spec and critic loop
+  (`tasks/acceptance.py`).
 
 ## 10. The review pass (2026-08-26, night) — standards applied
 
@@ -416,22 +428,30 @@ train venv's MuJoCo 3.12 for the first time: a cross-version enum
 comparison in `arm_ik` (the review's joint-type guard refused every
 hinge), draccus's top-level `tests` package shadowing ours, and the
 SO-101 experts at 3/4 on 3.12 against 4/4 on 3.11 — now pinned per
-instrument in `tests/_instruments.py`. Details: docs/07.
+instrument in `tests/_instruments.py`.
 
 ### 10.1 The second review (2026-08-27) — what stayed deferred, and why
 
-Four read-only reviewers, one slice each, fifty-odd findings; what
-they found and what was fixed is in docs/07's entry of the same date.
-Still open after it, with the reason each one waits:
+Four read-only reviewers, one slice each, fifty-odd findings, fixed the
+same day. What was done, and what stayed open with the reason each one
+waits (status as of 2026-08-27 unless dated):
+
+**Done 2026-08-27.**
+
+| Item | Note |
+|---|---|
+| `MJXWarpBackend.stepper`: a BATCHED stepper (`MJXBatchedStepper`), admitted by the gauntlet | the vectorized gymnasium env over it ([e2e-research/49](e2e-research/49-gpu-path-mjxwarp.md)) was to land with the cloud run, where its throughput can be measured |
+| A `Stepper` Protocol: `harness.Stepper` names `sensordata`/`states`/`sensors`/`extras`/`advance`/`done`; the CPU stepper is asserted to satisfy it | — |
+| An engine registry: `physics/registry.py`, `trainnr.engines` entry points, one plugin loader (`plugins.py`) that names a failing plugin; and the observables hook (`EpisodeProtocol.observables`, `Engine.observables`, `require_observables`) | Plumbing `Stepper.extras` into `success` waits for the first engine that exposes anything (a deformable's particles). The pyproject entry-point keys are never read against the decorator names — drift there is silent until a plugin is installed. |
+| The scripted expert's own stamp (late that day): `tasks.aloha2.expert_stamp` names the choreography by content (`kitting-expert@<hash>` over `KittingChoreography.fields()` and the segment table); every manifest carries it, the dataset's provenance carries the one value, and a batch with two experts is refused at export | A task's stamp names the SPEC, a batch's provenance the BUNDLE; until this, a choreography change left both unchanged while the demonstrations differed |
+
+**Open after it.**
 
 | Item | Why it waits |
 |---|---|
-| ~~`MJXWarpBackend.stepper`~~ — **done 2026-08-27**: a BATCHED stepper (`MJXBatchedStepper`), admitted by the gauntlet; the vectorized gymnasium env over it is what remains (docs/49) | The env class over the batched stepper lands with the cloud run, where its throughput can be measured. |
-| ~~A `Stepper` Protocol~~ — **done 2026-08-27**: `harness.Stepper` names `sensordata`/`states`/`sensors`/`extras`/`advance`/`done`; the CPU stepper is asserted to satisfy it | — |
-| An engine registry — **done 2026-08-27**: `physics/registry.py`, `trainnr.engines` entry points, one plugin loader (`plugins.py`) that names a failing plugin; and the observables hook (`EpisodeProtocol.observables`, `Engine.observables`, `require_observables`) | Plumbing `Stepper.extras` into `success` waits for the first engine that exposes anything (a deformable's particles). The pyproject entry-point keys are never read against the decorator names — drift there is silent until a plugin is installed. |
 | Task-side FULLPHYSICS offsets (`CUBE_STATE_SLICE = slice(17, 20)`, `PART_STATE_SLICE`, `_QPOS_OFFSET`) adopting `physics.FullPhysicsLayout` | Every one is pinned by a test today; the adoption is a mechanical pass over two rigs, queued behind the kitting work. |
 | `show-rig.py`, `show-yellow.py` without a Rerun mirror (the house rule) | Older rig viewers; the mirror is `RigMirror` plumbing plus a yellow-twin reconstruction the two errand tools already carry twice — the next item. |
-| `YellowTwin` (replay-errand, rig-rerun, sim-errand carry ~30 lines of the yellow twin's pose reconstruction each) and `RerunPaths`/`Timelines` for the entity strings | A rig-tool refactor, not an evaluation-layer one; queued with the rig's port to a bundle (docs/24). |
+| `YellowTwin` (replay-errand, rig-rerun, sim-errand carry ~30 lines of the yellow twin's pose reconstruction each) and `RerunPaths`/`Timelines` for the entity strings | A rig-tool refactor, not an evaluation-layer one; the rig since moved to its archive repository. |
 | `grid_scene` / `grid_model_from_xml` (show-many, rl-watch) into `_rig3d` | Same family; both tools work, both restate a ground plane and a pitch. |
 | `show-rig`'s sixteen tuned thresholds (`.ruff.toml` exempts the file, with the reason) | A hand-tuned demo controller; naming them is honest only with the desk to re-measure. |
 | `RatioParams`/`RigNames` in `robot/drivetrain_fit.py` | The car rig's identification code, off the training path; its fit records are test-pinned. |
@@ -442,16 +462,15 @@ Still open after it, with the reason each one waits:
 | The tools' `qpos[15]` / `CUBE_QPOS` cube index by body lookup | Display-only; `show-many` and `show-yellow` show the pattern. |
 | The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate could not run on the development machine (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading build-robot.sh's identical fix (now in the rig archive). |
 | From §10, still open: `EpisodeDesign` structs (kitting's is `KittingSpec` since 2026-08-27; the SO-101 tasks' step tables are next), typed `MilestoneEvent`/`ProtocolFields`, bundles as package data, the ALOHA joint-name lists derived once, the env's own `import mujoco` | Reasons unchanged. |
-| ~~The scripted expert has no stamp of its own~~ — **done 2026-08-27 (late)**: `tasks.aloha2.expert_stamp` names the choreography by content (`kitting-expert@<hash>` over `KittingChoreography.fields()` and the segment table); every manifest carries it, the dataset's provenance carries the one value, and a batch with two experts is refused at export | A task's stamp names the SPEC, a batch's provenance the BUNDLE; until this, a choreography change left both unchanged while the demonstrations differed |
 
-## 11. Open questions (carried from 45 §4 and 46 §5)
+## 11. Open questions (carried from 45 §4 and 46 §5; as of 2026-08-27, not revisited since)
 
 1. Async vector envs under WSL: LIBERO defers simulator creation to the
    first `reset` inside the worker to dodge stale EGL contexts under
    `forkserver`; our `mujoco.Renderer` needs the same deferral before
    `batch_size > 1` is trusted under WSL.
 2. Executed action horizon: inside the env (GR00T's `MultiStepWrapper`
-   shape, visible to every client) or in `EpisodeProtocol` (report 43)?
+   shape, visible to every client) or in `EpisodeProtocol` ([e2e-research/43](e2e-research/43-arena-policy-interface.md))?
    **Built 2026-08-27** inside the env (`executed_horizon`,
    `evaluate/scheduler.py`); it is a field of the record either way.
 3. Hub publishing: does a pinned `@<commit>` satisfy the `source@hash`

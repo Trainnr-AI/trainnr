@@ -1,9 +1,19 @@
 # Quickstart: identify your robot
 
-*The product's core workflow, start to finish, for someone who has never
-seen this repo. Written 2026-08-25 after an earlier review found every
-piece existed but was scattered across four files. Owners of the original
-rig have a shorter path — see the end.*
+*The identification workflow through the Python API, start to finish,
+for someone who has never seen this repo. Written 2026-08-25 after an
+earlier review found every piece existed but was scattered across four
+files.*
+
+**The tool route first.** From an agent, the same workflow is three MCP
+tools: `onboard_robot` (an MJCF or USD file becomes a stamped bundle),
+`ingest_recording` (or `ingest_public_log`) for the telemetry, and
+`identify_system` for the fit, with its intervals and pinned / NOT PINNED
+verdicts written into the bundle. For a legged robot the `legged-joints`
+method (since 2026-09-24) fits per-joint armature, damping and friction
+from the robot's own joint telemetry; the README's Go2 table walks it.
+This page is the Python-API path underneath those tools, for a robot
+whose telemetry arrives as a CSV.
 
 ## 0. Install
 
@@ -26,10 +36,10 @@ and a `model.xml`. Copy
 - `profile.json`: the measured constants your fit consumes, each with a
   provenance string. Honest placeholders say so — the template's own
   `ticks_per_revolution` carries "hand-count pending" in its provenance.
-  (The schema is currently rig-shaped — extra fields are refused, and a
-  non-rig robot fills the servo/camera fields with its own facts or
-  nominal values, stated as such. Schema generalisation is queued with
-  the first arm bundle.)
+  (`profile.json` is the measured-constants file the drivetrain template
+  carries. A bundle made by `onboard_robot` carries `bundle.json` instead:
+  the model file compiled, the source, the census; only
+  `robots/rig-drivetrain` still has a `profile.json`.)
 - `model.xml`: a MuJoCo model of just the parts you are fitting. Three
   rules, learned the hard way and stated once:
   **sensor order = your measurement column order · actuator order =
@@ -76,7 +86,7 @@ repo real sessions:
    anchor statement.
 2. **Verify your timestamp convention against a known-truth rollout
    first.** A one-sample shift produces a biased fit with tight
-   intervals (R13, and three repeats in docs/26 §5). Generate data
+   intervals (a review finding, and three repeats in docs/26 §5). Generate data
    from your model with known parameters, fit it, and demand exact
    recovery before touching real data.
 
@@ -121,11 +131,12 @@ statement verbatim; the cross-run verdict. That report — including its
 NOT PINNED rows — is the deliverable. A measurement that cannot admit
 what it doesn't know is a guess with confidence theater.
 
-## Rig owners' shortcut
+## The drivetrain shortcut
 
-For the original drivetrain (its bundle is `robots/rig-drivetrain`; the
-hardware and firmware live in the rig archive repository) the whole chain
-is one command:
+For the 2025–26 rig's drivetrain (its bundle is `robots/rig-drivetrain`;
+the hardware, the firmware and the recorder live in the archive
+repository Trainnr-AI/rig) the whole chain is one command over a
+recording made there:
 
 ```sh
 uv run --extra sim python ../tools/fit-report.py ../robots/rig-drivetrain \

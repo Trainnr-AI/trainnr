@@ -12,7 +12,7 @@ segue) added the same day the Arena read landed.*
 
 ## 0. The design constraint that names the shape
 
-The ask is a setup **the mjlab creators themselves would want to use**.
+The target is a setup **the mjlab creators themselves would want to use**.
 Their demonstrated taste (56): uv, tyro, typed configs, tests + a
 changelog entry per PR, native MuJoCo mechanisms over bolted-on
 abstractions, minimal deps, artifacts over side channels, Apache-2.0.
@@ -61,8 +61,8 @@ inner object:
   FAILS LOUDLY (their loader silently ignores unknown keys; their key
   sets differ per motor).
 
-Producer: `trainnr-bundle wrap` over a `bam.fit` output directory;
-`trainnr-bundle verify` recomputes metrics and checks integrity. Adoption
+Producer: `tools/actuator-bundle.py wrap` over a `bam.fit` output directory;
+`tools/actuator-bundle.py verify` recomputes metrics and checks integrity. Adoption
 path: usable by anyone with a BAM fit today; a natural PR to Rhoban
 (it preserves data they already compute); the artifact our own M1–M6
 library re-publishes in. *(SHIPPED 2026-08-31 as
@@ -108,7 +108,7 @@ registry already supports; no fork) that:
 
 ## 3. Artifact three: the deployment manifest + the certificate
 
-*(design)* The contract microduck keeps in French markdown and CLI
+*(design)* The contract microduck keeps in prose plan documents and CLI
 flags (57 §5: `--action-scale 0.8` vs trained `1.0`; kp silently
 detuned by a default), made machine-readable and asserted at both
 ends: obs layout and order, scales/clips/history, action scale,
@@ -128,7 +128,7 @@ to our stats layer's declared alpha/delta.
 
 ## 4. Who adopts what, and why they would
 
-| Party | Takes | Because it fixes their named pain |
+| Party | Would take | Because it would fix their named pain |
 |---|---|---|
 | mjlab core | the DR no-op linter; the RecorderTerm; nightly gates on their own harness | their recurring staleness-bug class; an empty API; a chart that asserts nothing (56) |
 | Rhoban/BAM | the bundle envelope (preserves the MAE they discard); the current-mjlab kernel | zero tests, no schema, a dead version wall (57 §3–4) |
@@ -141,9 +141,10 @@ additive to their existing repos; everything is Apache-2.0. That is
 the property that makes it adoptable by the people who built the
 frameworks — it reads as ecosystem infrastructure, not a land grab.
 
-## 5. What trainnr keeps proprietary-by-competence
+## 5. What trainnr would keep by competence, not by licence
 
-Not by license — by being the only ones who can do it: the
+Everything here is Apache-2.0; what stays distinctive is what only the
+measuring party can do: the
 identification service (bench + protocol + the fits themselves), the
 certification layer (two instruments, paired protocol, referee), and
 the Studio (the one place training telemetry, sim viewport, eval
@@ -153,12 +154,17 @@ for the service that produces trustworthy ones.
 
 ## 6. Sequencing, with gates
 
-1. **Bundle spec + `trainnr-bundle wrap/verify`** over our existing vendored
+*Status (2026-10-03): `trainnr-mjlab/` exists with the no-op linter; the
+RecorderTerm is `trainnr-mjlab/src/trainnr_mjlab/recorder.py`; the
+deployment manifest is `trainnr/trainnr/deploy/manifest.py`; the bundle
+tool is `tools/actuator-bundle.py`; the upstream offers were drafted and
+not sent.*
+
+1. **Bundle spec + `tools/actuator-bundle.py wrap/verify`** over our existing vendored
    BAM fits (no GPU needed; pure Python; can start now).
 2. **Kernel port to mjlab 1.6** + the refusing ActuatorCfg + auto
-   event registration (needs the GPU box; the former
-   rl-engineering-merge gate was dissolved 2026-08-31 — see
-   docs/00-roadmap Act II — so this waits only on a WSL session).
+   event registration (needs the GPU; an earlier merge gate was dissolved
+   2026-08-31, so this waited only on a GPU session).
 3. **DR linter + `dr_from_bundle` + `entity_from_bundle`.**
 4. **RecorderTerm → Studio**; the `train` specialist in the panel
    learns the mjlab commands.
@@ -263,7 +269,8 @@ ours** — resolved per artifact, from the idioms the reads measured:
   with our additions as sibling namespaced keys (`provenance`,
   `metrics`, `uncertainty`, `context`, `schema_version`). Both a
   `python -m` module (their CLI style) and a console script.
-- **Press outputs speak LeRobot exactly** (32/45): v2.1 layout,
+- **Press outputs speak LeRobot exactly** (32/45): the v2.1 layout then,
+  v3 now (README),
   `observation.state`/`action` feature naming — a dataset consumer
   must not be able to tell it wasn't written by their own recorder.
 - **The manifest takes Arena's spec shape** (59): typed,

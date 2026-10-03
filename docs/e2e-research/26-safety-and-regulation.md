@@ -1,6 +1,6 @@
 # Safety and regulation
 
-Research date: **2026-08-08**. Question: for an indoor commercial deployment of
+Research date: **2026-08-08**; regulatory claims as of **2026-08-15**. Question: for an indoor commercial deployment of
 a mobile manipulator in the US and EU, what actually applies, what does a
 supervised pilot require, and what does it cost?
 
@@ -11,7 +11,7 @@ supervised pilot require, and what does it cost?
 > (EU) 2026/1744, the AI requirements arrive *through the Machinery Regulation
 > itself* rather than as a parallel AI Act assessment. **One decision, one
 > regulation, one assessment.** It is also a description of the Tier 0
-> architecture this repository already has.
+> architecture the archived rig had ([19](19-the-system.md)).
 
 > **Re-verified 2026-08-15.** The EU mechanism changed between the research
 > date and the re-check: the Digital Omnibus (Regulation (EU) 2026/1744, in
@@ -109,8 +109,8 @@ regimes to reason about.
 > - **Document this separation explicitly in the technical file.** The argument
 >   is the deliverable.
 
-This is a description of the four-tier architecture in
-[19-the-system.md](19-the-system.md): Tier 0 is deterministic, small, `no_std`,
+This is a description of the archived rig's four-tier architecture in
+[19-the-system.md](19-the-system.md) (the rig lives in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)): its Tier 0 was deterministic, small, `no_std`,
 allocation-free, `#![forbid(unsafe_code)]`, and cannot be overridden from above.
 That work was done for engineering reasons. It turns out to have a regulatory
 value nobody was designing for.

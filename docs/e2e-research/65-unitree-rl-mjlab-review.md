@@ -125,7 +125,7 @@ the motor datasheet. We arrive from the customer side, where nobody
 can: fitted parameters with confidence intervals, command delay
 measured, the whole thing stamped into a certified bundle. Same
 doctrine, and ours works on robots Unitree didn't build. It also names
-a benchmark worth running on our own rig: **derived-gains + narrow DR
+a benchmark worth running on a robot: **derived-gains + narrow DR
 vs identified-intervals DR**, same task, same trials.
 
 ## 6. Where our discipline is ahead (each with the evidence)
@@ -150,9 +150,10 @@ vs identified-intervals DR**, same task, same trials.
 
 ## 7. What this changes for us
 
-Folded into the data-engine design (docs/66): the mimic lane as a
-fourth expert source, failure-bin sampling as prior art for the
-funnel→press loop, the deploy.yaml/sim2sim contract as the shape of
-our future sim-to-real seam, and the reward vocabulary + curricula as
-the adoption list for trainnr_mjlab when the walk grows terrain. The
-positioning lines went to docs/33 the same day.
+Folded into the data design: the mimic lane as a fourth expert
+source, failure-bin sampling as prior art for the funnel→press loop,
+the deploy.yaml/sim2sim contract as the shape of the sim-to-real seam
+(built since: `trainnr/deploy`), and the reward vocabulary + curricula
+as the adoption list for trainnr_mjlab when the walk grows terrain.
+The manuscript's §8 re-reads this repository at commit 1425b15
+(docs/paper/manuscript.md).

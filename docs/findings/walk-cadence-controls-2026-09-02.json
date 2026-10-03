@@ -37,7 +37,7 @@
   "dataset_cadence": "frames every 5 ticks at 50 Hz control (10 Hz)"
  },
  "artifacts": {
-  "log": "docs/07-progress-log.md, entry 2026-09-02 'campaign 1 - the student learned; the cadence killed it'"
+  "log": "the maintainers' log, 2026-09-02 (not public)"
  },
  "sources": {},
  "protocol": "docs/e2e-research/63 \u00a72 (the certificate) with the action held N ticks",

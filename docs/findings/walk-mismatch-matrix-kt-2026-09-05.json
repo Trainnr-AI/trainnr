@@ -717,7 +717,7 @@
   "figure.csv": "docs/figures/walk-mismatch-matrix-kt-2026-09-05.csv"
  },
  "sources": {},
- "protocol": "docs/70 \u00a79 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)",
+ "protocol": "the mismatch matrix: tools/walk-mismatch-matrix.sh judges every C1 policy pinned at fit x s and under drawn spans, 40 paired trials per cell (docs/paper/manuscript.md \u00a75.5)",
  "caveats": [
   "Pinned scale s multiplies only the kt axis of the actuator model by s; every other law parameter sits at the fit.",
   "One robot, one gait, one recipe; the policies are the C1 runs (three per arm).",

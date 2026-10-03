@@ -52,7 +52,7 @@
   "records": "docs/artifacts/go2/certificates/go2-c3-fit-records-cuda.jsonl",
   "run": "projects/go2-walk/runs/go2-c3-fit (the WSL box; projects/ is not tracked)"
  },
- "protocol": "docs/07-progress-log.md 2026-09-25 afternoon (the fit chain) and evening",
+ "protocol": "the fit chain of docs/76-the-loop.md: identify_system on the public chirp, train_walk(fit=...), evaluate_walk at the fit; run 2026-09-25 (the maintainers' log, not public)",
  "caveats": [
   "Simulation only; the fit is another laboratory's Go2 (IIT's public chirp, torque taken as the PD command), not the operator's robot.",
   "One seed here; two more seeds per recipe are in go2-fit-delay-margin-replicated-2026-09-26.",

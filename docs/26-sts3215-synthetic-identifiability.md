@@ -2,7 +2,7 @@
 
 *Run 2026-08-25, hardware-free, under the software-first
 constraint. Machinery: `trainnr/trainnr/robot/sts_synth.py` riding
-the same `identify()` wedge Paper 0 rehearsed. Full 32-cell matrix in
+the same `identify()` wedge the drivetrain rehearsal (`robots/rig-drivetrain`) exercised. Full 32-cell matrix in
 `data/sts3215-synthetic-identifiability.json`; two load-bearing cells
 pinned by `trainnr/tests/test_sts_synth.py`.*
 
@@ -11,7 +11,7 @@ pinned by `trainnr/tests/test_sts_synth.py`.*
 docs/e2e-research/27 §5 — which parameters can `mujoco.sysid` recover
 through an STS3215's position loop, firmware dead zone (10 counts ≈
 0.88°), 12-bit encoder quantization, and the registers a TTL bus can
-actually deliver? Answered the way Paper 0 was rehearsed: a true model
+actually deliver? Answered the way the drivetrain rehearsal was: a true model
 generates data, the data is corrupted the way the servo corrupts it
 (numbers from the third-party video bench test — vendor/reported-grade
 evidence, fine for a model, never citable as our measurement), and the
@@ -60,7 +60,7 @@ cells report pinned: the confidence intervals assume white residuals
 and the servo's corruptions are structured. The honesty machinery
 needs one more organ before the real bench: a residual-whiteness
 diagnostic in `identify()` that demotes intervals to DISTRUSTED when
-the residual is visibly structured. Queued.
+the residual is visibly structured. Not built as of 2026-10-03.
 
 **5. The clean cells recover truth exactly — after three convention
 bugs.** All 12 corruption-free cells recover all parameters to machine
@@ -69,23 +69,24 @@ and not the harness. Getting there required killing three successive
 sampling-convention bugs (end-of-hold rows, hand-rolled ZOH vs the
 optimizer's interpolation, a one-sample control-grid shift) — **each
 of which produced a biased fit with tight intervals around wrong
-values**. That is R13's failure class, met three more times in one
+values**. That is the failure class a review had named a week earlier
+(a biased fit that reports tight intervals), met three more times in one
 module, each caught by the truth-recovery check. The real bench
 inherits the fence: truth-recovery on synthetic data is now a
 prerequisite gate for any new excitation harness.
 
 ## What this changes
 
-- **Paper 1's bench protocol is now specced before any purchase**: poll
-  present-position + present-load; log present-speed if convenient but
-  never fit against it; weigh the link (and any payload) on a kitchen
-  scale; 25 Hz suffices; excitation dwarfing the ~20-count blind band
-  and inside the governor envelope (protocol rules already in
-  docs/23-research-agenda.md).
+- **The bench protocol for a real servo is specified before any bench
+  exists**: poll present-position + present-load; log present-speed if
+  convenient but never fit against it; weigh the link (and any payload)
+  on a kitchen scale; 25 Hz suffices; excitation dwarfing the ~20-count
+  blind band and inside the governor envelope.
 - **The downmarket-boundary worry shrinks**: through every corruption
   the video test documented, parametric identification converges given
   the right two registers. The open risk moves to what the study could
   not model — backlash as a *mechanical* element (v1 folds it into the
   measurement path), the governor's regime, and real sensor noise
   statistics.
-- The residual-whiteness diagnostic is the next `identify()` feature.
+- The residual-whiteness diagnostic was named as the next `identify()`
+  feature; it is not built as of 2026-10-03.

@@ -4,9 +4,13 @@
 sources, per the one-agent-per-field discipline. Re-tests
 [23-simulation-and-real2sim.md](23-simulation-and-real2sim.md) §3's
 verdict ("splats buy appearance, never physics", last checked
-2026-08-17) for [docs/30-the-full-loop.md](../30-the-full-loop.md)
-§3.1. **The verdict is amended — see (b).** The agent's report follows
-verbatim.*
+2026-08-17) for the scene-scanning stage of the loop. **The verdict is
+amended — see (b).** The agent's report follows verbatim.*
+
+*Historical (2026-08-25). Superseded by the 2026-09-22 passes
+[75](75-scene-capture-2026-09.md) and [76](76-physics-on-gaussians-2026-09.md)
+and by what was built, [docs/78](../78-the-scene-loop.md) (the scene loop);
+kept as the record of when the proxy-through-the-splat path first appeared.*
 
 ---
 
@@ -28,7 +32,7 @@ Method note: VERIFIED = I fetched the primary source (arXiv abs page, GitHub rep
 
 ### Q2 — SplatSim successors and sim2real numbers
 
-**DISCOVERSE (IROS 2025 Oral, Tsinghua)** — VERIFIED https://air-discoverse.github.io/ and https://github.com/TATP-233/DISCOVERSE. MuJoCo physics + 3DGS rendering, 650 FPS RGB-D at 640x480 across 5 cameras, ROS plugins, MIT LICENSE (verified in repo). Claims superior zero-shot sim2real on contact-rich tasks vs existing simulators (headline % not in README). Why it matters: this is architecturally our platform — MuJoCo carries physics, splats carry pixels — already built, MIT-licensed.
+**DISCOVERSE (IROS 2025 Oral, Tsinghua)** — VERIFIED https://air-discoverse.github.io/ and https://github.com/TATP-233/DISCOVERSE. MuJoCo physics + 3DGS rendering, 650 FPS RGB-D at 640x480 across 5 cameras, ROS plugins, MIT LICENSE (verified in repo). Claims superior zero-shot sim2real on contact-rich tasks vs existing simulators (headline % not in README). Why it matters: this is architecturally the platform — MuJoCo carries physics, splats carry pixels — already built, MIT-licensed.
 
 **GSWorld (arXiv 2510.20813, 2025-10-23)** — VERIFIED https://arxiv.org/abs/2510.20813. "Gaussian-on-Mesh" GSDF asset format binding splats to URDF/objects; closed-loop DAgger, benchmarking, zero-shot sim2real RL. Why it matters: a concrete asset-format answer for splat+physics co-registration.
 
@@ -47,7 +51,7 @@ Still **no fully-permissive turnkey pipeline**, verified against actual repos to
 
 ### Q4 — NVIDIA and Google/DeepMind
 
-**Isaac Sim 6.0 GA, 2026-06-04, ships NuRec Gaussian splatting natively** — VERIFIED via https://developer.nvidia.com/omniverse/nurec and https://radiancefields.com/nvidia-s-isaac-sim-6.0-ships-with-nurec-gaussian-splatting. Splat scenes (built on open-source gsplat; USDZ via 3DGRUT; 3DGS/3DGUT rendering through Fabric Scene Delegate) come with **paired collision proxies** so the same captured scene serves perception AND physics; includes Asset Harvester (object extraction) and Harmonizer (artifact cleanup). Why it matters: "splat + collision proxy pair" is now the vendor-standardized asset architecture — the exact pattern our platform would ingest.
+**Isaac Sim 6.0 GA, 2026-06-04, ships NuRec Gaussian splatting natively** — VERIFIED via https://developer.nvidia.com/omniverse/nurec and https://radiancefields.com/nvidia-s-isaac-sim-6.0-ships-with-nurec-gaussian-splatting. Splat scenes (built on open-source gsplat; USDZ via 3DGRUT; 3DGS/3DGUT rendering through Fabric Scene Delegate) come with **paired collision proxies** so the same captured scene serves perception AND physics; includes Asset Harvester (object extraction) and Harmonizer (artifact cleanup). Why it matters: "splat + collision proxy pair" is now the vendor-standardized asset architecture — the exact pattern the platform would ingest.
 
 **Newton physics engine** — VERIFIED repo https://github.com/newton-physics/newton: **Apache-2.0**, MuJoCo Warp as primary backend, and an **in-tree MPM solver** (granular, snow, multi-material examples) plus VBD cable examples. Newton 1.0 GA at GTC 2026 (March) with large speedups over MJX — CLAIMED (secondary: developer.nvidia.com/newton-physics surfaced, Medium/blockchain.news coverage). README has **no splat/neural-rendering integration**; Isaac Lab's Newton integration (VERIFIED, https://isaac-sim.github.io/IsaacLab/main/source/experimental-features/newton-physics-integration/index.html) is experimental (Isaac Lab 3.0 Beta) and also rendering-silent. A "Newton closed-loop with Warp+gsplat" claim circulates in secondary coverage (pebblous.ai blog, 2026-04) — CLAIMED only.
 

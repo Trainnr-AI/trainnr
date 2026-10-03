@@ -1,10 +1,39 @@
 # The scene loop: a captured scene as a data source, with its physics honest
 
-*Started 2026-09-22, after the A0–A8 merge. Designed from
-docs/e2e-research/75, before any code. The framing (2026-09-22): data collection, augmentation,
-generation, telemetry and the loop that improves the model are the
-product's most important feature; a captured scene is judged by what
-it adds to that loop, never by how it looks.*
+*Started 2026-09-22, after the build phases A0–A8 of docs/76 (the
+project layer, the artifact kinds, robot adapters, identification
+methods, tasks, the train and evaluate doors, deployment, drift and
+headless control) had merged. Designed from docs/e2e-research/75,
+before any code. The framing (2026-09-22): data collection,
+augmentation, generation, telemetry and the loop that improves the
+model are the product's most important feature; a captured scene is
+judged by what it adds to that loop, never by how it looks.*
+
+**Status (2026-09-25).** E0 met (the instrument step, 38/40 identical on
+both instruments). E1 met with a public capture (Mip-NeRF 360's garden,
+185 stills, through the chain); a phone capture is still to come. E2 met
+(the Go2 trains on the scene's heightfield with the head camera seeing
+the splat). E3 built, its first batch empty by the referee. E4 not
+started. E5 needs a robot. The headline numbers, each a record in
+docs/68-findings.md: the plane-trained walker on the hurdle scene, blind,
+0/4 (`scene-walk-first-certificate-2026-09-23`); the same walker on the
+captured garden under full physics 6/6, exact 95 % interval [0.54, 1.00]
+(`go2-walks-the-captured-garden-2026-09-23`); the first scene-trained
+walker survives 38/40 and tracks 0/40 on its own scene
+(`scene-walk-first-certificate-2026-09-23`); a garden-trained walker
+survives 36/40 and tracks 3/40 (`scene-walk-garden-2026-09-25`, with its
+caveat about the solid-block proxy). §1–§7 are the design; §8.x is the
+build in date order, with *Build notes* passages a reader can skip; §9
+is the certification protocol. The machines are the GPU workstation (an
+RTX 3090 Ti on WSL2) and a Mac (M1 Pro).
+
+Contents: [1. What the research settled](#1-what-the-research-settled) ·
+[2. The claim this work can earn](#2-the-claim-this-work-can-earn-and-the-one-it-cannot) ·
+[3. The artifact: a scene](#3-the-artifact-a-scene) · [4. The experiments](#4-the-experiments-each-with-its-gate) ·
+[5. Frictions expected](#5-frictions-expected-named-before-they-are-found) · [6. What this work refuses to claim](#6-what-this-work-refuses-to-claim) ·
+[8. E1 as built](#8-e1-as-built-2026-09-22-on-a-mac-m1-pro) · [8.6 The capture chain](#86-e1s-second-half-the-capture-chain-on-the-cpu-2026-09-23) ·
+[8.9 The Go2 in the garden](#89-the-go2-in-the-garden-a-captured-scene-walked-under-full-physics-2026-09-23) ·
+[9. How a scene's physics gets certified](#9-how-a-scenes-physics-gets-certified-for-a-task)
 
 ## 1. What the research settled
 
@@ -37,7 +66,7 @@ Six things, each with its evidence in docs/e2e-research/75:
    real wins; co-training always needs real data; no one closes the
    loop from deployed failures back into the scene.
 
-## 2. The claim this branch can earn, and the one it cannot
+## 2. The claim this work can earn, and the one it cannot
 
 **Can:** an agent turns a phone video into a stamped scene artifact
 whose record says how it was made, how far its collision proxy departs
@@ -101,7 +130,7 @@ number).
 | # | experiment | gate, provable here |
 |---|---|---|
 | E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
-| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk — **met 2026-09-23 (§8.8-8.10):** a public capture (Mip-NeRF 360's garden, 185 stills) through the chain on the box, gsplat beside Brush, the scene staged and walked; the operator's own phone video is still to come |
+| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk — **met 2026-09-23 (§8.8-8.10):** a public capture (Mip-NeRF 360's garden, 185 stills) through the chain on the box, gsplat beside Brush, the scene staged and walked; a phone video of a room is still to come |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box — **met 2026-09-23 (§8.5):** the Go2 trains on the scene's heightfield from the course's start, the head camera sees the splat in every world, its picture is in the actor, the Studio films it; 256 worlds at 64x64 over 393,684 gaussians: 393 steps/s against 4,054 without the camera and 4,500 on the plane |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene — **built 2026-09-23 (§8.7), the batch empty by the referee:** the press stands on the scene, films the head camera inside the env and names the scene, its gap and its floor on every manifest; the first scene-trained walker survives 38/40 and tracks 0/40 on its own scene, so no episode passes the criterion and the record says so |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
@@ -110,7 +139,7 @@ number).
 E0 through E3 need the box's GPU and a phone. E4 needs their data and
 a day. E5 needs a robot and is where the loop closes.
 
-**The CPU order (2026-09-22, the GPU workstation unavailable).** Probed
+*Build notes (2026-09-22): the order of work while the GPU workstation was unavailable.* Probed
 the same day, before any building: mujoco_warp 3.13's splat renderer
 runs on a CPU-only Warp on a Mac (M1 Pro) and composites correctly, at about 3 frames a
 second for four worlds at 320 by 240 (finding
@@ -141,7 +170,7 @@ amendments:
 
 - **E2 gains a contact-site gap and a perturbation assay.** Moving a
   collision mesh by 20 mm and 5° zeroed a contact task while the image
-  did not change (2608.21416, simulation, 39 scenes). So beside the
+  did not change (arXiv:2608.21416, simulation, 39 scenes). So beside the
   scene's four numbers over its footprint, a task records the same four
   within its contact regions (for a walk, the ground under the paths
   the feet take), and E2 runs the assay: the proxy shifted ±20 mm and
@@ -178,23 +207,13 @@ amendments:
 - The instrument step moves every walk certificate's instrument stamp;
   E0 measures what that costs before anything else is built.
 
-## 6. What this branch refuses to claim
+## 6. What this work refuses to claim
 
 No real-robot number. No "the scene predicts the robot": the field's
 own evidence is that two equal-scoring scenes differ eightfold on
 hardware. No measured scene physics until E5. No "photoreal" as a
 word: the record carries PSNR from the trainer and the gap from the
 audit, and the reader decides.
-
-## 7. Positioning, planned
-
-Three sentences enter docs/33 marked *planned*, to be dated when their
-gate passes: the Apache end-to-end capture chain against a field whose
-splat-to-physics methods are non-commercial and whose vendor pairing
-does not ship; the visual–collision gap measured and carried on every
-scene against a field that never audits it; scene physics with an
-interval and a drift check against a field of point estimates and
-hand-picked spans.
 
 ## 8. E1 as built (2026-09-22, on a Mac, M1 Pro)
 
@@ -212,7 +231,7 @@ presentation through Rerun's splat archetype beside the proxy mesh,
 the doors `import_scene` and `describe_scene`, the `scene` extra
 (Open3D, CoACD), eleven tests.
 
-What the first real scene taught, in the order it was learned:
+*Build notes (2026-09-22).* What the first real scene taught, in the order it was learned:
 
 1. **The web splat shares the checkpoint's frame** (nearest
    neighbour 0.0000 m), so the cheap file is the right input for the
@@ -259,8 +278,8 @@ heightfield's data embedded so `stage.xml` stands alone; the
 perturbation as a rigid move of the terrain body about the start),
 `cameras.py` (mujoco_warp's ray tracer over the model and the scene's
 visible gaussians, refusing by name on an instrument older than 3.13),
-`assay.py` (nine stages gated with one seed, the cliff on the nominal
-stage, honest when nothing walked). The gate keeps every tick's contact
+`deploy/assay.py` (nine stages gated with one seed, the cliff on the
+nominal stage, honest when nothing walked). The gate keeps every tick's contact
 points (`GateRuntime.contact_points`; the DDS runtime answers None and
 the record says unrecorded), saves them beside its record, and measures
 the scene's gap within 10 cm of them; its mirror draws the splat under
@@ -270,7 +289,7 @@ the deployment card names the scene and terrain it stands on; the
 drawer shows the contact-site gap and the assay's table. `deploy`
 moves to tier 3 beside `scenes`. Fourteen new tests.
 
-What the first stage taught:
+*Build notes (2026-09-22).* What the first stage taught:
 
 1. **MuJoCo collides a mesh as its hull, and a hurdle course as hulls
    is a plateau.** CoACD's 59 parts sat a mean 9.4 cm from the proxy
@@ -311,7 +330,7 @@ Still E2's: the smoke train with camera observations (mjlab's
 CameraSensor passing the splat arrays through, the box's GPU), the
 frame rate at N worlds, the Go2's real camera pose from the bundle.
 
-## 8.2 E0 as built (2026-09-22, the box)
+## 8.2 E0 as built (2026-09-22, the GPU workstation)
 
 The walk package's pins moved by override, not by an mjlab release:
 mjlab 1.6.0 is still the newest and pins mujoco and mujoco-warp to 3.11,
@@ -322,7 +341,7 @@ interval 0.83 to 0.99, median error ratio 0.2727 - the 3.11
 certificate's numbers to the last digit, and all 40 trials with the same
 outcome and length on both (finding `e0-instrument-step-2026-09-22`).
 
-What the step taught, in the order it was found:
+*Build notes (2026-09-22).* What the step taught, in the order it was found:
 
 1. **A certificate did not know its instrument.** Its name comes from
    the device tag, seed, trials and a hash of the protocol, and the
@@ -351,7 +370,7 @@ What the step taught, in the order it was found:
    the TERM handler's disconnect is bounded: the stuck trainer had
    ignored TERM.
 
-## 8.3 E2 on the box: the first walker on the course (2026-09-22)
+## 8.3 E2 on the GPU workstation: the first walker on the course (2026-09-22)
 
 The scene came to the GPU workstation as it came to the CPU machine: Neverwhere's
 `hurdle_226_blue_carpet_v3.zip` from their Hugging Face dataset (MIT,
@@ -390,7 +409,7 @@ Two consequences:
    which moves every arm and ALOHA certificate's stamp, or running a
    staged-scene gate in the walk package's environment.
 
-## 8.4 The course gate: the scene's protocol, and where the walker stops (2026-09-22, the box)
+## 8.4 The course gate: the scene's protocol, and where the walker stops (2026-09-22)
 
 A deployment staged on a scene is now judged along the scene's course
 (`trainnr/trainnr/deploy/course.py`); the manifest chooses — the stage
@@ -442,7 +461,7 @@ finding `course-gate-first-walker-2026-09-22`). The number that means
 something waits for a policy that can take the hurdles: E2's train on
 the scene, or E4's reproduction on Neverwhere's own terrain.
 
-## 8.5 E2 on the box: the walk on the scene, and what the camera costs (2026-09-23)
+## 8.5 E2 on the GPU workstation: the walk on the scene, and what the camera costs (2026-09-23)
 
 The Go2 now trains on a captured scene (`trainnr-mjlab/src/trainnr_mjlab/scene_stage.py`,
 `train_walk(..., scene=)`): the scene's heightfield grid — the same
@@ -479,7 +498,7 @@ number, at the smallest picture a policy could plausibly use. A g3 run
 at 4,096 worlds would render sixteen times as much per step; the
 picture's cost, not the physics, sets the scene walk's scale.
 
-What the first scene smoke taught, before that table could be written:
+*Build notes (2026-09-23).* What the first scene smoke taught, before that table could be written:
 
 1. **mujoco_warp caps the prisms one geom collides with at MuJoCo's
    own `mjMAXCONPAIR` (50) and drops the rest, printing a line per
@@ -624,7 +643,7 @@ another machine's package manager (the first draft said `brew` on a
 Linux box, 2026-09-23). COLMAP's CPU build suffices: the chain runs
 the sparse mapper only.
 
-## 8.7 E3 built, and the first scene walker judged: a press that stands on the scene, a certificate that names it, an empty batch (2026-09-23, the box)
+## 8.7 E3 built: the press on a scene, and the first scene walker judged (2026-09-23)
 
 **The press on a scene.** `generate_walk_demos(checkpoint, robot=, scene=)`
 (`trainnr-mjlab/src/trainnr_mjlab/walk_press.py`, `--robot --scene`): the walk press, built for
@@ -692,8 +711,8 @@ that do not send it into the hurdles from the first tick (the course
 protocol's own, or mjlab's terrain curriculum over difficulty rows the
 scene does not have), and a reference for the jump the velocity reward
 alone has not found (mocap and retargeting are a planned data lane,
-designed, not built). None fits the one-hour rule for local runs; the
-cloud is empty; the call is the maintainer's.
+designed, not built). None fits in an hour on the workstation; each is
+a decision about compute, not a change to the design.
 
 ## 8.8 A second splat trainer: gsplat on CUDA, chosen by the registry (2026-09-23, the GPU workstation)
 
@@ -754,9 +773,9 @@ Brush's rate here, at a fourteenth of its CPU. A 200-step smoke exported
 The full 30,000-step capture through the door, with the Studio showing
 the job, the stage (`⏳ scenes/mipnerf-garden — gsplat_train` on the
 Compute card, from the index's new `in_progress` list) and the live
-stream, is the run docs/07 reports.
+stream, is the run recorded in finding `go2-walks-the-captured-garden-2026-09-23`.
 
-## 8.9 The Go2 in the garden: a captured scene walked under full physics (2026-09-23, the box)
+## 8.9 The Go2 in the garden: a captured scene walked under full physics (2026-09-23)
 
 "Can we use this environment to move a dog here with full environment
 physics and robot interaction and dynamics?" Yes, by the doors that
@@ -797,7 +816,7 @@ The result, `go2-c2-garden-loop`: six of six trials walk the full loop
 around the table at 0.60-0.80 m/s, every waypoint reached within
 budget, no fall, exact 95 % interval [0.54, 1.00]. The same
 plane-trained walker, no scene training, on a garden captured from 185
-public frames this afternoon.
+public frames the same day (2026-09-23).
 
 Two limits, recorded: the head and course camera panes stay black on
 the box because the splat renderer the pictures need is mujoco_warp
@@ -809,7 +828,7 @@ into whatever stands near its start, and its error ratio says
 recording for the deployment, so a second gate under the same runtime
 no longer streams unseen behind the first.
 
-## 8.10 Under the table: the proxy splits at a clearance, and where the blind walker stops (2026-09-23, the box)
+## 8.10 Under the table: the proxy splits at a clearance, and where the blind walker stops (2026-09-23)
 
 "Is it possible for the robot to understand the gap beneath the table
 top and walk from within it?" The top-surface proxy roofed the table.
@@ -859,8 +878,8 @@ to go under and a reward for the passage. Neither is a proxy change.
 
 ## 9. How a scene's physics gets certified for a task
 
-Assembled from what exists (docs/e2e-research/76 §7), every step but
-the last runnable here today:
+Assembled from what exists (docs/e2e-research/76 §7). Step 3 and the
+seeds run in simulation today; steps 1, 2 and 4 need a robot:
 
 1. Identify the floor's or object's friction, mass and centre of mass
    by a scripted interaction; report the spread over at least five
@@ -877,6 +896,6 @@ the last runnable here today:
    the bias in points.
 5. Fix and publish the seeds.
 
-Steps 1, 2 and 4 need a robot; step 3 and the seeds are E2's. A scene
+Step 3 and the seeds are E2's. A scene
 record that has not been through this is a scene, not a certified one,
 and its card says which.

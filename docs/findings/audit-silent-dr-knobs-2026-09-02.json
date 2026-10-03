@@ -12,7 +12,7 @@
  "outcome": {
   "microduck_rl_no_op_knobs": 5,
   "our_no_op_knobs": 1,
-  "pixel_check": "headlight draw 0.40 -> mean pixel 23.7, 1.14 -> 39.5, 1.17 -> 40.1 after the fix (docs/07 2026-09-02 D1)"
+  "pixel_check": "headlight draw 0.40 -> mean pixel 23.7, 1.14 -> 39.5, 1.17 -> 40.1 after the fix (measured 2026-09-02 while the first data lane was being built)"
  },
  "inputs": {
   "scene": "rq_pipeline.tasks.so101 lift-study (nlight == 0)"
@@ -20,15 +20,15 @@
  "artifacts": {
   "linter": "rq_mjlab/src/rq_mjlab/linter.py",
   "applier": "pipeline/rq_pipeline/physics/variations.py",
-  "log": "docs/07-progress-log.md 2026-09-02 (D1)"
+  "log": "the maintainers' log, 2026-09-02 (not public)"
  },
  "sources": {
   "pollen-robotics/microduck_rl": "repomix pack read 2026-08-31 (163 files); commit bf19b34a1ef6 (2026-08-31 12:27 UTC \u2014 the latest commit not after the read date; pinned 2026-09-07 from the GitHub history; the pack itself carried no hash)",
   "Rhoban/bam": "v1.0.2",
   "mujocolab/mjlab": "v1.6.0 (the pack read 2026-08-31; release date not verified in-repo)",
-  "prior sightings": "mjlab #971, #1043, #1168; IsaacLab #7272, #5063, #7538, #7511; mujoco_playground v0.0.4 (docs/e2e-research/67 \u00a75)"
+  "prior sightings": "mjlab #971, #1043, #1168; IsaacLab #7272, #5063, #7538, #7511; mujoco_playground v0.0.4 (the prior-art audit; the issues are listed in docs/paper/references.md)"
  },
- "protocol": "docs/e2e-research/67-novelty-audit.md \u00a75",
+ "protocol": "the prior-art audit of randomization knobs that silently no-op in open stacks (the issues named under sources, each read at its tracker); the audit itself is not public, its primary sources are in docs/paper/references.md",
  "caveats": [
   "The phenomenon is known from the stacks' own trackers; the audit count and the refusing linter are the contribution."
  ],

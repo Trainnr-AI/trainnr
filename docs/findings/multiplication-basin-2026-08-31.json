@@ -36,9 +36,9 @@
   "constant": "SPAWN_NOISE = 0.004 in collect/kitting_demos.py"
  },
  "artifacts": {
-  "log": "docs/07-progress-log.md B3.1 (2026-08-31)",
+  "log": "the maintainers' log, 2026-08-31 (not public)",
   "code": "pipeline/rq_pipeline/collect/multiply.py",
-  "positioning": "docs/33-what-we-say.md"
+  "positioning": "the maintainers' positioning notes (not public)"
  },
  "sources": {},
  "protocol": "docs/e2e-research/59 \u00a75 (Mimic's contract) and docs/e2e-research/60 \u00a73",

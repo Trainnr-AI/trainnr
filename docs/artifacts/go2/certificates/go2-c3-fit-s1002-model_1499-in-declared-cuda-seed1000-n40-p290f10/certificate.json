@@ -1,0 +1,61 @@
+{
+ "schema": "trainnr-evaluation/1",
+ "source": "go2-walk@79c28c97151a",
+ "policy": "go2-c3-fit-s1002-model_1499@fa42e4937821",
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda",
+ "protocol": {
+  "trials": 40,
+  "seed": 1000,
+  "criterion": "survived and err_ratio<0.5",
+  "err_ratio_bound": 0.5,
+  "err_floor_mps": 0.1,
+  "dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "commands": {
+   "lin_vel_x": [
+    -1.0,
+    1.0
+   ],
+   "lin_vel_y": [
+    -1.0,
+    1.0
+   ],
+   "ang_vel_z": [
+    -0.5,
+    0.5
+   ],
+   "heading": [
+    -3.141592653589793,
+    3.141592653589793
+   ]
+  },
+  "command_basis": "command curriculum stage 1 of 3, reached by iteration 1499",
+  "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda",
+  "judged_at": "CROSS-evaluation: trained in fit@0ad6202797c5, judged in declared; law DR: declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants"
+ },
+ "identity": {
+  "robot": "go2@5003bf617b5f",
+  "actuator": "unitree-go2-declared-pd@3b68245f8d2a",
+  "dr_basis": "declared \u00b10.1 scale on kp, kd, armature around the reference's declared constants",
+  "actor": "deployable",
+  "task": null,
+  "trained_dr_basis": "fit fit@0ad6202797c5 (public log, recording iit-go2-chirp@f7f50914a129): 31/36 joint terms drawn over their bootstrap intervals, 5 not pinned over \u00b10.5 of the estimate; gains: declared \u00b10.1 scale on kp, kd around the reference's declared constants",
+  "seed": 1002,
+  "fit": "fit@0ad6202797c5",
+  "fit_basis": "public log",
+  "judged_in_fit": "declared"
+ },
+ "funnel": {
+  "survived": 40,
+  "tracked": 39
+ },
+ "successes": 39,
+ "trials": 40,
+ "ci95": [
+  0.8684,
+  0.9994
+ ],
+ "median_err_ratio": 0.247,
+ "robot": "go2@5003bf617b5f",
+ "task": "go2-walk@79c28c97151a",
+ "run": "go2-c3-fit-s1002@dfd2ac0a1b92"
+}

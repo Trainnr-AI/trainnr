@@ -1,6 +1,11 @@
 # The paired study (C1): does identified-region DR beat guessed DR, measurably?
 
-*2026-08-31. The protocol for docs/00 Phase C1 — "the number the
+*Historical (2026-08-31). Both runs below predate the harness cadence
+fix; superseded by the c1-competent-lift records in `docs/findings/`
+and docs/paper/manuscript.md §5.1. Kept as the protocol's record.*
+
+*2026-08-31. The protocol for the first campaign, C1 (identified
+versus guessed randomization on the lift) — "the number the
 datasheet earns its claims with". Smoke ran end to end the same day
 (0/4 vs 0/4, UNRESOLVED, as §3 predicts). **The sized run ran the same
 night on a rented B200** (32 demos/arm on `lift-study`, ACT 10k steps
@@ -24,7 +29,8 @@ recipe's ceiling. **Protocol amendment for run 3: a competence gate —
 each arm is first judged under its own training center, and the
 cross-judgment is informative only if the identified arm passes high
 there.** Remaining knobs: more demos/steps at hard truths (raise the
-ceiling), a brittler-but-learnable task, the C2 flagship's RL
+ceiling), a brittler-but-learnable task, the second campaign's (C2,
+the microduck walk, [63](63-the-flagship.md)) RL
 locomotion (a different recipe with a real dynamics-sensitivity
 profile), or the real robot's region. This page publishes the nulls
 either way — the instrument reports what is, not what sells.*
@@ -34,7 +40,7 @@ either way — the instrument reports what is, not what sells.*
 > `ecb04ac` was judged through a harness that played each policy action
 > for ONE control tick while the datasets were pressed at `frame_every=5`
 > (10 Hz) — every chunk five times too fast (the walk's cadence bug in a
-> second costume; docs/07 2026-09-04). The two nulls stand as measured:
+> second costume; found 2026-09-04). The two nulls stand as measured:
 > the easy-truth 40/40 vs 40/40 shows the task survived even a 5×-fast
 > replay, and the hard-truth ~47% cap is a lower bound on what the
 > recipe can do. Both are re-run under the held harness in the
@@ -44,8 +50,9 @@ either way — the instrument reports what is, not what sells.*
 
 Our datasheets say synthetic data is drawn from an identified
 confidence region, not a guess, and imply that this matters for the
-trained policy. docs/23's evidence line (sim-predicts-real r = 0.924
-with careful correspondence vs ≈ 0.60 without) is suggestive and
+trained policy. The field's evidence ([23](23-simulation-and-real2sim.md):
+sim-predicts-real r = 0.924 with careful correspondence vs ≈ 0.60
+without) is suggestive and
 uncontrolled; nobody in the surveyed ecosystems has run the controlled
 version (59 §5: Arena's generation path has "no dynamics
 randomization"; mjlab trains on hand-set ranges). C1 runs it.
@@ -60,13 +67,13 @@ nominal and truth.
 ## 1. The design: synthetic truth, so the experiment is controlled
 
 The real study wants a physical robot: identify it, train two ways,
-deploy both. Before hardware (docs/38's first-touch plan), the
+deploy both. Before hardware, the
 controlled version substitutes a SYNTHETIC truth — a dynamics vector
 we choose and then hide from both arms of the study:
 
 - **Truth**: `damping ×1.18, gain ×0.85` of nominal (off-nominal but
   inside the expert's measured competence — the lift expert keeps
-  10/10 at ±30 % with the both-terms gain rule, docs/07 2026-08-26).
+  10/10 at ±30 % with the both-terms gain rule, measured 2026-08-26).
 - **Arm GUESSED**: per-episode draws from `U(1 ∓ 0.30)` on both
   parameters, centred on NOMINAL — the folklore span, exactly what
   our own kitting generator and every surveyed framework does.
@@ -84,7 +91,7 @@ we choose and then hide from both arms of the study:
 Why lift: its expert is open-loop (a step-scheduled waypoint script),
 so generation is deterministic given the draws; its referee reads
 privileged state; it has the ArmnetBench cameras for the imitation
-policy; and `tests/_instruments.py` pins its expert rate per engine
+policy; and `trainnr/tests/_instruments.py` pins its expert rate per engine
 build.
 
 ## 2. The phases
@@ -95,10 +102,10 @@ build.
    records truth, conditions, seeds, and this protocol's path.
 2. **convert** (exists: `trainnr/trainnr/collect/lerobot_export.py`): both arms to
    LeRobot datasets, provenance carried.
-3. **train** (next): the same trainer config twice (LeRobot ACT at
+3. **train** (ran 2026-08-31): the same trainer config twice (LeRobot ACT at
    smoke scale locally; real scale on the rented card). Nothing about
    the condition leaks into the config.
-4. **evaluate** (next): both checkpoints through the gymnasium env
+4. **evaluate** (ran 2026-08-31): both checkpoints through the gymnasium env
    under the TRUTH dynamics on MATCHED trials (the paired protocol —
    policy A's trial k and policy B's trial k start identically), on
    BOTH instruments (CPU MuJoCo + MJX-Warp), folded by
@@ -109,7 +116,7 @@ build.
 
 ## 3. Sizing, honestly
 
-The smoke run (tonight) is 8 episodes/arm and smoke-scale training:
+The smoke run (2026-08-31) was 8 episodes/arm and smoke-scale training:
 it proves the protocol executes end-to-end and the accounting is
 paired; its verdict will be UNRESOLVED by construction (docs/32's
 power arithmetic — distinguishing rates at these sample sizes needs
@@ -142,11 +149,11 @@ no surveyed framework can write.
 ## 4. What the result means either way
 
 - Identified wins at truth: the datasheet's basis line is worth
-  money; C-phase outreach cites the number.
+  money; the number is the one to cite.
 - No detectable difference at N: the folklore span is good enough for
   THIS task/expert/architecture at THIS truth distance — publish
   that too; the harness exists to measure, not to flatter the wedge
-  (the honesty rows in docs/33 bind us).
+  (the honesty rule binds us).
 - Guessed wins: almost certainly a bug in the pairing or leakage;
   the paired records make it auditable episode by episode.
 

@@ -427,7 +427,7 @@
   "figure.csv": "docs/figures/walk-mismatch-matrix-refit-2026-09-06.csv"
  },
  "sources": {},
- "protocol": "docs/70 \u00a79 (the mismatch matrix: tools/walk-mismatch-matrix.sh, every C1 policy judged pinned at fit x s and under drawn spans)",
+ "protocol": "the mismatch matrix: tools/walk-mismatch-matrix.sh judges every C1 policy pinned at fit x s and under drawn spans, 40 paired trials per cell (docs/paper/manuscript.md \u00a75.5)",
  "caveats": [
   "Pinned scale s multiplies EVERY law parameter of the actuator model by s (walk_verdict --judge-at-scale); a real mismatch moves them separately \u2014 the per-axis matrices (--judge-param) are the slices.",
   "One robot, one gait, one recipe; the policies are the C1 runs (three per arm).",
@@ -441,7 +441,7 @@
   },
   {
    "date": "2026-09-07",
-   "what": "re-judged on the WSL box with the fixed seam (commit 62b999b; tools/walk-refit-rejudge-on-box.sh, log docs/artifacts/walk-c1/matrix-refit-rejudge.log): every pinned and drawn-\u00b10.30 cell replaced, 42 certificates; the fit column is the original six. The withdrawn certificates are in git at 6bbc3a5. The withdrawal is lifted."
+   "what": "re-judged on the WSL box with the fixed seam (commit 62b999b; tools/walk-refit-rejudge-on-box.sh; its log is not shipped, the counts are in this record): every pinned and drawn-\u00b10.30 cell replaced, 42 certificates; the fit column is the original six. The withdrawn certificates are in git at 6bbc3a5. The withdrawal is lifted."
   }
  ]
 }

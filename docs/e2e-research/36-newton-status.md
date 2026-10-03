@@ -3,11 +3,16 @@
 *Fourth pass, 2026-08-25. Researched by one agent against primary
 sources, per the one-agent-per-field discipline. Tests
 [docs/22-pipeline-architecture.md](../22-pipeline-architecture.md) §3's
-position ("MuJoCo is the loop; Newton a backend, not a foundation")
-for [docs/30-the-full-loop.md](../30-the-full-loop.md). Headline: the
+position ("MuJoCo is the loop; Newton a backend, not a foundation").
+Headline: the
 position stands and is STRENGTHENED — and the GPU path should be
 MJX-Warp, which consumes the very mjModel our sysid identifies. The
 agent's report follows verbatim.*
+
+*Historical (2026-08-25). Superseded by the measured reads
+[47](47-newton-docs-review.md), [50](50-newton-delta-probe.md) and
+[51](51-solvermujoco-roundtrip.md), which ran Newton; kept because the paper
+cites it ([docs/paper/references.md](../paper/references.md)).*
 
 ---
 
@@ -37,11 +42,11 @@ agent's report follows verbatim.*
 
 | Finding | Date | Status | Source |
 |---|---|---|---|
-| `ModelBuilder.add_mjcf()` (backed by newton/_src/utils/import_mjcf.py (in the Newton repo)) supports joints, actuators, equality constraints (→ loop joints), materials/textures, meshes (file + inline), defaults/classes hierarchy, includes, heightfields; v1.5.0 added inline mesh-data import; importers "preserve materials, textures, velocity, collision filtering, and equality constraints with greater fidelity" | 2026-08-11 | VERIFIED (source file + release notes) | https://raw.githubusercontent.com/newton-physics/newton/main/newton/_src/utils/import_mjcf.py |
+| `ModelBuilder.add_mjcf()` (backed by newton/_src/utils/import_mjcf.py in the Newton repository) supports joints, actuators, equality constraints (→ loop joints), materials/textures, meshes (file + inline), defaults/classes hierarchy, includes, heightfields; v1.5.0 added inline mesh-data import; importers "preserve materials, textures, velocity, collision filtering, and equality constraints with greater fidelity" | 2026-08-11 | VERIFIED (source file + release notes) | https://raw.githubusercontent.com/newton-physics/newton/main/newton/_src/utils/import_mjcf.py |
 | **Menagerie coverage measured directly**: the Newton-project `mujoco-usd-converter` benchmarks all of Menagerie — **85/85 models convert, 100% success, including `trs_so_arm100/so_arm100` (verified, 1 minor warning)**, run dated 2026-03-09. Converter itself is explicitly "Alpha" | 2026-03-09 | VERIFIED (benchmarks.md fetched) | https://github.com/newton-physics/mujoco-usd-converter (benchmarks.md) |
 | Newton's own robot examples (G1, H1, ANYmal, Allegro, UR10, Panda) increasingly load **structured USD** via `download_asset()`, not raw MJCF — USD is the favored packaging in Newton-land, MJCF import is the compatibility path | Aug 2026 | VERIFIED (example sources read) | https://github.com/newton-physics/newton/tree/main/newton/examples/robot |
 
-So yes: an SO-ARM100 Menagerie MJCF loads today, either directly via `add_mjcf` or via the (alpha) USD conversion pipeline. The agent could not run it (no GPU in its session) — "runs correctly" (contact behavior, actuator parity) remains untested.
+So yes: an SO-ARM100 Menagerie MJCF loads today, either directly via `add_mjcf` or via the (alpha) USD conversion pipeline. The agent could not run it then (no GPU in its session; [47](47-newton-docs-review.md), [50](50-newton-delta-probe.md) and [51](51-solvermujoco-roundtrip.md) ran it later) — "runs correctly" (contact behavior, actuator parity) remains untested.
 
 ### GPU batched rollouts and adoption (Q4)
 
@@ -54,7 +59,7 @@ So yes: an SO-ARM100 Menagerie MJCF loads today, either directly via `add_mjcf` 
 | MJX-Warp throughput: **2.96M–3.35M steps/s** on MuJoCo's own test scenes, far above MJX-JAX on contact-rich scenes | current docs | VERIFIED | https://mujoco.readthedocs.io/en/stable/mjx.html |
 | "Newton 475x faster than MJX for manipulation / 252x locomotion on RTX PRO 6000 Blackwell"; "~50M steps/s on RTX 4090"; "GA adopted by manufacturers" | GTC Mar 2026 | **CLAIMED only** — secondary blogs (vnrobo, byteiota, blockchain.news); fetches of blogs.nvidia.com and the mjwarp nightly-benchmark page were blocked in the session | https://vnrobo.com/en/blog/nvidia-newton-physics-engine |
 
-### PhysicsBackend adapter cost (Q5)
+### Adapter cost behind a physics-backend seam (Q5)
 
 VERIFIED API surface (docs 1.5.0 + example code): `ModelBuilder` → `add_mjcf/add_usd/add_urdf` → `replicate(xforms=...)` for batched multi-world → `SolverMuJoCo` (plus XPBD/VBD/Featherstone/Kamino/MPM) → `State`/`Control`/`Contacts` → `ArticulationView` selection. RL-relevant machinery landed through 2026: in-place solver resets with `StateFlags` (v1.3.0), deterministic bit-exact rollouts (v1.4.0), masked per-world resets and vectorized impedance controllers (v1.5.0, experimental). The Python API is workable for an adapter today — estimate: a thin adapter at days, not weeks.
 
@@ -64,13 +69,13 @@ The real cost is not code, it's **parity**: Newton rebuilds the model through it
 
 - "MuJoCo is becoming a solver inside Newton; one converging stack, not a fork risk" — **STANDS, strengthened.** MJWarp is co-maintained by DeepMind+NVIDIA as part of Newton, release-locked to MuJoCo versions (v3.12.0 both sides, 2026-08-20), documented on mujoco.readthedocs.io, and MuJoCo upstream tracks Newton USD schemas. This is one organism, not a fork.
 - "MJCF stays source of truth; USD carries scenes" — **STANDS.** The Newton project's own converter treats Menagerie MJCF as the input of record (85/85 convert) and emits standalone USD; Newton imports both.
-- "Newton slots in behind PhysicsBackend for GPU rollouts" — **STANDS as architecture, premature as action.** Newton is GA (v1.0.0 Mar 2026, v1.5.0 Aug 2026, monthly cadence) but still breaks API every minor release, and its flagship consumer (Isaac Lab 3.0) is explicitly experimental with no manipulation RL support yet.
-- **Refinement:** the convergence means the venture doesn't need Newton to get the Newton-era GPU solver. MJWarp is reachable three ways — raw `mujoco_warp`, `MJX-Warp (impl='warp')`, or Newton — and the first two preserve mjModel/sysid parity for free.
+- "Newton slots in behind a physics-backend seam for GPU rollouts" — **STANDS as architecture, premature as action.** Newton is GA (v1.0.0 Mar 2026, v1.5.0 Aug 2026, monthly cadence) but still breaks API every minor release, and its flagship consumer (Isaac Lab 3.0) is explicitly experimental with no manipulation RL support yet.
+- **Refinement:** the convergence means the platform doesn't need Newton to get the Newton-era GPU solver. MJWarp is reachable three ways — raw `mujoco_warp`, `MJX-Warp (impl='warp')`, or Newton — and the first two preserve mjModel/sysid parity for free.
 
 ## (c) Recommendation
 
-**Stay MJX/mujoco_warp for GPU batched manipulation rollouts; do not build the Newton adapter yet.** Concretely: implement the GPU PhysicsBackend against **MJX-Warp** (`mujoco-mjx[warp]`, `impl='warp'`) — same mjModel the sysid produces, version-locked to the CPU MuJoCo, 3M+ steps/s verified on contact scenes, and mjlab exists if an Isaac-Lab-style manager API is later wanted without Newton. Note the one trade: MJX-Warp has no autodiff — if differentiable rollouts are needed, that stays on MJX-JAX.
+**Stay MJX/mujoco_warp for GPU batched manipulation rollouts; do not build the Newton adapter yet.** Concretely: implement the GPU backend (a seam that is not in the tree) against **MJX-Warp** (`mujoco-mjx[warp]`, `impl='warp'`) — same mjModel the sysid produces, version-locked to the CPU MuJoCo, 3M+ steps/s verified on contact scenes, and mjlab exists if an Isaac-Lab-style manager API is later wanted without Newton. Note the one trade: MJX-Warp has no autodiff — if differentiable rollouts are needed, that stays on MJX-JAX.
 
-**Revisit Newton when X happens, where X =** Isaac Lab 3.0 reaches stable (non-beta) with Newton manipulation-RL environments supported — that is the signal that Newton's API churn has settled and the MuJoCo-solver path is production-hardened for arm workloads. (Secondary trigger, whichever comes first: the venture needs what only Newton has — cables/cloth/MPM multi-physics coupling, hydroelastic contact, RTX tiled-camera sensors, or USD-native scene rollouts.) Isaac Lab 3.0 stable is plausibly a late-2026 event given the beta started 2026-03-17.
+**Revisit Newton when X happens, where X =** Isaac Lab 3.0 reaches stable (non-beta) with Newton manipulation-RL environments supported — that is the signal that Newton's API churn has settled and the MuJoCo-solver path is production-hardened for arm workloads. (Secondary trigger, whichever comes first: the platform needs what only Newton has — cables/cloth/MPM multi-physics coupling, hydroelastic contact, RTX tiled-camera sensors, or USD-native scene rollouts.) Isaac Lab 3.0 stable is plausibly a late-2026 event given the beta started 2026-03-17.
 
 Session caveat: fetches of blogs.nvidia.com and the mjwarp nightly-benchmarks page were permission-blocked, so all headline speedup multipliers (475x/252x vs MJX) remain CLAIMED from secondary coverage of GTC 2026; everything else above was fetched from primary sources on 2026-08-25.

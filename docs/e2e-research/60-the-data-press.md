@@ -3,8 +3,9 @@
 *2026-08-31. The synthetic-data half of the cross-framework design
 ([58](58-cross-framework-setup.md) §8 expanded into a product plan).
 Evidence base: the four-read arc (56, 57, 59), the field's measured
-rankings (docs/22), the synthetic-data principles (docs/31), and —
-decisive for the plan's footing — what `trainnr/collect` already
+rankings ([22](22-data-generation.md)), the synthetic-data principles
+recorded with the end-to-end test ([docs/22 T5](../22-pipeline-architecture.md)),
+and — decisive for the plan's footing — what `trainnr/collect` already
 does. Design decisions are marked as such.*
 
 ## 0. The zero-adoption principle, applied to data
@@ -31,9 +32,9 @@ framework you move into.
 - **BAM's fits never reach data generation** (57): the one measured
   artifact in the ecosystem stops at the actuator; nothing samples
   training data from what was identified.
-- **LeRobot-rig users collect by hand** (docs/21): ~16–48 demos/hour
+- **LeRobot-rig users collect by hand** ([21](21-data-collection.md)): ~16–48 demos/hour
   of human teleop under the 50-episode rules; the field's measured
-  gains (docs/22) come mostly from curation and alignment because
+  gains ([22](22-data-generation.md)) come mostly from curation and alignment because
   generation they can trust doesn't exist.
 
 ## 2. What already exists in-repo: the micro-press
@@ -73,8 +74,9 @@ their stacks that runs on a laptop):
   kitting: per-episode dynamics drawn from the bundle's identified
   confidence region (`dr_from_bundle`, 58 §2), refusal of draws
   outside it, referee-gated keep/discard, milestone funnel recorded
-  per episode. The randomiser itself stays tested (docs/31's
-  gain-that-was-a-setpoint lesson is a standing test pattern).
+  per episode. The randomiser itself stays tested (the gain-that-was-a-setpoint
+  lesson from the end-to-end test, [docs/22 T5](../22-pipeline-architecture.md),
+  is a standing test pattern).
 - **Multiplication from seeds** (for tasks without experts): the
   Mimic contract exactly as Arena runs it — per-subtask units (object
   ref, termination signal, offset range, nearest-neighbor source
@@ -88,7 +90,8 @@ their stacks that runs on a laptop):
   instrument (the divergence habit from docs/e2e-research/49 applied to data).
 
 **Outputs**:
-- A **LeRobot v2.1 dataset** — the format LeRobot trainers, GR00T
+- A **LeRobot dataset** (v2.1 when this was written; the press writes
+  v3 since 2026-09, as the README says) — the format LeRobot trainers, GR00T
   finetuning and the HF hub already consume (Arena's own export
   target, 59 §5). Zero adoption on the training side.
 - The **provenance sidecar**, generalized from `DatasetProvenance`:
@@ -109,12 +112,13 @@ their stacks that runs on a laptop):
   provenance out.
 - LeRobot rigs: real teleop episodes enter as seeds with the same
   sidecar, so real and synthetic share one provenance schema — the
-  co-training ratio question (docs/23's α knife-edge) becomes
-  *measurable* per dataset instead of folklore.
+  co-training ratio question (how much real data a mix needs before
+  synthetic data stops helping) becomes *measurable* per dataset
+  instead of folklore.
 
 ## 4. What the field's measurements dictate *(evidence → ordering)*
 
-docs/22's ranking by measured real-robot gain puts curation and
+[22](22-data-generation.md)'s ranking by measured real-robot gain puts curation and
 alignment above everything generative, and world-model generation at
 0.00–0.07 task success (Veo-Act). The press encodes that:
 1. **Curation is built in, not bolted on** — the referee gate + funnel
@@ -172,15 +176,20 @@ their framework. That is the whole trick, twice now (58 §0).
    dynamics vector; kitting is the first adapter, its legacy manifest
    and committed batches untouched.)*
 2. **`dr_from_bundle` sampling + refusal** — lands with 58's bundle
-   spec (also CPU-only).
-3. **The datasheet generator** over existing records.
+   spec (also CPU-only). *(SHIPPED: `trainnr_mjlab/dr.py`
+   `dr_from_bundle`, `trainnr/robot/actuator_bundle.py` `declared_ranges`.)*
+3. **The datasheet generator** over existing records. *(SHIPPED:
+   `trainnr/collect/datasheet.py`, rewritten over merged shards by
+   `collect/shards.py`.)*
 4. **Multiplication from seeds** (Mimic-contract, physics-verified) —
-   the first piece that benefits from the GPU box; stacks on the
-   standing WSL gate.
+   the first piece that benefits from a GPU. *(SHIPPED as the
+   `multiply_demos` tool.)*
 5. **Host adapters** (mjlab RecorderTerm, Arena HDF5 import) with
-   58's `trainnr_mjlab`.
-6. **The paired validation study** (§6) — the number that turns the
-   datasheet into a sales page.
+   58's `trainnr_mjlab`. *(PARTLY: `trainnr_mjlab/recorder.py` is a
+   Rerun recorder term, not a dataset recorder; no Arena import.)*
+6. **The paired validation study** (§6) — the number the datasheet's
+   claims rest on. *(RAN: [62](62-paired-study.md), then the
+   c1-competent-lift records in docs/findings.)*
 
-Steps 1–3 need no GPU, no rl-engineering merge, and no new deps: they
-are refactors and reports over machinery the repo already trusts.
+Steps 1–3 needed no GPU and no new deps: they were refactors and
+reports over machinery the repo already trusted.

@@ -2,7 +2,7 @@
 
 *Sixth pass, 2026-08-26. One agent, one field — the environment contract of
 LeRobot's evaluator, read from the INSTALLED package (`lerobot` 0.6.1 in
-`trainnr/.venv-train`; `gymnasium` 1.3.0, the wheel pins
+the installed lerobot 0.6.1 (as of 2026-08-26); `gymnasium` 1.3.0, the wheel pins
 `gymnasium<2.0.0,>=1.1.1`). Citations are `lerobot/<path>:L<line>` inside the
 venv's site-packages; gymnasium likewise. Secondary source: the NVIDIA/HF blog
 on the Environment Hub, by URL. Mapped against our harness
@@ -183,6 +183,10 @@ silently leaves the denominator (the Arena pattern, docs/40 §1.4).
 
 ## 2. What we already have
 
+*Our-side line numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
+
 | LeRobot expects | Ours | Where |
 |---|---|---|
 | `{"pixels": {cam: uint8 HWC}, "agent_pos": float32}` per step | `closed_loop_vision_rollout` builds `{"observation.state": first state_width sensors, "observation.images.<key>": renderer.render()}` per control tick — the post-`preprocess_observation` shape, one rename away | `trainnr/trainnr/physics/mujoco_backend.py:L293-303` |
@@ -196,6 +200,10 @@ silently leaves the denominator (the Arena pattern, docs/40 §1.4).
 | `AsyncVectorEnv` batching; mp4 per episode; recorded rollouts | none — serial trials; Rerun + MuJoCo viewers | `harness.py:L133-144` |
 
 ## 3. Recommendation: expose the task as a LeRobot env; keep our harness as the judge
+
+*What shipped: `TrainnrEnvConfig` in `trainnr/trainnr/envs/lerobot_plugin.py`,
+registered as env type `trainnr`; the sketch below is the original 2026-08-26
+design, old names included.*
 
 **Do both.** A ~150-line package `lerobot_env_robotiq` (named so
 `register_third_party_plugins` imports it, §1.6) wrapping ONE control tick of
@@ -222,7 +230,7 @@ class TransferCubeEnv(gym.Env):                      # field names are the contr
         self._stepper = backend.stepper(task.protocol.perturb(trial, home)); self._tick = 0
         return self._obs(), {"is_success": False, "task": self.task}                 # libero.py:L363
     def step(self, action):
-        self._stepper.advance(action, task.protocol.control_interval)                # R7 rule inside
+        self._stepper.advance(action, task.protocol.control_interval)                # R7 (forward pass after each step, so sensors describe one instant)
         self._tick += 1; done = self._tick >= self._max_episode_steps
         ok = done and task.protocol.success(self._stepper.states_tail, self._stepper.sensors_tail)
         return self._obs(), float(ok), False, done, {"is_success": ok, "task": self.task}
@@ -268,18 +276,20 @@ harness's job, unchanged.
 **The one real cost**: `_closed_loop` runs a whole episode
 (`mujoco_backend.py:L173-234`) and its docstring forbids forking the stepping
 discipline (`L180-187`). Extract a `Stepper` (seat state `L203-207`; advance k
-substeps with the R7 `mj_forward` `L220-233`; rolling `states`/`sensors`
+substeps with R7's `mj_forward` (the forward pass after each step, so
+sensors describe one instant) `L220-233`; rolling `states`/`sensors`
 tails) that both `_closed_loop` and the env consume. ~40 lines moved, none
 duplicated.
 
 ## 4. Open questions
 
-1. **Does `lerobot-train`'s periodic eval use the same `make_env`?** Not read
-   here; if so the env doubles as the trainer's in-loop eval for free.
+1. **Does `lerobot-train`'s periodic eval use the same `make_env`?** Answered
+   by [docs/31](../31-aloha2-e2e.md) T5: LeRobot's in-loop eval runs through our
+   env. Not read here at the time; if so the env doubles as the trainer's in-loop eval for free.
 2. **Async + EGL on WSL.** LIBERO defers simulator creation to the first
    `reset` inside the worker to dodge stale EGL contexts under forkserver
    (`libero.py:L258-277`); our `mujoco.Renderer` needs the same deferral —
-   confirm against the WSL box's Mesa gotchas before trusting `batch_size > 1`.
+   confirm against WSL2's Mesa behaviour before trusting `batch_size > 1`.
 3. **Where the gripper normalisation lives.** ALOHA checkpoints emit a [0, 1]
    gripper channel we map to `ctrlrange` (`aloha2.py:L75-84`): in `step`, or
    as an `env_postprocessor` via `get_env_processors` (`configs.py:L126-128`)?

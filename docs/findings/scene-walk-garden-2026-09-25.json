@@ -58,5 +58,5 @@
   "run": "projects/go2-walk/runs/go2-garden-c1 (the WSL box; projects/ is not tracked)",
   "verdicts": "projects/go2-walk/runs/go2-garden-c1/verdict/"
  },
- "protocol": "docs/07-progress-log.md 2026-09-25 night; docs/79 §2"
+ "protocol": "docs/78-the-scene-loop.md (the scene loop's protocol); run 2026-09-25 (the maintainers' log, not public)"
 }

@@ -1,18 +1,21 @@
 # The end-to-end test: ALOHA 2 through every stage
 
+*Historical record (2026-08-26/27) of the first end-to-end run: ALOHA 2
+kitting with ACT. The end-to-end loop is now the Go2 walk (docs/77); the
+kitting task and the evaluation layer (docs/32) remain in the tree.*
+
 *Started 2026-08-26. The decision was to run the whole pipeline, stage
 by stage, on one robot — first a ViperX 300S, then (once the camera
 question was answered) the full ALOHA 2 rig, because it has cameras.
 This doc is the plan and the running record; each rung links its
-evidence. The critical path (Paper 2 on the development machine's GPU) is unchanged —
-this is the platform proving it can swallow a second stranger, and the
-first with cameras and someone else's measurement.*
+evidence. It is the platform proving it can swallow a second stranger,
+and the first with cameras and someone else's measurement.*
 
 ## 0. Why ALOHA 2
 
 - **It sits inside the wedge.** ViperX 300S arms run Dynamixel
   servos that report position, velocity, current and temperature —
-  feedback the SG90 arm never had. Identification, drift telemetry and
+  feedback the 2025–26 rig's hobby-servo arm never had. Identification, drift telemetry and
   the HIL loop all have something to read.
 - **It has cameras — the arm alone does not.** Menagerie's
   `trossen_vx300s/vx300s.xml` carries zero `<camera>` elements (checked
@@ -27,8 +30,8 @@ first with cameras and someone else's measurement.*
   position/velocity). The standalone `vx300s` Menagerie file carries
   DIFFERENT, un-identified numbers for the same servos — 3–5× apart on
   shoulder damping and gains (table in `robots/aloha2-nominal/README.md`).
-  Paper 1 on this robot is a replication with intervals they did not
-  report, against a reference that exists.
+  An identification study on this robot would be a replication with
+  intervals they did not report, against a reference that exists.
 - **The ecosystem is ready-made.** ACT was born on this rig; LeRobot
   drives ViperX/ALOHA natively for collection, ships ALOHA ACT
   configs and pretrained sim checkpoints, and `gym-aloha` has MuJoCo
@@ -36,15 +39,19 @@ first with cameras and someone else's measurement.*
 
 ## 1. Stage by stage
 
-| Stage | On ALOHA 2 | Hardware? | Status |
+Status as of 2026-08-26; T1 and T2 of §3 later ran on the ⑧ row's
+transfer-cube task (0/4, a kinematic gap, explained in §3). The circled
+numbers are the stage numbers of the 2026-08 pipeline brief.
+
+| Stage | On ALOHA 2 | Hardware? | Status (2026-08-26) |
 |---|---|---|---|
 | ② ONBOARD — bundle | `robots/aloha2-nominal/`: Menagerie `aloha` byte-identical (commit `da76818e`, BSD-3) + `aloha2.xml` sensor wrapper (28 sensors: 14 jointpos + 14 jointvel in actuator order); census pins 14 actuators, 28 sensors, **6 cameras**, 95 geoms; wrapper-purity and hold/travel tests | No | **DONE 2026-08-26** — `trainnr/tests/test_aloha2_bundle.py`, 6/6 |
-| ② ONBOARD — identification | Excitation on the real arms → `mujoco.sysid` → intervals + identifiability verdicts, compared against ALOHA 2's published values (Paper 1 as replication). Rehearse first in sim exactly as Paper 0 did: true model → sweep → degraded telemetry → `identify()` recovers | Real: yes. Rehearsal: no | queued |
+| ② ONBOARD — identification | Excitation on the real arms → `mujoco.sysid` → intervals + identifiability verdicts, compared against ALOHA 2's published values (a replication with intervals). Rehearse first in sim exactly as the drivetrain rehearsal did: true model → sweep → degraded telemetry → `identify()` recovers | Real: yes. Rehearsal: no | queued |
 | ① SCAN | The scene IS the bundle's `scene.xml` (frame, table, cameras); task objects as cousins with measured mass/μ | No | queued |
-| ③ VALIDATE | Gate A: paired sim/real rank correlation, certificate on the lower bound | Yes | after hardware |
+| ③ VALIDATE | The go/no-go gate (Gate A, 2026-08: simulated evaluation must rank policies the way reality does): paired sim/real rank correlation, certificate on the lower bound | Yes | after hardware |
 | ④ COLLECT | LeRobot's ALOHA recorder (Dynamixel bus + cameras → LeRobotDataset) — not the Pico `.wire` | Yes (or scripted sim demos) | queued |
 | ⑤⑥⑦ TRAIN | ACT via LeRobot's ALOHA config on a 24 GB RTX 3090 Ti; released sim checkpoints first | No | queued |
-| ⑧ EVALUATE | Harness tasks on the bundle (`trainnr/trainnr/tasks/aloha2/transfer_cube.py`): transfer cube first, matching gym-aloha's protocol; paired trials → certificate dry run | No | next |
+| ⑧ EVALUATE | Harness tasks on the bundle (`trainnr/trainnr/tasks/aloha2/transfer_cube.py`): transfer cube first, matching gym-aloha's protocol; paired trials → certificate dry run | No | next (ran the same day: T1, T2) |
 | ⑨ ENVELOPE | Dynamixel current/torque limits + software watchdog — no Pico Tier 0 here; the safety story is different and must be written | Yes | queued |
 | ⑩⑪ OPERATE / TELEMETRY | Leader-arm interventions; present-current/temperature registers as drift telemetry | Yes | after hardware |
 
@@ -88,7 +95,7 @@ Stage ⑦ had zero code by design (census first); ALOHA 2 is where it
 starts, because the whole public ecosystem for this rig already
 exists — ACT was born on it, LeRobot ships its datasets and
 checkpoints, and the identified dynamics give "physics" a meaning.
-The addendum names the two things the ladder is FOR: the recipe
+The brief's second half names the two things the ladder is FOR: the recipe
 engine's second axis — *combining* models (seed ensembles, a VLM
 planner over BC skills, merged fine-tunes), every combination judged
 by the same harness as a single model — and the target: not the
@@ -98,8 +105,10 @@ where reach demands it), where demos are generated, not downloaded.
 "Quickly" is the platform's promise; the certificate is what makes
 the speed honest.
 
-Principles carried in from the research (docs/e2e-research/20, 22,
-30 §⑥⑦, and the sprint's 32): **adopt, do not build** (LeRobot is
+Principles carried in from the research ([docs/e2e-research/20](e2e-research/20-policies-and-models.md),
+[22](e2e-research/22-data-generation.md), the pipeline brief's expand and
+train stages, and the recipe-engine prior art in
+[32](e2e-research/32-recipe-engine-prior-art.md)): **adopt, do not build** (LeRobot is
 the trainer; we write recipes, not optimizers); **ACT first, not to
 ship but to test the data pipeline** (trains in under an hour); **the
 foundation-model rung is a fine-tune** (SmolVLA fits a 3090 Ti
@@ -118,8 +127,12 @@ chosen by a certificate.
 | T2 | ACT from scratch on the public demos → `policy@hash` → harness beside T1 and a limp floor: the recipe engine's first walk over one family. **Done 2026-08-26: 10k steps in ~20 min on the shared card, ten checkpoints each played live in `train-watch` (all fail — 10% of the released model's training), then the harness: ours 0/4, released 0/4, limp 0/4 (933 s).** A row of zeros the certificate correctly cannot rank: no joint-space ACT trained on the ACT sim's chain transfers to this one (T1's kinematic gap), and 10k steps is not a policy yet. The walk continues on OUR demos (T5) | public demos | certificate dry run | **DONE — zero row** |
 | T3 | Foundation model: SmolVLA fine-tune on the same demos (fits), then MolmoAct2/π0.5 LoRA if VRAM allows — same harness, same protocol; the family axis of the recipe space | public demos | certificate dry run | queued |
 | T4 | Combining models — the second axis: seed ensembles of T2/T3 checkpoints (action averaging), a VLM planner routing between BC skills, and merged fine-tunes (weight-space soups); each combination is a `recipe@hash` scored by the same protocol as a single model | public demos | certificate dry run | queued |
-| T5 | The industrial task, ⑥ EXPAND: `kitting` in OUR ALOHA 2 scene — **scene + scripted demos EXIST (2026-08-26)**: two slots, one part per arm, `build_kitting` + `scripted_kitting_episode` (chained grip-centre IK with tilted approach — a vertical approach is impossible, the gripper-base housing hits the table first, measured via contacts; closed-loop clamped 3-axis correction; verify-and-retry via the referee) places both parts within millimetres in the proven spawn band; `tools/kitting-demos.py` generates referee-filtered demos with ±30% DR around the bundle's dynamics (smoke: 3 kept / 8 attempts, trajectories + frames + manifests). The near-base band's closing-plane orientation was IK-nullspace-random (the close back-drove upward) until 2026-08-27's closing-plane objective in `arm_ik`, applied on the grasp beats only, plus the park beat (docs/07). **The loop ran end to end on the development machine 2026-08-26**: 40 demos kept of 44 attempts at NOMINAL dynamics (the afternoon's "the expert only works at nominal — 2/10 at ±10%, 0/10 at ±30%" was an ARTIFACT of the generator scaling a position servo's `gainprm[0]` without `biasprm[1]`, which scales the setpoint, not the stiffness; corrected the same evening and re-measured: **8/10 at ±10%, 10/10 at ±30%, no retries** — the next batch can carry ±30% DR) → `collect/kitting_export.py` → LeRobot v3, 56,000 frames at 50 fps, 976 MB, provenance `aloha2-nominal@80ee6fd7ef99` (1,524 s; the converter is single-threaded PNG-then-AV1, 38 s/episode) → `lerobot-train` ACT 20k steps, batch 8 (1,353 s) → harness, paired trials: **act-kitting-20000 0/4, limp 0/4** (588 s). The code path is proven; the policy is not — 40 demos and 20k steps is below the ACT sim recipe (50 demos, 100k+ steps), and the 24 GB card is a smoke box for it. The decision the same day: real training runs on a cloud GPU; the development machine tests recipes. **Evening, through the gymnasium env and `lerobot-eval` with milestones (docs/32): the same 0/4 reads as a funnel — part_moved 2/4, part_lifted 1/4, one_in_slot 0/4, both_in_slot 0/4**: two paired starts produced contact, one of them a lift, none a placement. **Night, the chain re-run end to end after the review at smoke scale with ±30% DR**: 4 demos kept of 5 → 5,600 frames → ACT 600 steps with LeRobot's in-loop eval through our env (0/2) → `lerobot-eval` 0/4, funnel part_moved 2/4 → both viewers → 216/216 in both venvs; twenty minutes wall clock, two cross-venv bugs found and fixed on the way (docs/07) | our sim | certificate dry run | **loop proven, 0/4 (funnel 2/1/0/0) — real training → cloud GPU.** ✅ 2026-08-27 (late): the task's own acceptance review passes on the SHIPPED band — expert 4/4, floor 0/4 on both MuJoCo builds — after the closing-plane objective and the park beat (its first verdict that day had been a 2/4 rejection at the near-base corners; the decision was to fix the choreography, not trim the band). The T5 demos predate both fixes and are regenerated before the cloud run. ✅ 2026-08-27 night, **the first non-zero policy**: ACT 10k steps at batch 64 on 29 whole-band demos, on a rented B200 (docs/34): **1 of 4 distinct paired starts places both parts** (funnel 3/2/2/1 against 2/1/0/0 for every earlier T5 policy); LeRobot's own "3/10" was one start three times — the env's seed→trial wrap, fixed with `--env.trials` (docs/07) |
-| T6 | Reinforcement learning in parallel worlds — the asked-for picture of a multi-system simulation (Isaac Lab's grid of learners). Two layers: `tools/show-many.py` (N rigs on a grid, CPU, replay — measured 16 worlds at 0.29× realtime, the argument for the GPU) and `tools/rl-watch.py`: MuJoCo Playground's `AlohaHandOver` (Menagerie's MJX-patched ALOHA) trained with brax PPO on MJX, thousands of worlds on the 24 GB card, sixteen of them on screen driven by the current policy at every evaluation. Stack installed 2026-08-26 (`jax[cuda12]` 0.11.1 sees the RTX; `playground`; `mujoco-mjx`; `mujoco-warp` 3.12 — which is version-locked to MuJoCo 3.12 and fails through the FFI against this venv's 3.11, so `impl="jax"` for now). Exploratory: Playground's task and reward, not our harness's; the harness judges the result afterwards. **Ran 2026-08-26 on Warp (`LD_LIBRARY_PATH=/usr/lib/wsl/lib`; JAX pinned 0.9.2 for brax; 36k env-steps/s at 2,048 worlds): eval reward 0.01 → 0.51 and 13/16 shown worlds holding the box at 34 M steps, six minutes in.** The grid viewer runs in its own process (the GIL starved a thread). The RLT-shaped refinement of a frozen generalist stays the destination | Playground sim | watched curve, then harness | **LEARNED — 13/16 at 34 M steps** |
+| T5 | The industrial task: `kitting` in our own ALOHA 2 scene, demos generated, not downloaded (the full account is below the table) | our sim | certificate dry run | **loop proven, 0/4 at smoke scale; the first non-zero policy 2026-08-27 night (1 of 4 paired starts)** |
+| T6 | Reinforcement learning in parallel worlds on MJX-Warp (the full account is below the table) | Playground sim | watched curve, then harness | **LEARNED — 13/16 at 34 M steps** |
+
+**T5 in full.** The industrial task, ⑥ EXPAND: `kitting` in OUR ALOHA 2 scene — **scene + scripted demos EXIST (2026-08-26)**: two slots, one part per arm, `build_kitting` + `scripted_kitting_episode` (chained grip-centre IK with tilted approach — a vertical approach is impossible, the gripper-base housing hits the table first, measured via contacts; closed-loop clamped 3-axis correction; verify-and-retry via the referee) places both parts within millimetres in the proven spawn band; `tools/kitting-demos.py` generates referee-filtered demos with ±30% DR around the bundle's dynamics (smoke: 3 kept / 8 attempts, trajectories + frames + manifests). The near-base band's closing-plane orientation was IK-nullspace-random (the close back-drove upward) until 2026-08-27's closing-plane objective in `arm_ik`, applied on the grasp beats only, plus the park beat. **The loop ran end to end on the development machine 2026-08-26**: 40 demos kept of 44 attempts at NOMINAL dynamics (the afternoon's "the expert only works at nominal — 2/10 at ±10%, 0/10 at ±30%" was an ARTIFACT of the generator scaling a position servo's `gainprm[0]` without `biasprm[1]`, which scales the setpoint, not the stiffness; corrected the same evening and re-measured: **8/10 at ±10%, 10/10 at ±30%, no retries** — the next batch can carry ±30% DR) → `collect/kitting_export.py` → LeRobot v3, 56,000 frames at 50 fps, 976 MB, provenance `aloha2-nominal@80ee6fd7ef99` (1,524 s; the converter is single-threaded PNG-then-AV1, 38 s/episode) → `lerobot-train` ACT 20k steps, batch 8 (1,353 s) → harness, paired trials: **act-kitting-20000 0/4, limp 0/4** (588 s). The code path is proven; the policy is not — 40 demos and 20k steps is below the ACT sim recipe (50 demos, 100k+ steps), and the 24 GB card is a smoke box for it. The decision the same day: real training runs on a cloud GPU; the development machine tests recipes. **Evening, through the gymnasium env and `lerobot-eval` with milestones (docs/32): the same 0/4 reads as a funnel — part_moved 2/4, part_lifted 1/4, one_in_slot 0/4, both_in_slot 0/4**: two paired starts produced contact, one of them a lift, none a placement. **Night, the chain re-run end to end after the review at smoke scale with ±30% DR**: 4 demos kept of 5 → 5,600 frames → ACT 600 steps with LeRobot's in-loop eval through our env (0/2) → `lerobot-eval` 0/4, funnel part_moved 2/4 → both viewers → 216/216 in both venvs; twenty minutes wall clock, two cross-venv bugs found and fixed on the way
+
+**T6 in full.** Reinforcement learning in parallel worlds — the asked-for picture of a multi-system simulation (Isaac Lab's grid of learners). Two layers: `tools/show-many.py` (N rigs on a grid, CPU, replay — measured 16 worlds at 0.29× realtime, the argument for the GPU) and `tools/rl-watch.py`: MuJoCo Playground's `AlohaHandOver` (Menagerie's MJX-patched ALOHA) trained with brax PPO on MJX, thousands of worlds on the 24 GB card, sixteen of them on screen driven by the current policy at every evaluation. Stack installed 2026-08-26 (`jax[cuda12]` 0.11.1 sees the RTX; `playground`; `mujoco-mjx`; `mujoco-warp` 3.12 — which is version-locked to MuJoCo 3.12 and fails through the FFI against this venv's 3.11, so `impl="jax"` for now). Exploratory: Playground's task and reward, not our harness's; the harness judges the result afterwards. **Ran 2026-08-26 on Warp (`LD_LIBRARY_PATH=/usr/lib/wsl/lib`; JAX pinned 0.9.2 for brax; 36k env-steps/s at 2,048 worlds): eval reward 0.01 → 0.51 and 13/16 shown worlds holding the box at 34 M steps, six minutes in.** The grid viewer runs in its own process (the GIL starved a thread). The RLT-shaped refinement of a frozen generalist stays the destination
 
 Tracking: wandb API surface only, off by default (`--wandb.enable=false`),
 Trackio the escape hatch; every run stamped with the bundle, scene,

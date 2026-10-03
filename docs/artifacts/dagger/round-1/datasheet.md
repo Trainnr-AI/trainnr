@@ -15,7 +15,4 @@ counts below are of SUCCESSFUL episodes only.
 
 ## Dynamics draws
 
-Basis: caller-declared span ±0.1 (bundle is point estimates); per-world draws live inside the batched env and are not exported per episode (D2 v1)
-
-| parameter | low | mean | high |
-|---|---|---|---|
+Basis: a caller-declared span of ±0.1 around the bundle's point estimates. The per-world draws live inside the batched environment and were not exported per episode in this first version of the data lane, so no per-parameter table follows.

@@ -70,7 +70,9 @@ Neither third-party benchmark reports confidence intervals. (⚠️ Narrowed
 publishes Clopper-Pearson intervals with worked numbers, and PhAIL's paper
 does Kaplan-Meier with clustered bootstrap. What survives: **no leaderboard
 publishes them, and they are in no shipping framework** — zero hits for
-`clopper`/`binom`/`confidence_interval` in Isaac Lab-Arena's `main`.) At N = 20 rollouts and a true success rate near 0.5, one standard
+`clopper`/`binom`/`confidence_interval` in Isaac Lab-Arena's `main`.)
+
+At N = 20 rollouts and a true success rate near 0.5, one standard
 error is roughly **11 percentage points** — so any single-task difference under
 about 15 points is indistinguishable from noise, including your own.
 
@@ -210,7 +212,7 @@ This is where the field's best-evidenced real-robot result lives.
 | RIPT-VLA (arXiv 2505.17016) | 2025-05 | ❌ **LIBERO sim only** | 1 demo: 4% → 97% in 15 iterations |
 | Q-chunking (arXiv 2507.07969) | 2025-07 | ❌ sim benchmarks | no real numbers |
 | EvoHIL (arXiv 2608.03872) | 2026-08-04 | ✅ real — Franka FR3 + **SO-101**, six tasks under lighting shifts | self-evolving reward + flow-matched HIL RL; claims better success/smoothness than HIL and imitation baselines, **no quantitative numbers in the abstract**; code status unconfirmed |
-| **RLT — "RL Token"** (Physical Intelligence, pi.website/research/rlt) | 2026 (read 2026-08-20, operator-supplied full text; no arXiv ID sighted) | ✅ real — 4 sub-millimetre tasks on **π0.6** (screw, zip tie, Ethernet, charger) | Frozen VLA exposes a compact **"RL token"** readout (encoder-decoder bottleneck over the VLA's final-layer embeddings); a small TD3-style actor-critic learns over **action chunks (C=10)**, BC-regularised toward the VLA's own reference chunk with reference-dropout, human interventions + sparse binary human success labels, update-to-data ratio 5. **Screw success 20% → 65%; up to 3× critical-phase speedup; on Ethernet the RL policy's median (66 steps) beats every expert teleop demo (median 146)** — in 15 min–5 h of robot data. Ablations are the mechanism evidence: single-step baselines (HIL-SERL, PLD) fail outright at 50 Hz sparse reward — **chunk-level credit assignment is why corrections work at VLA control rates**. Author-reported, PI's own model, no third party |
+| **RLT — "RL Token"** (Physical Intelligence, pi.website/research/rlt) | 2026 (read 2026-08-20 in full text; no arXiv ID sighted) | ✅ real — 4 sub-millimetre tasks on **π0.6** (screw, zip tie, Ethernet, charger) | Frozen VLA exposes a compact **"RL token"** readout (encoder-decoder bottleneck over the VLA's final-layer embeddings); a small TD3-style actor-critic learns over **action chunks (C=10)**, BC-regularised toward the VLA's own reference chunk with reference-dropout, human interventions + sparse binary human success labels, update-to-data ratio 5. **Screw success 20% → 65%; up to 3× critical-phase speedup; on Ethernet the RL policy's median (66 steps) beats every expert teleop demo (median 146)** — in 15 min–5 h of robot data. Ablations are the mechanism evidence: single-step baselines (HIL-SERL, PLD) fail outright at 50 Hz sparse reward — **chunk-level credit assignment is why corrections work at VLA control rates**. Author-reported, PI's own model, no third party |
 
 The RLT row updates two standing claims (2026-08-20). The "beyond the
 demonstrator ceiling" argument now has its cleanest exhibit — half the RL
@@ -330,7 +332,7 @@ training against ACT's 30–60 minutes, for no reliable gain at 50-episode scale
 
 ## 6. The ladder
 
-For one person, full-time, one 24 GB GPU, six months, SO-101 on a wheeled base.
+The ladder for a solo builder: full-time, one 24 GB GPU, six months, SO-101 on a wheeled base.
 
 **Rung 0 — data infrastructure, not models.** Teleop, record, replay. Cameras
 placed, lighting fixed, resets rehearsed. Exit when 50 clean episodes take under

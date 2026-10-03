@@ -1,11 +1,20 @@
 # The GPU path, probed: MJX-Warp runs here, batches models, costs float32
 
 *2026-08-27, one agent against primary sources AND a live install
-probe on this Mac (Apple Silicon, no CUDA; scratch venv, versions:
+probe on an Apple M1 (arm64, no CUDA; scratch venv, versions:
 mujoco 3.12.0, mujoco-mjx 3.12.0, warp-lang 1.16.0). Companion to
 [47](47-newton-docs-review.md)/[48](48-solver-landscape.md). The
 standing recommendation of [36](36-newton-status.md) survives contact
 with the machine and gets cheaper than expected.*
+
+*Current state (2026-10-03): MJX-Warp runs on the RTX 3090 Ti under WSL2
+(postscript 2), the batched stepper exists (postscript 3), and the ceiling
+was measured (postscript 4). The sections below are the day's record in
+order.*
+
+*Our-side line numbers are from the 2026-08-26 tree: `EpisodeProtocol` is now
+`trainnr/trainnr/protocol.py`, the aloha2 task module is now the package `trainnr/trainnr/tasks/aloha2/`, `bundles/` is
+`trainnr/trainnr/bundles/`.*
 
 ## Headline, all VERIFIED by execution on 2026-08-27
 
@@ -48,17 +57,17 @@ with the machine and gets cheaper than expected.*
 | **No `rollout()`** | the adapter writes the loop: `set_state` → per-tick ctrl write → `step` → `get_state`/sensordata. Raw mujoco_warp's `set_state/get_state` speak concatenated mjtState rows with an `active` mask — a direct FULLPHYSICS analogue of our `Stepper` seam. Days, not weeks; Mac-testable |
 | **Version lockstep** (mjwarp 3.12.0 released within an hour of MuJoCo 3.12.0; each mjx pins its warp-lang) | every MuJoCo upgrade is a re-identification event; the instrument stamp must be `mjwarp-x.y.z+warp-a.b.c+device` |
 | **The batch renderer is a different camera** | MJX-Warp batch rendering (MuJoCo 3.6.0+) is a BVH **raycaster** — it can render per-step observations in batched rollouts (nworld fixed at context creation; known vmap(scan) issue), but its frames are not our eye-calibrated OpenGL frames. Batched-vision scores need their own camera-match pass before any comparison (inference, flagged) |
-| WSL gotcha (already recorded in rl-watch.py) | without `LD_LIBRARY_PATH=/usr/lib/wsl/lib` Warp **silently falls back to CPU** — a WarpBackend must assert `wp.get_cuda_device_count() > 0` when GPU is intended |
+| WSL gotcha (already recorded in `tools/rl-watch.py`) | without `LD_LIBRARY_PATH=/usr/lib/wsl/lib` Warp **silently falls back to CPU** — a WarpBackend must assert `wp.get_cuda_device_count() > 0` when GPU is intended |
 
 ## What the repo already proves
 
 MJX-Warp is not a candidate here — it is the **incumbent** GPU path
-with a production data point: T6 PPO on the 3090 Ti under WSL2 at
+with a production data point: T6 PPO ([docs/31](../31-aloha2-e2e.md)'s stage ladder) on the RTX 3090 Ti under WSL2 at
 36k env-steps/s across 2,048 worlds on a mesh-contact ALOHA scene
 (20× MJX-JAX), JAX→Warp FFI working, `spawn` not fork, viewers in
 their own process. The open work is the adapter/env shim plus sizing
-knobs — feasibility is settled. Per the repo's own seam decision
-(physics/backend.py, 2026-08-26: the Protocol was removed), **the
+knobs — feasibility is settled. Per the repository's own seam decision of 2026-08-26 (the abstract
+physics-backend Protocol was removed; every backend is MuJoCo), **the
 gymnasium env over the same tasks is the integration point**, not a
 resurrected backend protocol.
 
@@ -93,7 +102,7 @@ bound against the reference instrument — MEASURED on the Mac:
 **3.52e-07 max over 3 worlds x 50 steps** on the pendulum scene
 (bound set at 1e-3: a conversion-layer bug is orders of magnitude, not
 float32 noise). All four tests green on the Warp CPU backend, exactly
-as §1 said they could be. Remaining for the WSL card: the same
+as §1 said they could be. Remaining for the WSL GPU: the same
 gauntlet on CUDA, ALOHA-scene sizing, and the vectorized env wrapper.
 
 **And the re-identification cost got measured the same hour.** The
@@ -108,13 +117,13 @@ now PINS `mujoco[sysid]~=3.11.0` with the doctrine in a comment
 (upgrades move by decision + full referee re-run, never as a
 dependency side effect), the mjx extra pins `~=3.11.0` to match, and
 arm_ik compares joint types through `int()` so the next binding-layer
-drift cannot silently refuse hinges. Final stamp on this Mac:
+drift cannot silently refuse hinges. Final stamp on the M1 (arm64):
 `mjx-warp-3.11.0+warp-1.14.0+cpu`, divergence unchanged at 3.52e-07.
 NOTE this also corrects the report above: the repo runs LOCKED
 mujoco 3.11.0 (3.12.0 is upstream latest) — the probes' 3.12 numbers
 came from a scratch venv resolving fresh.
 
-## Postscript 2 (2026-08-27, the WSL box: the RTX 3090 Ti, MJX 3.12 + Warp 1.16)
+## Postscript 2 (2026-08-27, the RTX 3090 Ti under WSL2, MJX 3.12 + Warp 1.16)
 
 The adapter's first run on a GPU and on a real scene, both the same
 night. The pendulum gauntlet passes on the card with the same
@@ -140,7 +149,8 @@ comparisons with the CPU reference.
 `MJXWarpBackend.stepper` exists: batched, every world in lockstep, one
 jitted program per substep count, the forward pass recomputed after
 each step so sensors and poses describe one instant (the CPU
-stepper's R7 rule). On the pendulum its rows agree with the
+stepper's R7 rule, the forward pass after each step so sensors describe
+one instant). On the pendulum its rows agree with the
 whole-episode `rollout` to 1e-4 and with the CPU stepper to the
 gauntlet's 1e-3, world by world. The vectorized gymnasium env over it
 is the remaining piece of this report's plan.

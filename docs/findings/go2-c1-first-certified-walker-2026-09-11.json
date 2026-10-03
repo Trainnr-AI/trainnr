@@ -50,7 +50,7 @@
   "records": "docs/artifacts/go2/certificates/go2-c1-records-cuda.jsonl",
   "run": "projects/go2-walk/runs/go2-c1 (the WSL box; projects/ is not tracked)"
  },
- "protocol": "docs/77-the-unitree-loop.md §3; docs/07-progress-log.md 2026-09-10 and 2026-09-11 evening",
+ "protocol": "docs/77-the-unitree-loop.md §3 (the loop's protocol; the run's own notes of 2026-09-10 and 2026-09-11 are in the maintainers' log, not public)",
  "caveats": [
   "Simulation only, on the vendor's declared constants: no robot was measured for this walker.",
   "The certificate judges the trained command envelope (up to 1 m/s forward), where a 40/40 says the policy is at the ceiling of this protocol, not that it is the best walker.",

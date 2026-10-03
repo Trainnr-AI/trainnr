@@ -1,12 +1,30 @@
-# The loop: a RoboticOps harness for the agentic era
+# The loop: the design of the agent-driven harness
 
-*2026-09-08. The design for what this repo is becoming: an MCP app whose
-tools let an agent take a real robot from "just plugged in" to "trained,
-certified and deployed", and keep it improving. Written before the build,
-because the concepts have to be right before hardware is involved. The
-build sequence and its gates are recorded in docs/77 (the Go2 loop) and
-docs/78 (the scene loop); what follows is the design those phases
-implement.*
+*2026-09-08. The design for what this repository became: an MCP server
+whose tools let an agent take a real robot from "just plugged in" to
+"trained, certified and deployed", and keep it improving. Written before
+the build, because the concepts have to be right before hardware is
+involved.*
+
+**How to read this document.** §0–§11 are the design as written on
+2026-09-08. Where a section was built, a **Built** note follows it with
+the date; passages headed *Build notes (date)* are the diary of that
+build and can be skipped. Counts in the text are dated; the README's
+"What is in the box" table is the current map of the tree. The build
+sequence itself is recorded in docs/77 (the Go2 loop) and docs/78 (the
+scene loop). The machines named below are the GPU workstation (an RTX
+3090 Ti on WSL2) and a Mac (M1 Pro). The build phases A0–A8 are: A0 the
+project layer and its index, A1 the artifact kinds and stamps, A2 robot
+adapters, A3 identification methods, A4 tasks, A5 generic train and
+evaluate doors, A6 deployment, A7 drift, A8 headless control.
+
+Contents: [0. The question](#0-the-question) · [1. The one contract](#1-the-one-contract) ·
+[2. Artifact kinds](#2-artifact-kinds) · [3. The state machine](#3-the-state-machine) ·
+[4. The tool families](#4-the-tool-families) · [5. Ingest: the robot seam](#5-ingest-the-robot-seam) ·
+[6. Identify](#6-identify) · [7. Scene and task](#7-scene-and-task) ·
+[8. Deploy, and the gate that needs no robot](#8-deploy-and-the-gate-that-needs-no-robot) ·
+[9. The loop](#9-the-loop) · [10. The window, in three modes](#10-the-window-in-three-modes) ·
+[11. What this refuses to claim](#11-what-this-refuses-to-claim)
 
 ## 0. The question
 
@@ -53,7 +71,8 @@ Three consequences fall out, and they are the whole reason for the rule:
   archaeology project.
 - **The cloud, when it comes, stores rather than decides.** A registry
   keyed by the same stamps inherits the honesty layer instead of
-  replacing it (the open-core split, 2026-09-07).
+  replacing it (decided 2026-09-07, when the open tool and the hosted
+  service were split).
 
 ## 2. Artifact kinds
 
@@ -82,10 +101,10 @@ nothing downstream ever invents a name.
 | batch | pressed episodes with a datasheet and per-episode manifests | cites, not stamped |
 | dataset | a training dataset with its provenance sidecar | cites, not stamped |
 | run | a training run with its manifest | cites, not stamped |
-| policy | a checkpoint directory or file | sometimes |
+| policy | a checkpoint directory or file | yes — imported as an artifact since 2026-09-09 (§2.1) |
 | certificate | an evaluation: trials, confidence interval, funnel, every input version | yes for walk |
-| deploy | a manifest making a policy runnable on the robot | no — new |
-| drift | fresh telemetry judged against the identified interval | no — new |
+| deploy | a manifest making a policy runnable on the robot | yes — built 2026-09-11 (docs/77 §6) |
+| drift | fresh telemetry judged against the identified interval | yes — built 2026-09-13 (§9.2) |
 | finding | a tracked claim with its commit, argv and instrument | yes |
 
 The rule for detecting a kind is the file that must be at its root — a
@@ -95,10 +114,12 @@ than guessed at.
 
 ### 2.1 Policies, evaluations and findings as artifacts (2026-09-09)
 
+*Build notes (2026-09-09): how the data pages were filled.*
+
 The requirement (2026-09-09): the policies, evaluations, findings,
 deployments and monitoring pages show real data in sections a user finds
 meaningful. The decision was to fill them from what exists first: the
-flagship study's fifteen trained arms and the findings ledger. `trainnr/trainnr/project/importer.py`:
+fifteen trained arms of the microduck walk study (docs/e2e-research/63) and the findings ledger. `trainnr/trainnr/project/importer.py`:
 
 - `import_experiment(project, arm_dir)` — a trainnr_mjlab run (`train/`
   with `identity.json`, `model_*.pt`, `verdict/`) becomes three kinds:
@@ -200,6 +221,9 @@ parameter the task depends on.
 One MCP server, three families, all over the same seams the pipeline
 itself uses — never around them.
 
+*Counts are dated. The server registers 76 tools as of 2026-10-03; the
+families below are the design, with the counts of 2026-09-24.*
+
 - **DESCRIBE** (built, 14 tools): bundles, actuators, certified bundles,
   tasks, engines, runs, evaluation records, a batch's datasheet, an
   actuator's friction curves. Read-only windows.
@@ -214,8 +238,10 @@ itself uses — never around them.
 - **STUDIO** (built, 14 tools): launch, quit, open, show, compare, time,
   panels, simulate, the simulator's controls, screenshot, events.
 - **CLOUD** (8 tools, off by default): custody by stamp and managed jobs;
-  offline is a named state, not an error. Built 2026-09-08, not merged
-  as of 2026-09-24; the hosted service it would talk to is not in this
+  offline is a named state, not an error. Built 2026-09-08 and never
+  merged: superseded by the `trainnr.mcp_tools` entry-point seam
+  (2026-10-02), through which a package outside this repository adds
+  its tools to the same server. The hosted service is not in this
   repository.
 
 Counted from the registration list in `trainnr/trainnr/mcp_server.py`
@@ -227,7 +253,7 @@ on 2026-09-24: 69 tools at noon, 75 by the evening (ACT gained
 What the harness adds, by stage: a workspace description (what artifacts
 exist, by kind, with their lineage), robot ingest and identification
 doors, task authoring and acceptance doors, the four chain doors that
-were named in the open-core split note but never built (dataset export, policy
+were named in the 2026-09-07 split decision but never built (dataset export, policy
 training, policy evaluation, generic certification), a tool to point the
 Studio at an artifact, deployment export and its gate, and the drift
 check.
@@ -241,11 +267,16 @@ traceback.
 
 ## 5. Ingest: the robot seam
 
-This is the hole that blocks everything else. Today a robot enters only
-as a MuJoCo model directory, and telemetry enters only as this repo's own
-wire format or a thin CSV reader. The generic identification path is
-shaped like a two-wheel drivetrain, and the robot profile schema refuses
-fields it does not know.
+*Written 2026-09-08, when this was the hole that blocked everything
+else; built since: the adapter registry (A2), the rosbag2 and MCAP
+readers, the LeRobot reader, live capture, and Unitree's DDS capture
+(2026-09-24, docs/77 §2). The paragraphs below are the design.*
+
+At the time of writing a robot entered only as a MuJoCo model
+directory, and telemetry only as the archived rig's own wire format or
+a thin CSV reader. The generic identification path was shaped like a
+two-wheel drivetrain, and the robot profile schema refused fields it
+did not know.
 
 The fix is a third registry seam, shaped exactly like the two that
 already work — plugin tasks and rented-GPU providers, both a Protocol
@@ -270,9 +301,10 @@ critical path:
    file operation, which is why offline comes before live.
 4. **lerobot** — a recorded dataset directory from the LeRobot
    ecosystem, the community standard for arm teleoperation.
-5. **unitree** — the vendor SDK's low-level state. Gated on a research
-   pass that did not complete; rates and licence terms get verified
-   before the adapter is written.
+5. **unitree** — the vendor SDK's low-level state. Built 2026-09-24
+   (`trainnr/trainnr/robots/dds_capture.py`): `rt/lowstate` and
+   `rt/lowcmd` recorded as one recording over DDS, rehearsed on
+   Unitree's own simulator (docs/77 §2).
 
 Two honesty requirements ride along. The robot profile becomes a census
 plus per-robot extras instead of a fixed rig schema. And onboarding
@@ -303,14 +335,14 @@ by the caller:
 Live capture is a small state machine with its state on disk (idle,
 listening with datagrams so far, ingested with the stamp, failed with the
 reason), so the Studio shows it and a tool can poll it, the way jobs
-work. There is one live listener today, the archived rig over UDP; a live
-ROS 2 listener would need a ROS installation, which is what the seam
-avoids, and a Unitree listener waits on its SDK research.
+work. Live listeners: the archived rig over UDP and, since 2026-09-24,
+Unitree's DDS; a live ROS 2 listener would need a ROS installation,
+which is what the seam avoids.
 
 ### 5.2 Showing an artifact as itself
 
 The Studio can index a project and launch the viewer; `present`
-(`trainnr/trainnr/project/present.py`, the door the open-core split named `show_in_studio`) points
+(`trainnr/trainnr/project/present.py`, the door `show_in_studio`) points
 the viewer at one artifact: a robot as its meshes in a 3D view posed at
 its keyframe, a recording's channels as time series on its own clock, an
 experiment's curves from its log, a batch's kept frames beside its
@@ -414,8 +446,9 @@ without one is refused by name, since acceptance is the expert's
 verdict.
 
 **Environment capture was designed before it was built, and the reason is
-recorded** (built 2026-09-22 onward: docs/78, the scene loop; the paragraph
-below is the verdict that shaped it). This repo re-checked the field on 2026-08-25 and amended its
+recorded.** This paragraph is superseded by docs/78 (the scene loop,
+built 2026-09-22 onward: the `scene` kind, the capture chain, the
+measured gap); it stays as the verdict that shaped it. This repo re-checked the field on 2026-08-25 and amended its
 own verdict: Gaussian splats still do not carry contact, every shipped
 system keeps a mesh or particle proxy as the physics carrier, and one
 2026 result measured 65 to 80 percent geometric degradation when
@@ -423,13 +456,15 @@ converting appearance-grade geometry into physics-grade topology. The
 recommendation on record is to standardize a scanner's output as a splat
 plus a watertight collision proxy, built from permissively licensed
 pieces, and to benchmark against the closest existing implementation
-before writing one. So the harness reserves the scene kind and the seam,
-and refuses to pretend the capture is solved.
+before writing one. So the harness reserved the scene kind and the seam,
+and refused to pretend the capture was solved until it was measured
+(docs/78 §3).
 
 ## 8. Deploy, and the gate that needs no robot
 
 Written before the deployment stage existed (built 2026-09-11, A6 in §2.1;
-the MuJoCo gate 20/20 and Unitree's DDS gate 20/20 by 2026-09-13, docs/33).
+the MuJoCo gate 20/20 and Unitree's DDS gate 20/20 by 2026-09-13,
+finding `dds-gate-go2-c2-2026-09-13`).
 The shape it named is the shape that was built, from prior art
 (docs/e2e-research/65):
 a manifest that travels *with* the policy carrying the joint-order map,
@@ -468,8 +503,8 @@ interval produces a drift record naming it and recommending
 re-identification. Injecting synthetic drift into a recorded fixture
 tests the whole path with no robot.
 
-This is the smallest honest version of the fleet data plane designed in
-the full-loop rule — telemetry always, interventions on event, heavy logs
+This is the smallest honest version of the fleet data plane the design
+named — telemetry always, interventions on event, heavy logs
 batched — and it is the piece that turns a one-shot pipeline into a loop
 that keeps improving.
 
@@ -531,7 +566,9 @@ that robot the stage stays empty and the strip says so. The fleet tiers
 (always-on telemetry, events, batches) are a service; this is one record
 per check, run by an agent when it decides to.
 
-### 9.2 Built (2026-09-13, on a Mac, M1 Pro)
+### 9.2 Built (2026-09-13)
+
+*Built on the Mac (M1 Pro).*
 
 `trainnr/fleet/drift.py` (the rule, the record, `judge`), the kind's
 marker imported from there by `project/kinds.py`, the project's
@@ -543,8 +580,8 @@ drivetrain ratio fit anchors its damping) so an anchor is reported and
 never judged. Tests in `trainnr/tests/test_drift.py`: the rule on
 constructed records, then the whole path on the rig's committed sweeps.
 
-The proof the design asked for, on a fresh project (`projects/rig-drift`, local, not tracked,
-not tracked): two real sweeps identified (the reference), then a copy of
+*Build notes (2026-09-13): the proof.* On a fresh project
+(`projects/rig-drift`, local, not tracked): two real sweeps identified (the reference), then a copy of
 the first with the LEFT wheel's encoder ticks scaled by 1.4 — the check
 named `left_gear_per_damp` as left and the right wheel's gear as within;
 then an untouched copy of the first sweep — every judged parameter
@@ -654,8 +691,10 @@ and after the measurements (findings `studio-viewport-pipe` and
 MuJoCo in a subprocess — now two: physics and render, on a
 shared-memory state ring.
 
+*Build notes (2026-09-09): the redesign.*
+
 **The page** (redesigned the same evening, after the first cut was judged
-to show no thinking about what is simple and delightful for the user,
+to show no thinking about what is simple for the user,
 around what a person does in a simulator, in order of how often: watch; pause,
 step, reset, change speed; poke the robot; flip an overlay; look up a
 fact). The picture is the page: the MuJoCo simulator fills the strip and
@@ -708,6 +747,8 @@ choices; nothing runs → refused with "simulate_in_studio first". The
 state file carries `simulator: {time, rtf, paused, manual, speed,
 render_ms}` beside `viewport_task` and `viewport_fps`.
 
+*Build notes (2026-09-09): measurements.*
+
 **Are the overlays true?** (asked 2026-09-09 of the contact forces and
 joints section) The
 renderer draws MuJoCo's own visualization (`mjv_updateScene` with the
@@ -733,6 +774,8 @@ not a registered task or the duck preview. Each is a tag away; each
 waits for the loop stage that needs it.
 
 ### 10.3 Many worlds (2026-09-09)
+
+*Build notes (2026-09-09).*
 
 The question (2026-09-09) was how the page looks with tens of simultaneous
 simulations; the walk scene was the answer. Built on the RL view, the one many-worlds scene
@@ -780,7 +823,7 @@ on the sliders, the "worlds per wall second" number, and manual drive
 of one world while the policy runs the rest.
 
 
-### 10.4 The window from first principles (proposed 2026-09-09, not built)
+### 10.4 The window from first principles (proposed 2026-09-09; items 1–9 built the same day)
 
 After the data pages filled, the ask was a pass from first principles
 over the user's window, view and interaction, with easy visual access to
@@ -942,7 +985,7 @@ parameter's shift against its reference and a reading (A7, 2026-09-13).
 Only a fit record, which rides inside its bundle, has no presentation of
 its own (tested by name in `tests/test_present.py`).
 
-*2026-09-27, after the end-to-end review:* (1) a Studio that switches
+*Build notes (2026-09-27), after the end-to-end review:* (1) a Studio that switches
 project leaves a pointer in the old project's `studio-state.json`
 (`moved_to`, the new root; never a live heartbeat), and `control.state`
 follows it: a door called under the old project sees `alive: true`,
@@ -968,7 +1011,7 @@ so a second show is seen, not streamed behind the first. (6) Application
 ids are folded to rerun's entry-name alphabet (`viz.entry_name`: a
 stamp's `@` becomes `-`), which ends the "requires migration" toast.
 
-*2026-09-28, the stranger test (docs/07):* every door that takes an
+*Build notes (2026-09-28), the stranger test, a first-time user's agent walking the Go2 loop:* every door that takes an
 artifact by version also takes its bare name when the project holds one
 artifact of that name and kind (`pick_artifact`; several are refused
 naming each version); `evaluate_walk` refuses a checkpoint that is not
@@ -1029,6 +1072,8 @@ under its own recording id with the layout it was saved with, exactly
 as the live stream looked — then the derived presentation. So a run
 that happened on one machine opens on another as it ran.
 
+*Build notes (2026-09-13): the parity test.*
+
 **Parity, stated as a test.** A gate run with the Studio quit leaves its
 file; the door reads from that file the same number of ticks the gate's
 record says it stepped, and the same trials the record lists; the Studio
@@ -1042,7 +1087,7 @@ lives. The cloud feed that follows a remote log stays as it is; the
 remote's own feeds now leave their files beside the remote's artifacts,
 which is what a pull brings home.
 
-**Built (2026-09-13, on a Mac, M1 Pro).** The seam: `trainnr/viz.py`
+**Built (2026-09-13, on the Mac).** The seam: `trainnr/viz.py`
 (`open_stream`, `sinks`, `viewer_file`, `viewer_files`,
 `studio_listening`, the `TRAINNR_VIEWER_FILE` knob). Through it: the
 mjlab recorder (a training run's `.viewer/train.rrd`, the reward

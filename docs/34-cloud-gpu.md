@@ -1,4 +1,4 @@
-# 34. Rented GPUs — the provider seam and the runbook
+# The rented GPU: the provider seam and the runbook
 
 *2026-08-27. The training run at recipe scale (docs/31 §5) needs a card
 for four and a half hours; the development machine is a smoke box.
@@ -47,8 +47,8 @@ schema and the wire said:
 - **The catalog** (`/v2/catalog/gpus?include=AVAILABILITY&product=POD&cloud=…&minCudaVersion=13.0`)
   prices per tier and reports stock as `NONE / LOW / MEDIUM / HIGH`.
   Our train venv is torch+cu130, so the **host driver must be CUDA
-  ≥ 13** — the floor the tool queries with. Tonight's stock, one card,
-  community tier: RTX 3090 **$0.22/h**, RTX 4090 **$0.34/h** (CUDA 13.0
+  ≥ 13** — the floor the tool queries with. Stock on 2026-08-27, one
+  card, community tier (prices as of that date): RTX 3090 **$0.22/h**, RTX 4090 **$0.34/h** (CUDA 13.0
   and 13.2 hosts), RTX 5090 $0.69/h; secure tier: A40 $0.44/h, RTX 4090
   $0.74/h, L40S $0.99/h, A100 80 GB SXM $1.59/h. 47 types listed, 15
   in stock with a CUDA-13 host on community, 16 on secure.
@@ -82,7 +82,7 @@ schema and the wire said:
   81 % of the batch-8 step rate with eight times the samples per step,
   6.5× the throughput (`e2e-smoke --batch`, with `--lr` scaled by the
   square root of the batch ratio; the preset keeps the recipe's 8 for
-  comparability; the decision that night was 64). The pod's volume
+  comparability; the decision on 2026-08-27 was 64). The pod's volume
   refuses `chown` (rsync `-a` exits 23; the tool uses `-rlptD`). Runpod's
   UI telemetry lags the pod's own `nvidia-smi` by a few minutes.
 - **An evaluation of N episodes needs N distinct starts.** The env
@@ -166,8 +166,9 @@ offscreen renderer on a bare Linux GPU box; none of WSL's Mesa
 variables apply.
 
 **Cost of the recipe run**, from docs/31 §5's measured rates on a
-3090-class card: ~4.5 h → about **$1.50 on a community RTX 4090**, $1.00
-on a 3090, $3.30 on a secure 4090. A stopped pod keeps billing its
+3090-class card, at the 2026-08-27 prices above: ~4.5 h → about **$1.50
+on a community RTX 4090**, $1.00 on a 3090, $3.30 on a secure 4090. A
+stopped pod keeps billing its
 disk; `terminate` when the results are pulled.
 
 ## 4. The Claude Code side — the vendor's plugin
