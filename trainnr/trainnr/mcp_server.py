@@ -1727,7 +1727,7 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
 
     project = current_project()
     resolved = _studio_artifact(artifact)
-    if _refused(resolved) or resolved is None:
+    if not isinstance(resolved, str):
         return resolved or refusal("name an artifact")  # type: ignore[return-value]
     since = time.time()
     answer = command(project, "show", artifact=resolved)
@@ -2019,8 +2019,8 @@ def screenshot_studio(
     from trainnr.project.control import screenshot  # noqa: PLC0415
 
     resolved = _studio_artifact(artifact)
-    if _refused(resolved):
-        return resolved  # type: ignore[return-value]
+    if resolved is not None and not isinstance(resolved, str):
+        return resolved  # type: ignore[return-value]  # a refusal is the reply
     return screenshot(
         current_project(), section=section, artifact=resolved, width=width
     )
@@ -2124,7 +2124,7 @@ def pick_artifact(
     return exact
 
 
-def _project_artifact(stamp: str, kind: str) -> Any:
+def _project_artifact(stamp: str, kind: str | None) -> Any:
     from trainnr.project import current_project, index_project  # noqa: PLC0415
 
     project = current_project()
