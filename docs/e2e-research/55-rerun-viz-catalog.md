@@ -61,7 +61,7 @@ their panels:
 ## 3. The split: native panel vs the real viewer
 
 **Native (egui_plot in trainnr-studio)** — always-on, lightweight, lives
-beside the viewport and agent panel:
+beside the simulator and agent panel:
 
 - training loss / success-rate curves for a followed run (TimeSeries
   equivalent; `egui_plot` line + points)

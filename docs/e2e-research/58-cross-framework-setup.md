@@ -147,7 +147,7 @@ Everything here is Apache-2.0; what stays distinctive is what only the
 measuring party can do: the
 identification service (bench + protocol + the fits themselves), the
 certification layer (two instruments, paired protocol, referee), and
-the Studio (the one place training telemetry, sim viewport, eval
+the Studio (the one place training telemetry, the simulator, eval
 records and the agentic pipeline share a timeline). The open artifacts
 make these MORE valuable: every bundle in circulation is an argument
 for the service that produces trustworthy ones.

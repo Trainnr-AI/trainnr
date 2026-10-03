@@ -278,7 +278,7 @@ registry refusal was not planned. The plan as written (historical;
 
 1. **Day 1 — the reader and the test first.** *trainnr/robot/usd_import.py*: open the stage, refuse a 0-byte sublayer by name, select variants from a mapping, `add_usd` with the three resolvers, bridge to an MjSpec through Newton's solver, and hand the spec back. The test writes the 2F-85 (Newton_compliant) and asserts the §4 table: 8 ranges, 11 masses, the actuator gains, 3 equalities, the closure sim (finger within 1 mrad of target, equality violation under 1 cm). Also the Physx_parallel_grip variant (6 hinges, 5 equalities) so the PhysX resolver is pinned too.
 2. **Day 2 — the bundle writer and the door.** Leaf names, mesh files, `ctrlrange` from the driven joint's range, the sensor block, a `home` key, `--free`/`--attach` root, the record with provenance, README with the CC BY line and the runtime options Robotiq recommends as a declared `<option>`. The onboarding registry gains `.usd|.usda|.usdc|.usdz`; `onboard_robot` in the Studio's MCP surface names the variant selections in its arguments; a missing `newton` refuses with the install line per OS.
-3. **Day 3 — seen and written.** The imported gripper on a task in the Studio (closing on a block, both viewers, stills), the census against the record, docs/07, a docs/33 row, tools/README rows, this document's §4 replaced by the bundle's numbers.
+3. **Day 3 — seen and written.** The imported gripper on a task in the Studio (closing on a block, both viewers, stills), the census against the record, the tools README rows, this document's §4 replaced by the bundle's numbers.
 
 The same evening, every door gained the audit: the compiled bundle against the
 source as authored, per body (mass, centre of mass, the full inertia

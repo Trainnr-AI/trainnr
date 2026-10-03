@@ -238,7 +238,7 @@ MuJoCo C library, with a native viewer (re-)written in Rust."
 - **Model editing**: `MjSpec` wrappers with examples (`model_editing`,
   `terrain_generation`, `procedural_tree`, `multi_legged_creatures`).
 
-What this settles for the Studio: the viewport already made this call
+What this settles for the Studio: the Studio's simulator already made this call
 once. `crates/trainnr-studio/src/viewport.rs` streams frames from
 `tools/studio-render-stream.py` (the pipeline's own `mujoco.Renderer`,
 MuJoCo 3.11) through shared memory, with camera deltas and the
@@ -271,7 +271,7 @@ per-actuator sliders** (`simulate`'s right panel, Gazebo's Joint
 Position Controller, Genesis's `control_dofs_position`), the
 **visualization toggles** (the `mjVIS_*` list, Gazebo's Visualize
 Contacts, Isaac's collider display), **perturbation by mouse**
-(`simulate`'s Ctrl+drag, which the viewport already has), and
+(`simulate`'s Ctrl+drag, which the Studio's simulator already has), and
 **keyframes** (Copy / Adjust / Load / Save key). `simulate` adds the
 history scrubber; nobody else does.
 
@@ -300,7 +300,7 @@ render interval and decimation (Isaac Lab). None of these is ours.
 
 **Not settled here, and left for the discussion** (settled the same
 day: the Simulator page, [docs/76 §10.2](../76-the-loop.md)): whether "Live view"
-becomes the runtime page or stays beside it; and how far the viewport's
+becomes the runtime page or stays beside it; and how far the simulator's
 subprocess protocol grows (run, pause, step, sliders, keyframes, flags
 are each one tagged stdin message away, on the wire that already carries
 camera deltas and the perturbation).
