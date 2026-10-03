@@ -85,6 +85,14 @@ the operator's; everything else in this document is unchanged by it.
 One product repository and satellites only where the lifecycle differs,
 the rule both Rerun and goose follow.
 
+*Decided 2026-10-03 (Prakhar: "lets not keep separate repos for now, lets
+use just trainnr for now, then we can split later if needed"): everything
+below the first three rows is deferred. The product repository holds
+mjsim (docs/84), the telemetry readers, the exact statistics, the scene
+chain and the paper as modules and directories with their seams named,
+so a split later is a move, not a rewrite. The rows stay as the shape a
+split would take.*
+
 | Repository | Holds | Why separate |
 |---|---|---|
 | **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the desktop app (`crates/trainnr-desktop`), the CLI and tools, the actuator library and the four nominal robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |

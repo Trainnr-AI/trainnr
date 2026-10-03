@@ -15,7 +15,11 @@ egui app and to any MuJoCo user, and it moves on its own cadence
 (rendering, the drawer, the follow rules, the ring). In prose it is "the
 simulator" (the page already says so); "viewport" leaves the vocabulary
 with the extraction, and the heartbeat's `viewport_*` fields with the
-next schema version. This is the plan; nothing is cut yet.*
+next schema version. This was the plan for a repository; decided 2026-10-03 that no
+repository splits off for now ("lets use just trainnr for now"), so
+mjsim is the simulator's **module** inside trainnr: the same cut, the same
+contract, under `crates/mjsim` and `mjsim/` when steps 1 and 2 run; step
+3 waits until a split is needed.*
 
 ## 1. What mjsim is today
 
