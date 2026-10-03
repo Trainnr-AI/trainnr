@@ -68,7 +68,7 @@ Software used as dependencies (no source copied)
   original simulator's conventions so released checkpoints see the scene
   they were trained on.
 - Rerun (Rerun Technologies, MIT OR Apache-2.0): the Python SDK, and the
-  viewer embedded in the desktop app through the re_viewer and re_ui
+  viewer embedded in the Studio through the re_viewer and re_ui
   crates; egui and eframe (emilk, MIT OR Apache-2.0).
 - Newton (NVIDIA, Apache-2.0) and OpenUSD (Pixar, Apache-2.0 with the
   Tomorrow Open Source Technology notice): the USD import door.

@@ -27,7 +27,7 @@ Two halves and a wire between them.
 
 | Half | Where | Size | Depends on |
 |---|---|---|---|
-| the widget (Rust) | `crates/trainnr-desktop/src/viewport.rs` (the shared-memory reader, the texture, the camera, the resize and scale), `simulator.rs` (the transport bar, the overlays, the Inspect drawer, the follow rules, the worlds row), `keys.rs` (WASD and the shortcuts) | 2,650 lines | egui, re_ui's icons, `spawn.rs` (process helpers: a group, kill the tree) |
+| the widget (Rust) | `crates/trainnr-studio/src/viewport.rs` (the shared-memory reader, the texture, the camera, the resize and scale), `simulator.rs` (the transport bar, the overlays, the Inspect drawer, the follow rules, the worlds row), `keys.rs` (WASD and the shortcuts) | 2,650 lines | egui, re_ui's icons, `spawn.rs` (process helpers: a group, kill the tree) |
 | the stream (Python) | `tools/studio-render-stream.py` (MuJoCo, the policy, the camera, the frame ring, the status, the physics ring for the viewer twin) | 2,365 lines | `trainnr` (the task registry for the scenes, `viz` for the mirror into Rerun), mujoco, onnxruntime for a deployment |
 | the wire | a shared-memory ring of RGB frames (`--shm`), one wake-up byte per frame on stdout (the frame token), a JSON status per tick (the status token), a second ring for the physics twin (`--physics`), commands on stdin (camera, resize, run/pause/step/reset, inputs) | docs/35 §6 | |
 
@@ -52,7 +52,7 @@ list it offers comes in as an argument.
     package depends on mujoco and numpy only and `trainnr` depends on it,
     not the other way round. The mirror into Rerun stays in `trainnr`
     (it is the loop's, not the simulator window's).
-- **The app** (`crates/trainnr-desktop`) depends on the crate by version
+- **The app** (`crates/trainnr-studio`) depends on the crate by version
   and on the Python package through `trainnr`'s own dependency; the
   Simulator page keeps its layout, the empty-state card and the
   heartbeat fields. `spawn.rs` implements `Launcher`.
@@ -68,7 +68,7 @@ Buys: the widget improves on its own cadence and pull requests (rendering
 quality, the drawer, the half-size rule, a Windows build of just the
 widget's demo), a demo app in the repo that is the smallest MuJoCo
 viewport anyone can run, and a second consumer is possible (a notebook,
-another egui app). Costs: two version pins to keep in step (the desktop's
+another egui app). Costs: two version pins to keep in step (the Studio's
 Cargo.toml and `trainnr`'s pyproject), a release step the monorepo did
 not have, and the first week of cutting, which is mostly moving files
 and naming the contract that exists already.
@@ -80,11 +80,11 @@ and naming the contract that exists already.
    the `SceneSource` protocol; the widget stops reaching into `spawn.rs`.
 2. Move: the crate under `crates/mjsim` and the package under `mjsim/`
    in the monorepo first (a path dependency), the
-   desktop and `trainnr` consuming them; every gate green.
+   Studio and `trainnr` consuming them; every gate green.
 3. Extract: the repository `Trainnr-AI/mjsim` with the files'
    history (the rig recipe, `tools/export/rig/`), the monorepo switching
    to a versioned dependency; the demo app and its README.
-4. Release with the first tag; the desktop pins it.
+4. Release with the first tag; the Studio pins it.
 
 Decided by the operator; steps 1 and 2 are a day inside the monorepo and
 carry no risk; step 3 is the point of no return for the file history.

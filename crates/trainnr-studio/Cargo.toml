@@ -5,7 +5,7 @@
 [workspace]
 
 [package]
-name = "trainnr-desktop"
+name = "trainnr-studio"
 version = "0.1.0"
 edition = "2021"
 license = "FSL-1.1-ALv2"

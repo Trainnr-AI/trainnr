@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     native_options.viewport = native_options
         .viewport
-        .with_app_id("ai.trainnr.desktop")
+        .with_app_id("ai.trainnr.studio")
         .with_icon(std::sync::Arc::new(icon));
 
     // The chrome is ours where a client may draw it (chrome.rs): our top
@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         re_ui::viewport_with_window_chrome(native_options.viewport, chrome::custom_chrome());
 
     eframe::run_native(
-        "trainnr Desktop",
+        "trainnr Studio",
         native_options,
         Box::new(move |cc| {
             re_viewer::customize_eframe_and_setup_renderer(cc)?;
@@ -188,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut rerun_app = re_viewer::App::new(
                 main_thread_token,
                 re_viewer::build_info(),
-                re_viewer::AppEnvironment::Custom("trainnr Desktop".to_owned()),
+                re_viewer::AppEnvironment::Custom("trainnr Studio".to_owned()),
                 startup_options,
                 cc,
                 None,

@@ -16,11 +16,11 @@ command -v cargo-llvm-cov >/dev/null || {
   echo "cargo-llvm-cov not installed:  cargo install cargo-llvm-cov"; exit 1; }
 
 if [ "${1:-}" = "--html" ]; then
-  (cd crates/trainnr-desktop && cargo llvm-cov --html)
-  echo "open crates/trainnr-desktop/target/llvm-cov/html/index.html"
+  (cd crates/trainnr-studio && cargo llvm-cov --html)
+  echo "open crates/trainnr-studio/target/llvm-cov/html/index.html"
   exit 0
 fi
 
-(cd crates/trainnr-desktop && cargo llvm-cov --summary-only 2>/dev/null) | tail -n +2
+(cd crates/trainnr-studio && cargo llvm-cov --summary-only 2>/dev/null) | tail -n +2
 echo
 python3 tools/loc-report.py | tail -25

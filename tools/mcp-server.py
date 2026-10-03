@@ -3,7 +3,7 @@
     cd trainnr && uv run --extra sim --extra mcp trainnr mcp
 
 is the same server through the package's console script, which is what
-`.mcp.json`, the Desktop's agent panel and `uvx trainnr mcp` run; this
+`.mcp.json`, the Studio's agent panel and `uvx trainnr mcp` run; this
 file only forwards to it.
 
 The doors an agent works the loop through: describe (bundles with their hash

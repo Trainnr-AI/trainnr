@@ -6,7 +6,7 @@ telemetry into a simulation model, generate training datasets, train
 policies by reinforcement learning (MuJoCo, mjlab) or imitation learning
 (LeRobot), evaluate them with exact confidence intervals, gate and deploy
 them on the robot's runtime, and watch the deployment telemetry for drift,
-which starts the next turn. One MCP server, a desktop app, a Claude Code
+which starts the next turn. One MCP server, the Studio (a desktop app), a Claude Code
 plugin; every step is a tool call and every result is a record the next
 step cites. For developers with one robot and companies with a fleet.
 
@@ -21,7 +21,7 @@ step cites. For developers with one robot and companies with a fleet.
 | 5. Evaluate | a clip cannot tell 10 % from 99 %; an evaluation here is paired, seed-matched trials with an exact confidence interval and a milestone funnel, and the gate reads the lower bound | `evaluate_walk`, `evals`, `eval_detail` | evaluations that gate on the lower bound |
 | 6. Sim-to-real | the deployment is the last evaluation: the export, a gate on two runtimes (ours and the vendor's) against the same rows at a declared tolerance, a failed gate attributed to its cause (latency first), pre-flight before the first tick | `export_deployment`, `gate_deployment`, `attribute_deployment`, `preflight_deployment` | deployments with their gate and pre-flight |
 | 7. Deploy and watch | the policy on the vendor's runtime; its telemetry back into turn 1; the robot re-identified against its fitted intervals | `stage_deployment`, `check_drift` | drift records |
-| 8. Query and learn | every record above, from the agent or the desktop app: which policy, on which model, under which conditions, with what interval | `describe_project`, `runs`, `friction_curve`, `list_ledger_findings` | the next turn's question |
+| 8. Query and learn | every record above, from the agent or the Studio: which policy, on which model, under which conditions, with what interval | `describe_project`, `runs`, `friction_curve`, `list_ledger_findings` | the next turn's question |
 
 Everything in this table has run end to end on a Unitree Go2, in simulation,
 through the tools alone. The hardware step is the vendor's own runtime; no
@@ -53,7 +53,7 @@ session:
 | Pre-flight | `preflight_deployment` | the checks before the first tick on a robot, soft stop measured |
 | Monitoring | `check_drift` | the robot re-identified from a new recording against its fitted intervals |
 
-The desktop app shows each stage as it lands: the Overview's pipeline strip,
+the Studio shows each stage as it lands: the Overview's pipeline strip,
 the robot and its fit, the experiment's curves, the evaluation's intervals,
 the deployment gate, and the simulator with the policy driving the robot.
 
@@ -92,11 +92,11 @@ command = "uv"
 args = ["run", "--directory", "/path/to/trainnr/trainnr", "--extra", "sim", "--extra", "mcp", "trainnr", "mcp"]
 ```
 
-**The desktop app** (Rust; the embedded Rerun viewer and the MuJoCo simulator):
+**the Studio** (Rust; the embedded Rerun viewer and the MuJoCo simulator):
 
 ```sh
-cd crates/trainnr-desktop && cargo build --release && cd ../..
-uv run --directory trainnr trainnr desktop        # or the launch_studio tool
+cd crates/trainnr-studio && cargo build --release && cd ../..
+uv run --directory trainnr trainnr studio        # or the launch_studio tool
 ```
 
 **Training** needs the mjlab trainer and a CUDA GPU:
@@ -109,7 +109,7 @@ test, runs on a laptop without a GPU.
 |---|---|---|
 | [`trainnr/`](trainnr/README.md) | L0, Python package `trainnr` | bundles and their hash identity, system identification over `mujoco.sysid`, exact small-n statistics, the evaluation protocol, the deployment gate, drift, scenes, the project index, the MCP server and the `trainnr` command |
 | [`trainnr-mjlab/`](trainnr-mjlab/README.md) | L1, Python package `trainnr_mjlab` | the mjlab trainer: identified actuator physics as an mjlab actuator, the randomization events, the linter that turns silent no-ops into errors, the walk tasks |
-| [`crates/trainnr-desktop/`](crates/trainnr-desktop/) | L2, Rust | the desktop app; talks to L0 through the project's files and processes only |
+| [`crates/trainnr-studio/`](crates/trainnr-studio/) | L2, Rust | the Studio; talks to L0 through the project's files and processes only |
 | [`robots/`](robots/) | data | the actuator library (BAM's fits, each with provenance) and the nominal robot bundles |
 | [`tools/`](tools/) | scripts | the gates (`verify.sh`, `check-docs.py`, `check-numbers.py`, `check-layers.py`), the paper build, the cloud runbook |
 | [`docs/`](docs/) | the record | dated research against primary sources, numbered decisions, the progress log, the findings and the paper |

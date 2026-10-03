@@ -11,7 +11,9 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 ### Changed
 
 - The project is now **trainnr** (packages `trainnr` and `trainnr-mjlab`,
-  the desktop app `trainnr-desktop`, the `trainnr` command, environment
+  the Studio `trainnr-studio` (crate, binary, `trainnr studio`, app id
+  `ai.trainnr.studio`; the app's persisted window state resets once),
+  the `trainnr` command, environment
   variables `TRAINNR_*`, task ids `trainnr/<task>`). The old import names
   and the old task namespace are gone; nothing outside this repository
   ever used them.
@@ -24,7 +26,7 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
-- A light theme for the desktop app, designed (a white page, warm paper
+- A light theme for the Studio, designed (a white page, warm paper
   panels, soft blue tints): a switch in the title bar (dark, light or the
   system's), kept across launches; the embedded viewer, the pages and the
   card pictures follow; `set_studio_theme` sets it from an agent.
@@ -41,7 +43,7 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 - `trainnr.mcp_tools`: an entry-point group through which an installed
   package registers tools on the same MCP server (the seam the cloud
   package extends, docs/83).
-- `trainnr mcp` serves the MCP server over stdio; `trainnr desktop`
+- `trainnr mcp` serves the MCP server over stdio; `trainnr studio`
   launches the app; `trainnr version`.
 - The repository installs as a Claude Code plugin and marketplace
   (`.claude-plugin/`), with the MCP server, the skills and the agents.

@@ -29,7 +29,7 @@ monorepo with one version: a Rust workspace (`goose`, `goose-cli`,
 recipes. Satellites exist only where the release channel differs: the VS
 Code extension, the mobile apps. The brand is lowercase in prose, the CLI
 is `goose`, every crate is `goose-*`, the app is "goose Desktop". Their
-hard-won lesson: the desktop app *spawns and connects to* one server over
+hard-won lesson: the Studio *spawns and connects to* one server over
 a standard protocol and owns no state, so the app and the core version
 independently; they paid a year of a custom daemon (`goosed`) before
 landing there. Extensions are external MCP servers in a registry, never
@@ -62,7 +62,7 @@ never needed ("the doors", "the press", "the referee") become the industry's.
 
 | Today | Proposed | Why |
 |---|---|---|
-| the Studio (the desktop window) | **trainnr Desktop** — the app you install; binary `trainnr-desktop` | "Studio" is what Foxglove dropped and what LM Studio and Android Studio own; "Desktop" is goose's word and is neutral. The app is not a viewer only: it lists the project, runs the simulator, mirrors jobs. Inside it, the words are exact: **the viewer** (the embedded Rerun viewer), **the simulator** (the MuJoCo viewport), **the pages** (Robots … Monitoring). |
+| the Studio | **trainnr Studio** (decided 2026-10-03: "lets use studio") — the app you install; binary `trainnr-studio`, command `trainnr studio`, app id `ai.trainnr.studio` | "Desktop" was the proposal (goose's word, neutral); Prakhar chose Studio: the tools are already `launch_studio`, `describe_studio`, `set_studio_theme` and `$TRAINNR_STUDIO` names the binary, so the user-facing name and the API now agree. The app is not a viewer only: it lists the project, runs the simulator, mirrors jobs. Inside it, the words are exact: **the viewer** (the embedded Rerun viewer), **the simulator** (the MuJoCo window), **the pages** (Robots … Monitoring). |
 | the doors (MCP tools) | **tools** of the **trainnr MCP server** | MCP's own word. Tool prefix `mcp__trainnr__*`. |
 | the press | **data generation** (`generate_demos`) | W&B / LeRobot vocabulary; "press" stays as the module name only. |
 | the referee | **success criterion** / **judge** | Gymnasium vocabulary. |
@@ -95,18 +95,18 @@ split would take.*
 
 | Repository | Holds | Why separate |
 |---|---|---|
-| **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the desktop app (`crates/trainnr-desktop`), the CLI and tools, the actuator library and the four nominal robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
+| **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the Studio (`crates/trainnr-studio`), the CLI and tools, the actuator library and the four nominal robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
 | **`trainnr-cloud`** (private) | the control plane of docs/64: registry, scheduler, orgs, billing | Closed by decision; different owners and cadence. |
 | **`trainnr-www`** (private or public) | trainnr.ai; reads `docs/` from the product repo at a pinned commit, Rerun's `landing` pattern | Vercel deploys; a designer's repo. |
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
-| **`mjsim`** (public, planned; docs/84) | the MuJoCo simulator window: the egui widget (Rust) and the simulation stream (Python), one version; the desktop app and `trainnr` depend on it | its own cadence and its own users (any egui app, any MuJoCo user); the name is free on PyPI and crates.io |
+| **`mjsim`** (public, planned; docs/84) | the MuJoCo simulator window: the egui widget (Rust) and the simulation stream (Python), one version; the Studio and `trainnr` depend on it | its own cadence and its own users (any egui app, any MuJoCo user); the name is free on PyPI and crates.io |
 | **`trainnr-identified-dr`** (public; one repository per paper, docs/81) | the manuscript, its LaTeX, figures, the per-trial artifacts with their history, a frozen snapshot of the finding records it cites, the paper build tools; depends on `trainnr` at a pinned commit | A paper freezes at submission and is cited by DOI; its evidence is most of the product history's weight (docs/80 §8). |
 | **`rig`** (public archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
 | **`.github`** (public) | the organisation profile README | GitHub's convention. |
 
 Not repositories: a docs repo (docs live beside the code and a checker ties
 them, as Rerun does), a separate MCP repo (the server is a subcommand of
-the package, as `rerun viewer-mcp` is), a separate Desktop repo (it
+the package, as `rerun viewer-mcp` is), a separate Studio repo (it
 versions with the file contract it reads; goose's lesson).
 
 ## 4. "Developed separately, imported seamlessly": the layout inside `trainnr`
@@ -121,7 +121,7 @@ trainnr/
     trainnr/            PyPI `trainnr`, import `trainnr`      (L0: the pipeline; no GUI, no trainer)
     trainnr-mjlab/      PyPI `trainnr-mjlab`, import `trainnr_mjlab`   (L1: the trainer plugin; imports L0)
   crates/
-    trainnr-desktop/    the app; its own Cargo workspace (rerun 0.36) (L2: reads L0's files, spawns L0/L1)
+    trainnr-studio/    the app; its own Cargo workspace (rerun 0.36) (L2: reads L0's files, spawns L0/L1)
   tools/                → `trainnr` CLI subcommands over time (L2)
   robots/               the actuator library + nominal bundles (data)
   docs/  docs/paper/  docs/findings/  docs/artifacts/
@@ -141,14 +141,14 @@ Rules:
   `pip install trainnr` (core), `pip install trainnr[mcp,deploy,viz]`,
   `pip install trainnr-mjlab` (pins `trainnr==x.y`). In the repo they are a
   `uv` workspace, so development uses the path; a release uses the pin.
-- **One protocol between the app and the core.** The Desktop reads
+- **One protocol between the app and the core.** The Studio reads
   `.index/*.json` and drives the pipeline through the MCP server's tools;
   it owns no state. Every path it assumes today (`spawn.rs` markers) is
   replaced by "the `trainnr` package on PATH" plus `$TRAINNR_REPO` for
   development.
 - **One version, one tag.** `version` lives in one place and is written
-  into both pyprojects, the Cargo workspace and the Desktop's about box;
-  a tag `vX.Y.Z` builds wheels, the Desktop for three platforms, and the
+  into both pyprojects, the Cargo workspace and the Studio's about box;
+  a tag `vX.Y.Z` builds wheels, the Studio for three platforms, and the
   source bundle; a floating `stable` tag, goose's way. Alphas pinned exact.
 - **Extension points.** Robot adapters, identification methods, trainers,
   engines, model sources are entry-point groups under `trainnr.*`; a
@@ -162,8 +162,8 @@ Rules:
 | PyPI / import | `rq-mjlab` / `rq_mjlab` | `trainnr-mjlab` / `trainnr_mjlab` | same |
 | entry-point groups | `rq_pipeline.tasks` … | `trainnr.tasks` … | both sides in-tree |
 | MCP server | `robotiq` (`.mcp.json`, `name=`) | `trainnr` | agents' tool prefix changes |
-| Desktop crate / binary | `studio-shell` | `trainnr-desktop` | launch path, `$TRAINNR_DESKTOP` |
-| app id / eframe name | `robotiq_studio` / "robotiq studio" | `ai.trainnr.desktop` / "trainnr Desktop" | resets the app's persisted window state once |
+| Studio crate / binary | `studio-shell` | `trainnr-studio` | launch path, `$TRAINNR_STUDIO` |
+| app id / eframe name | `robotiq_studio` / "robotiq studio" | `ai.trainnr.studio` / "trainnr Studio" | resets the app's persisted window state once |
 | gym / task namespace | `robotiq/<task>` | `trainnr/<task>` | no alias: the only `robotiq/` task ids were twelve files in local, untracked projects, rewritten; no stamp moves (the stamp hashes the bare name) |
 | LeRobot env type | `--env.type=robotiq` | `--env.type=trainnr` | |
 | the module named after the old brand (envs/robotiq.py, since removed) | | a module named for what it holds (the gym environments) | |
@@ -171,7 +171,7 @@ Rules:
 | env vars | `RQ_*` (19), `ROBOTIQ_*` (2) | `TRAINNR_*` | documented in one page |
 | dataset ids | `rq-pipeline/rig`, `rq-pipeline/aloha2-kitting` | frozen for existing datasets; new defaults `trainnr/<name>` | |
 | user agents | `rq-pipeline/cloud-gpu` | `trainnr/<version>` | |
-| actor word | `by: studio` | `by: desktop` | the event log's word |
+| actor word | `by: studio` | `by: studio` | unchanged |
 | the old rig's ids | `robotiq_hil`, `robotiq_rig`, … | untouched; they leave with the rig | |
 
 **The one identifier that keeps the old word**: the bundle schema string
@@ -227,10 +227,10 @@ filtered export, cold gate 16 of 16), `Trainnr-AI/rig` (archived) and
 `Trainnr-AI/.github` (the profile). The checkout keeps its private remote;
 the public repository is pushed only from the export.*
 
-1. This document decided (the Desktop name, the robots split timing, the
+1. This document decided (the Studio name, the robots split timing, the
    logs), then written into docs/64 and docs/70 as the standing decision.
 2. The rename, one commit: directories, packages, entry points, the MCP
-   server, the Desktop, the ids, the env vars, the docs; the layer check
+   server, the Studio, the ids, the env vars, the docs; the layer check
    added. (The compat shims for the two import names and the task
    namespace were added and then removed the same day: nothing outside
    this repository ever used the old names.)

@@ -23,7 +23,7 @@ reversal is dated and reasoned; nothing is quietly dropped.*
 
 ## 0. What the Studio is
 
-One native desktop application, `crates/trainnr-desktop`, about 1,200 lines
+One native desktop application, `crates/trainnr-studio`, about 1,200 lines
 of Rust in three files. It is an [eframe](https://github.com/emilk/egui)
 app (eframe = the application harness for the egui immediate-mode GUI
 library) that does two things:

@@ -94,7 +94,7 @@ SECTIONS = (
 )
 PANEL_ACTIONS = ("expand", "toggle")
 # The built Studio, relative to the checkout.
-STUDIO_RELEASE = Path("crates") / "trainnr-desktop" / "target" / "release"
+STUDIO_RELEASE = Path("crates") / "trainnr-studio" / "target" / "release"
 
 
 # -- paths ---------------------------------------------------------------------
@@ -431,7 +431,7 @@ def studio_binary() -> Path | None:
     if named:
         path = Path(named)
         return path if path.is_file() else None
-    exe = "trainnr-desktop.exe" if sys.platform.startswith("win") else "trainnr-desktop"
+    exe = "trainnr-studio.exe" if sys.platform.startswith("win") else "trainnr-studio"
     path = checkout() / STUDIO_RELEASE / exe
     return path if path.is_file() else None
 
@@ -537,7 +537,7 @@ def launch(project: Project, binary: Path | None = None) -> dict[str, Any]:
                 f"no Studio binary at {binary}"
                 if binary is not None
                 else "no Studio binary: build it with "
-                "`cargo build --release -p trainnr-desktop` or set $TRAINNR_STUDIO"
+                "`cargo build --release -p trainnr-studio` or set $TRAINNR_STUDIO"
             ),
         }
     deadline = time.monotonic() + PORT_FREE_TIMEOUT_S

@@ -13,7 +13,7 @@ abstract: >-
   measured randomization span, evaluated with paired trials and exact
   intervals, gated against the robot's runtime, deployed, and watched
   through their telemetry for drift, which starts the next turn. One MCP
-  server, a desktop app and a Claude Code plugin.
+  server, the Studio (a desktop app) and a Claude Code plugin.
 authors:
   - family-names: Aggarwal
     given-names: Prakhar

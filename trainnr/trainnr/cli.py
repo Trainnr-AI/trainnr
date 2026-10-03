@@ -1,7 +1,7 @@
-"""The `trainnr` command: the MCP server, the desktop app, the version.
+"""The `trainnr` command: the MCP server, the Studio, the version.
 
     trainnr mcp        serve the tools over stdio (what an agent's config runs)
-    trainnr desktop    launch trainnr Desktop on the current project
+    trainnr studio     launch the trainnr Studio on the current project
     trainnr version    the installed version
 
 Each subcommand is a thin door over the module that owns the work; the
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog=PACKAGE, description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("mcp", help="serve the tools over stdio (needs the `mcp` extra)")
-    sub.add_parser("desktop", help="launch trainnr Desktop on the current project")
+    sub.add_parser("studio", help="launch the trainnr Studio on the current project")
     sub.add_parser("version", help="print the version")
     args = parser.parse_args(argv)
     if args.command == "version":
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
 
         serve()
         return 0
-    if args.command == "desktop":
+    if args.command == "studio":
         from trainnr.project import current_project  # noqa: PLC0415
         from trainnr.project.control import launch  # noqa: PLC0415
 

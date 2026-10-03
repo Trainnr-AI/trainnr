@@ -24,16 +24,16 @@ gate() {
 }
 
 echo "pre-commit:"
-# The desktop app is the one Rust crate left (the rig's crates and firmware
+# the Studio is the one Rust crate left (the rig's crates and firmware
 # moved to their own repository, https://github.com/Trainnr-AI/rig, on
 # 2026-10-02). It is its own workspace — own Cargo.lock, the rerun 0.36
 # pins — so every cargo gate runs inside it. Before the move it was
 # `exclude`d from the root workspace and a review found drift the root's
 # "formatting ok" stamps had been vacuously blessing: a workspace needs its
 # own gates, or it has none.
-gate "formatting (trainnr-desktop)" "cd crates/trainnr-desktop && cargo fmt --check"
-gate "clippy (trainnr-desktop)"     "! (cd crates/trainnr-desktop && cargo clippy -q --all-targets 2>&1) | grep -qE '^error'"
-gate "tests (trainnr-desktop)"      "cd crates/trainnr-desktop && cargo test -q"
+gate "formatting (trainnr-studio)" "cd crates/trainnr-studio && cargo fmt --check"
+gate "clippy (trainnr-studio)"     "! (cd crates/trainnr-studio && cargo clippy -q --all-targets 2>&1) | grep -qE '^error'"
+gate "tests (trainnr-studio)"      "cd crates/trainnr-studio && cargo test -q"
 # NOT a grep for `unsafe`. The COMPILER forbids it — `unsafe_code =
 # "forbid"` in the manifest — so a grep here would only duplicate that,
 # worse. The first version did exactly that, required `unsafe` at the

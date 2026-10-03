@@ -7,7 +7,7 @@ commands back on stdin, so the viewer on the other end can rotate and zoom.
 Why this exists: `mujoco-rs` (the Rust FFI binding) needs a patched fork of
 `glutin` to render on macOS at all, plus its own separate MuJoCo 3.9.0 install
 — a real dependency-trust and version-skew cost this repo chose not to pay
-(docs/e2e-research/54 and the trainnr-desktop build log record the attempt).
+(docs/e2e-research/54 and the trainnr-studio build log record the attempt).
 MuJoCo already renders correctly from Python everywhere this repo runs it
 (`camera-match.py`, `kitting_demos.py`, `show-aloha2.py`); this script is
 that same `mujoco.Renderer` in a loop, framed onto stdout so any process in
@@ -501,7 +501,7 @@ def staged_scene_dir(opened: object) -> "pathlib.Path | None":
 # budget is raised to the viewer's own cap before compile, and requests
 # are clamped to the compiled framebuffer regardless, so no size a viewer
 # sends can kill the stream. 1920 matches MAX_RENDER_SIDE in
-# crates/trainnr-desktop/src/viewport.rs — duplicated across the language
+# crates/trainnr-studio/src/viewport.rs — duplicated across the language
 # boundary like the rest of this wire contract; change both together.
 MAX_RENDER_SIDE = 1920
 

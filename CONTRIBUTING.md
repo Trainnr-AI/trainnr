@@ -22,12 +22,12 @@ version of every rule below is in `docs/`.
 git clone https://github.com/Trainnr-AI/trainnr && cd trainnr
 cd trainnr && uv sync --extra sim --extra mcp --extra viz && cd ..   # the Python package
 cd trainnr-mjlab && uv sync --extra viz && cd ..                      # the mjlab trainer
-cd crates/trainnr-desktop && cargo build --release && cd ../..       # the desktop app
+cd crates/trainnr-studio && cargo build --release && cd ../..       # the Studio
 tools/setup-hooks.sh                                                  # the pre-commit gates
 ```
 
 The layers (docs/80 §4): `trainnr` never imports `trainnr-mjlab` or the
-desktop; `trainnr-mjlab` imports `trainnr`; the desktop talks to the
+the Studio; `trainnr-mjlab` imports `trainnr`; the Studio talks to the
 packages through files and processes only. `tools/check-layers.py` enforces
 it.
 
@@ -41,7 +41,7 @@ it.
   Apache License 2.0. Unsigned commits are not merged.
 - **Pull request titles** follow Conventional Commits
   (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), with a scope
-  where it helps (`feat(desktop): ...`, `fix(mjlab): ...`). The body says
+  where it helps (`feat(studio): ...`, `fix(mjlab): ...`). The body says
   why, what the alternative was, and how you verified it.
 - **One changelog line** under *Unreleased* in `CHANGELOG.md` for anything a
   user would notice.
@@ -63,11 +63,11 @@ subset. Both must be green:
   `tools`; `mypy` for both packages (zero errors is the baseline).
 - `python -m unittest discover -s tests` in each package. Tests that need a
   GPU, a trained checkpoint or a project skip with a reason and say so.
-- `cargo fmt --check`, `cargo clippy` and `cargo test` for the desktop app.
+- `cargo fmt --check`, `cargo clippy` and `cargo test` for the Studio.
 - `tools/check-docs.py` (docs describe real code), `tools/check-layers.py`,
   `tools/check-numbers.py` (every number in the docs resolves to a record).
 
-A screen you changed is verified by looking at it: launch the desktop app,
+A screen you changed is verified by looking at it: launch the Studio,
 read every label as a user would, and attach the screenshot to the pull
 request.
 

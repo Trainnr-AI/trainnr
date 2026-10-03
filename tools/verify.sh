@@ -23,11 +23,11 @@ step() {                      # step "name" "command"
 
 PY="${PYTHON:-python3}"  # the repo-level gates' interpreter; override where python3 is not the name
 echo "=== trainnr end-to-end verification ==="
-# The desktop app is the one Rust crate left; it is its own workspace (own
+# the Studio is the one Rust crate left; it is its own workspace (own
 # Cargo.lock, the rerun 0.36 pins), so every cargo step runs inside it.
-step "formatting (trainnr-desktop)"  "(cd crates/trainnr-desktop && cargo fmt --check)"
-step "clippy (trainnr-desktop)"      "! (cd crates/trainnr-desktop && cargo clippy -q --all-targets 2>&1) | grep -qE '^error'"
-step "tests (trainnr-desktop)"       "(cd crates/trainnr-desktop && cargo test -q)"
+step "formatting (trainnr-studio)"  "(cd crates/trainnr-studio && cargo fmt --check)"
+step "clippy (trainnr-studio)"      "! (cd crates/trainnr-studio && cargo clippy -q --all-targets 2>&1) | grep -qE '^error'"
+step "tests (trainnr-studio)"       "(cd crates/trainnr-studio && cargo test -q)"
 step "docs describe real code" "\"$PY\" tools/check-docs.py"
 step "package layers (docs/80)" "\"$PY\" tools/check-layers.py"
 step "unsafe forbidden"        "\"$PY\" tools/check-unsafe-gates.py"

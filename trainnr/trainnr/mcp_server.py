@@ -1578,7 +1578,7 @@ def describe_studio() -> dict[str, Any]:
 
 def launch_studio() -> dict[str, Any]:
     """Start the Studio window on the current project (the built binary:
-    `$TRAINNR_STUDIO`, else crates/trainnr-desktop/target/release) and wait
+    `$TRAINNR_STUDIO`, else crates/trainnr-studio/target/release) and wait
     for its first heartbeat. Refuses when one already runs."""
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import launch  # noqa: PLC0415

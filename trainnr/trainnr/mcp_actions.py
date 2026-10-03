@@ -16,7 +16,7 @@ Environment shapes (each the wrapped tool's own documented launch):
 - pipeline tools:  uv run --project trainnr [--extra …] python tools/…
 - the T5 chain:    trainnr/.venv-train/bin/python tools/e2e-smoke.py
 - trainnr_mjlab (walk): uv run --project trainnr-mjlab python -m trainnr_mjlab.…
-- the Studio:      cargo run --release, in crates/trainnr-desktop
+- the Studio:      cargo run --release, in crates/trainnr-studio
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Rust build output (the desktop crate's own workspace)
+# Rust build output (the Studio crate's own workspace)
 target/
 **/target/
 

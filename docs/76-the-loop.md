@@ -592,7 +592,7 @@ as an event log**, and the agent **may launch and quit** the window.
 The one law holds: the Studio reads files and never talks to the MCP
 server. So control is three records under `<project>/.index/`, all
 mirrored between `trainnr/trainnr/project/control.py` and
-`crates/trainnr-desktop/src/control.rs`:
+`crates/trainnr-studio/src/control.rs`:
 
 | record | direction | shape | cadence |
 |---|---|---|---|
@@ -605,7 +605,7 @@ The verbs, and the MCP door over each (`trainnr/trainnr/mcp_server.py`):
 | verb | door | what it does in the window | refused when |
 |---|---|---|---|
 | — | `describe_studio` | reads the state file, adds `alive` and the presenter's last status | never; a missing Studio is reported, not raised |
-| — | `launch_studio` | starts the built binary (`$TRAINNR_STUDIO`, else `crates/trainnr-desktop/target/release/trainnr-desktop`) on the project and waits for its first heartbeat | one already runs; no binary |
+| — | `launch_studio` | starts the built binary (`$TRAINNR_STUDIO`, else `crates/trainnr-studio/target/release/trainnr-studio`) on the project and waits for its first heartbeat | one already runs; no binary |
 | `quit` | `quit_studio` | closes the window; past 5 s, terminates the pid | never |
 | `open` | `open_in_studio` | a page by its rail name; an artifact by version (its page opens with the drawer); a project by root; a `table` of the selected artifact by title (Joints, Actuators, Episodes…) in the exploration modal, an empty string closes it | no such page, artifact, project or table; a table with nothing selected |
 | `show` | `show_in_studio` | the presenter streams the artifact as itself; the Live view opens | no such artifact |
@@ -684,7 +684,7 @@ ranges, on mjlab's joystick override). While the scene runs itself the rows are 
 bars showing what the policy does; in drive mode they are sliders with
 a typed value. Ctrl+drag on the picture still shoves a body.
 
-**The wire** (`tools/studio-render-stream.py`, `crates/trainnr-desktop/src/viewport.rs`):
+**The wire** (`tools/studio-render-stream.py`, `crates/trainnr-studio/src/viewport.rs`):
 the same tagged stdin the camera uses, ten new tags — RUN, STEP, RESET,
 SPEED, MANUAL, CTRL, QPOS, VIS, RND, VIEW (a named camera view). RUN, STEP, RESET, SPEED, MANUAL,
 CTRL and QPOS cross into the physics process through the ring (a
@@ -865,7 +865,7 @@ agent's own door, the standing rule.
   since the index writes UTC), and a card's footer says how long ago.
   The Studio parses the ISO instants without a calendar crate
   (`model.rs`, `epoch_of`, Hinnant's days-from-civil).
-- *Views.* `crates/trainnr-desktop/src/listing.rs`: every page has a
+- *Views.* `crates/trainnr-studio/src/listing.rs`: every page has a
   Cards / Table / Matrix switch (remembered per page for the session,
   and set by the agent: `open_in_studio(view=...)`). The table's columns
   are the name, the summary keys the artifacts share (first six), and
@@ -903,7 +903,7 @@ page names the Scene strip and the agent's door instead of a port. And
 cell: 297 evaluation links overlapped the rows beneath).
 
 **Built 2026-09-09, item 9:** a command palette
-(`crates/trainnr-desktop/src/palette.rs`) on ⌘K (Ctrl+K elsewhere) over
+(`crates/trainnr-studio/src/palette.rs`) on ⌘K (Ctrl+K elsewhere) over
 every page and every artifact by name — pages first, then artifacts
 whose name starts with the query before those that merely hold it,
 newest first — Enter opens the first hit; the agent can open it with a

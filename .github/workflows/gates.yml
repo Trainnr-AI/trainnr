@@ -46,32 +46,32 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/trainnr-desktop
+          workspaces: crates/trainnr-studio
       - uses: astral-sh/setup-uv@v5
 
-      # The desktop app is the one Rust crate (the rig's crates and firmware
+      # the Studio is the one Rust crate (the rig's crates and firmware
       # moved to their own repository on 2026-10-02); it is its own
       # workspace, so cargo runs inside it.
-      - name: formatting (trainnr-desktop)
+      - name: formatting (trainnr-studio)
         run: cargo fmt --check
-        working-directory: crates/trainnr-desktop
-      - name: clippy (trainnr-desktop, no errors)
+        working-directory: crates/trainnr-studio
+      - name: clippy (trainnr-studio, no errors)
         # Same bar as the hook: errors block, warnings do not (yet). The
         # output is kept and shown, so a failure on the runner says why
         # (the first public run of 2026-10-02 failed silently).
         run: |
           cargo clippy -q --all-targets 2>&1 | tee clippy.log | tail -60
           ! grep -qE '^error' clippy.log
-        working-directory: crates/trainnr-desktop
+        working-directory: crates/trainnr-studio
       - name: unsafe still forbidden
         run: python3 tools/check-unsafe-gates.py
       - name: docs describe real code
         run: python3 tools/check-docs.py
       - name: package layers (docs/80)
         run: python3 tools/check-layers.py
-      - name: cargo test (trainnr-desktop)
+      - name: cargo test (trainnr-studio)
         run: cargo test -q
-        working-directory: crates/trainnr-desktop
+        working-directory: crates/trainnr-studio
 
       # The Python half mirrors tools/verify.sh: the suites need the sim,
       # mcp, deploy and viz extras (the "dependency-free core" of August

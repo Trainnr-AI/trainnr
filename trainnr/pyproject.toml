@@ -98,7 +98,7 @@ usd = ["newton[importers]~=1.6.0"]
 # party lists its task module here under its own name and `lerobot-eval
 # --env.task=<namespace>/<task>` finds it. Our own two are listed too.
 [project.scripts]
-# The one command a user types: `trainnr mcp` (an agent's config), `trainnr desktop`.
+# The one command a user types: `trainnr mcp` (an agent's config), `trainnr studio`.
 trainnr = "trainnr.cli:main"
 
 [project.entry-points."trainnr.tasks"]

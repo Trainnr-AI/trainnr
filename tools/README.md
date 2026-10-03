@@ -18,7 +18,7 @@ and the shared MuJoCo→Rerun mirror lives in `trainnr/trainnr/viz.py`; neither 
 
 | Tool | What it proves |
 |---|---|
-| `verify.sh` | Everything, one command: the desktop crate's fmt/clippy/tests, the doc, layer and unsafe gates, the Python packages (ruff, mypy, both unit suites), the USD import suite. The firmware, emulator and wire-replay steps moved with the rig to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig) (2026-10-02). `--serial <port>` adds real silicon |
+| `verify.sh` | Everything, one command: the Studio crate's fmt/clippy/tests, the doc, layer and unsafe gates, the Python packages (ruff, mypy, both unit suites), the USD import suite. The firmware, emulator and wire-replay steps moved with the rig to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig) (2026-10-02). `--serial <port>` adds real silicon |
 | `check-docs.py` | No doc names code that no longer exists |
 | `install-brush.py` | Brush's release binary for this machine (macOS arm64, Linux x86_64, Windows x86_64) into a user bin directory, its SHA-256 checked, no root: the splat trainer the capture chain runs |
 | `install-gsplat.py` | gsplat, the capture chain's CUDA splat trainer, into the train environment with CUDA's compiler wheels pinned to torch's build, its kernels built once; Linux and Windows, no system toolkit (a Mac uses Brush) |
@@ -53,10 +53,10 @@ archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
 | `planner-demos.py` | docs/66 D3: the planner expert presses an SO-101 task (`lift`, `block_stack`, `tool_insert`) — beats written from each seated scene, executed by chained IK, kept by the task's referee, every declared camera captured, the batch stamped `planner@<knobs>`; streams to the Studio by default; `--shards N --parallel M` presses in N runs with disjoint ranges and seeds and merges them (docs/66 D4: the datasheet then states the keep rate exactly) |
 | `kitting-demos.py` | T5's data source: referee-filtered scripted kitting episodes drawn over the task's whole declared band with ±30% DR — trajectories + frames + manifests, each manifest carrying the expert's own stamp (`expert_stamp`); `--first-episode K` shards one batch across parallel generators, or `--shards N --parallel M` does it for you and merges the records |
 | `camera-match.py` | Sim renders beside released real frames — camera placement is calibration, not decoration |
-| `studio-render-stream.py` | MuJoCo's own render as a subprocess service for `crates/trainnr-desktop`: frames out on stdout, orbit/zoom/size commands in on stdin — the app's 3D viewport without linking MuJoCo's C API into Rust; a scene is a preview task, the walk, or a deployment (`deploy:<name>` live, `:gate:<runtime>:<i>`, `:preflight:<i>`; `--project=<root>`, docs/77 §11) |
+| `studio-render-stream.py` | MuJoCo's own render as a subprocess service for `crates/trainnr-studio`: frames out on stdout, orbit/zoom/size commands in on stdin — the app's 3D viewport without linking MuJoCo's C API into Rust; a scene is a preview task, the walk, or a deployment (`deploy:<name>` live, `:gate:<runtime>:<i>`, `:preflight:<i>`; `--project=<root>`, docs/77 §11) |
 | `mcp-server.py` | The instrument's MCP surface over stdio: bundles (name@hash, fit records, SPREAD), the actuator library, task/engine registries, run manifests — read-only tools for any MCP client; the Studio's agent panel and `.mcp.json` both point here |
 | `studio-instrument-view.py` | The instrument's records into the Studio's embedded Rerun viewer, one shot with a blueprint: eval funnels as bar charts with readings, fit parameters as estimate+interval series per sweep with SPREAD verdicts, the STS3215 M1-vs-M6 friction budget on a real velocity axis |
-| `gen-app-icon.py` | Generates the Studio's dock icon (`crates/trainnr-desktop/assets/icon-256.rgba` + PNG preview) — the committed asset's provenance; re-run and commit both together if the mark changes |
+| `gen-app-icon.py` | Generates the Studio's dock icon (`crates/trainnr-studio/assets/icon-256.rgba` + PNG preview) — the committed asset's provenance; re-run and commit both together if the mark changes |
 
 ## Fitting and studies
 
@@ -91,6 +91,6 @@ archive, [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig), on
 
 Running now: `gate-deployment.py`, `attribute-deployment.py`, `preflight-deployment.py`, `capture-telemetry.py`, `public-log.py` (ingest), `import-usd.py`, `capture-scene.py` and trainnr_mjlab's `walk_train` each enter `<project>/mcp-jobs/` with a `.status` beside the record (stage, `done/total unit`). A run started by an agent sets `TRAINNR_RUN_SOURCE=agent`; a door's own job is adopted, never listed twice (docs/35 §5).
 | `wsl-run.sh` | Runs a command under `trainnr/wsl.env`, the WSL box's GPU routing in one file |
-| `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (the desktop crate's fmt/clippy/tests, docs, layers, numbers, unsafe, ruff over `trainnr/` and `tools/`, the unit suite) |
+| `setup-hooks.sh`, `hooks/pre-commit` | Installs and is the pre-commit gate (the Studio crate's fmt/clippy/tests, docs, layers, numbers, unsafe, ruff over `trainnr/` and `tools/`, the unit suite) |
 | `.ruff.toml` | Extends the pipeline's lint contract to `tools/`, with the per-file exceptions and their reasons |
 

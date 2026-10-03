@@ -73,7 +73,7 @@ fn resolve_repo_root(
             return root.to_path_buf();
         }
     }
-    // `crates/trainnr-desktop` is two directories under the repo root in a
+    // `crates/trainnr-studio` is two directories under the repo root in a
     // checkout; a copied binary never reaches this line with a live path.
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -257,7 +257,7 @@ mod tests {
         );
         // A named path that is not a checkout is ignored, and the
         // executable's ancestors are walked instead.
-        let deep = checkout.join("crates").join("trainnr-desktop").join("src");
+        let deep = checkout.join("crates").join("trainnr-studio").join("src");
         assert_eq!(
             resolve_repo_root(Some(std::env::temp_dir()), Some(deep.clone()), None),
             checkout

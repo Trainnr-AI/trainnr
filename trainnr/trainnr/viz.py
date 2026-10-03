@@ -29,7 +29,7 @@ VISUAL_ONLY_SKIP_GROUPS: tuple[int, ...] = (3, 4, 5)
 MIRROR_HZ = 20
 # The Studio's Rerun ingest door — the ONE home for the address every
 # feed and recorder connects to (the Rust shell binds the same port;
-# crates/trainnr-desktop/src/main.rs stays a documented mirror).
+# crates/trainnr-studio/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
 
 # What rerun 0.36 lets an application id (an "entry name") contain: ASCII

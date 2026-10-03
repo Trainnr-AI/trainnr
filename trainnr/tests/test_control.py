@@ -184,7 +184,7 @@ class State(unittest.TestCase):
         from trainnr.project.control import binary_rebuilt_since  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
-            exe = Path(tmp) / "trainnr-desktop"
+            exe = Path(tmp) / "trainnr-studio"
             exe.write_bytes(b"")
             started = exe.stat().st_mtime + 10.0  # launched after the build
 
@@ -283,7 +283,7 @@ class Lifecycle(unittest.TestCase):
             holder.listen(1)
             port = holder.getsockname()[1]
             project = create_project(Path(tmp) / "p", "p")
-            fake = Path(tmp) / "trainnr-desktop"
+            fake = Path(tmp) / "trainnr-studio"
             fake.write_text("#!/bin/sh\nsleep 1\n")
             fake.chmod(0o755)
             old = (ctl.VIEWER_PORT, ctl.PORT_FREE_TIMEOUT_S)
@@ -301,7 +301,7 @@ class Lifecycle(unittest.TestCase):
             _write_state(project)
             self.assertEqual(launch(project)["status"], "refused")
             (state_path(project)).unlink()
-            answer = launch(project, binary=Path(tmp) / "nowhere" / "trainnr-desktop")
+            answer = launch(project, binary=Path(tmp) / "nowhere" / "trainnr-studio")
             self.assertEqual(answer["status"], "refused")
             self.assertIn("nowhere", answer["reason"])
 
@@ -310,7 +310,7 @@ class Lifecycle(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             project = create_project(Path(tmp) / "p", "p")
-            fake = Path(tmp) / "trainnr-desktop"
+            fake = Path(tmp) / "trainnr-studio"
             fake.write_text("#!/bin/sh\necho 'no display'\nexit 3\n")
             fake.chmod(0o755)
             # A real Studio may hold the real port on this machine; the

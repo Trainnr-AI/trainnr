@@ -25,7 +25,7 @@ reporters in the release notes unless they prefer otherwise.
 - The `trainnr` and `trainnr-mjlab` Python packages and the `trainnr`
   command-line tool, including the MCP server (`trainnr mcp`) that agents
   connect to over stdio.
-- The desktop app (`crates/trainnr-desktop`), including the files it reads
+- the Studio (`crates/trainnr-studio`), including the files it reads
   from a project directory (`.index/`) and the processes it spawns.
 - The Claude Code plugin (`.claude-plugin/`): its skills, agents and the
   MCP server entry.
@@ -33,7 +33,7 @@ reporters in the release notes unless they prefer otherwise.
 ## Things to know
 
 - The MCP server executes actions on the machine that runs it (training
-  runs, simulators, the desktop app) in the project directory it is
+  runs, simulators, the Studio) in the project directory it is
   given. Treat it like any local developer tool: run it for projects you
   trust, and do not expose its stdio to untrusted agents.
 - `tools/cloud-gpu.py` provisions rented machines with an API key read

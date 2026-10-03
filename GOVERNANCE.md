@@ -27,7 +27,7 @@ the Functional Source License (FSL-1.1-ALv2).
 
 ## What is open and what is not
 
-The product repository (`trainnr`: the Python packages, the desktop app,
+The product repository (`trainnr`: the Python packages, the Studio,
 the CLI, the agent plugin, the robot bundles, the docs and the paper's
 records) is open source. A hosted service built on these packages
 (`trainnr-cloud`) is closed by decision (docs/80 §3, docs/83); nothing in

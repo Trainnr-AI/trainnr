@@ -13,17 +13,17 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 RENDER_STREAM = (REPO / "tools" / "studio-render-stream.py").read_text(encoding="utf-8")
-VIEWPORT_RS = (REPO / "crates" / "trainnr-desktop" / "src" / "viewport.rs").read_text(
+VIEWPORT_RS = (REPO / "crates" / "trainnr-studio" / "src" / "viewport.rs").read_text(
     encoding="utf-8"
 )
-MAIN_RS = (REPO / "crates" / "trainnr-desktop" / "src" / "main.rs").read_text(
+MAIN_RS = (REPO / "crates" / "trainnr-studio" / "src" / "main.rs").read_text(
     encoding="utf-8"
 )
 VIZ = (REPO / "trainnr" / "trainnr" / "viz.py").read_text(encoding="utf-8")
-SIMULATOR_RS = (REPO / "crates" / "trainnr-desktop" / "src" / "simulator.rs").read_text(
+SIMULATOR_RS = (REPO / "crates" / "trainnr-studio" / "src" / "simulator.rs").read_text(
     encoding="utf-8"
 )
-SHELL_SRC = REPO / "crates" / "trainnr-desktop" / "src"
+SHELL_SRC = REPO / "crates" / "trainnr-studio" / "src"
 MODEL_RS = (SHELL_SRC / "model.rs").read_text(encoding="utf-8")
 CONTROL_RS = (SHELL_SRC / "control.rs").read_text(encoding="utf-8")
 DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
@@ -46,7 +46,7 @@ def constant(source: str, pattern: str) -> str:
 class RenderSideCap(unittest.TestCase):
     def test_python_and_rust_agree_on_the_render_cap(self) -> None:
         # tools/studio-render-stream.py declares itself a mirror of
-        # crates/trainnr-desktop/src/viewport.rs; nothing enforced it
+        # crates/trainnr-studio/src/viewport.rs; nothing enforced it
         # until 2026-09-01.
         py = constant(RENDER_STREAM, r"^MAX_RENDER_SIDE = (\d+)")
         rs = constant(VIEWPORT_RS, r"const MAX_RENDER_SIDE: u32 = (\d+);")
