@@ -24,6 +24,7 @@
 </p>
 
 <p align="center">
+  <a href="#whats-inside">What's inside</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#what-it-does">What it does</a> ·
   <a href="docs/README.md">Docs</a> ·
@@ -48,6 +49,22 @@ Every step is a tool of one **MCP server**, so your coding agent runs the
 loop by conversation. Every result is a **record** the next step cites,
 stamped `name@hash`. The **Studio**, a desktop app, shows each stage as it
 lands. For developers with one robot and companies with a fleet.
+
+## What's inside
+
+| Area | What trainnr does |
+|---|---|
+| **Physical AI, end to end** | Robot learning from the robot's own data: real-to-sim, synthetic data, training, evaluation, sim-to-real deployment, and the data flywheel back, driven by an AI agent over MCP |
+| **Data collection** | Robot telemetry from ROS 2 bags (rosbag2), MCAP, Unitree's DDS (`rt/lowstate`, `rt/lowcmd`), LeRobot datasets, motion capture (marker CSV, BVH) and registered public robot logs, each with its rate, dropouts, licence and provenance |
+| **Real-to-sim** | System identification of joints and actuators with confidence intervals (MuJoCo's `sysid`, BAM actuator models), an identified digital twin stamped `name@hash`, robots onboarded from MJCF, URDF or Isaac Sim USD (through Newton), captured scenes from a phone video as Gaussian splats with a collision proxy |
+| **Simulation** | MuJoCo on CPU, MuJoCo Warp and MJX on the GPU, mjlab for massively parallel training, the Studio's interactive simulator with the Rerun viewer |
+| **Synthetic data creation** | Scripted and motion-planned demonstrations under recorded domain randomization, kept by the task's success criterion, multiplied across seeds, exported as LeRobot v3 datasets with a datasheet |
+| **Reinforcement learning for robotics** | PPO on mjlab (rsl_rl) for legged locomotion, domain randomization drawn from the identified intervals, latency randomization, teacher-student distillation, DAgger, a linter that refuses randomization that silently does nothing |
+| **Imitation learning and VLAs** | ACT through LeRobot, a Gymnasium environment and a LeRobot evaluation plugin, and openpi (π0, π0.5) policies evaluated through the same protocol |
+| **Evaluation** | Paired, seed-matched trials, exact Clopper-Pearson intervals, milestone funnels, sensitivity tables, mismatch matrices across the sim-to-real gap |
+| **Sim-to-real deployment** | ONNX export with a manifest, a sim-to-sim gate on MuJoCo and on Unitree's own simulator over DDS, failure attribution (latency first), pre-flight checks, soft stops |
+| **Telemetry and monitoring** | Deployed robots' telemetry re-identified against their fitted intervals: drift detected per parameter, re-identification recommended, the new fit fed back into training |
+| **Agents and tools** | One MCP server with 76 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
 
 ## Quickstart
 
