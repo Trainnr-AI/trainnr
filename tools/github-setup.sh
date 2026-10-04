@@ -28,7 +28,6 @@ say "repository: $REPO (private: $PRIVATE)"
 # organisation's profile is left as it is.
 api -X PATCH "repos/$REPO" \
   -F has_issues=true -F has_discussions=true -F has_wiki=false -F has_projects=false \
-  -F allow_forking=true \
   -f homepage=https://github.com/Trainnr-AI/trainnr \
   -F allow_merge_commit=false -F allow_squash_merge=true -F allow_rebase_merge=true \
   -F allow_auto_merge=false -F delete_branch_on_merge=true -F allow_update_branch=true \
@@ -51,6 +50,10 @@ say "actions: read-only token, no PR approvals by Actions, allow-listed actions 
 # A first-time or outside contributor's workflow waits for a maintainer's
 # approval before it runs (public repositories only).
 if [ "$PRIVATE" = "false" ]; then
+  # Forks are how outside contributors open pull requests; GitHub allows
+  # them on a private repository only when the organisation does.
+  api -X PATCH "repos/$REPO" -F allow_forking=true >/dev/null
+  say "forks: allowed"
   api -X PUT "repos/$REPO/actions/permissions/fork-pr-contributor-approval" \
     -f approval_policy=all_external_contributors >/dev/null
   say "actions: every outside contributor's run waits for approval"
