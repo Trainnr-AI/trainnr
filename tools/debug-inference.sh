@@ -4,7 +4,7 @@
 #
 # Why two: ONNX Runtime filters in C++ (ORT_LOG, default `error`) before
 # anything reaches Rust's tracing (RUST_LOG). Setting only one gives
-# silence that looks like "nothing wrong". See docs/11-perception-stack.md.
+# silence that looks like "nothing wrong". See a note.
 #
 #   tools/debug-inference.sh cargo run --release -p vision --bin bench
 #

@@ -2,7 +2,7 @@
  "id": "splat-renderer-cpu-2026-09-22",
  "claim": "mujoco_warp 3.13.0's Gaussian-splat ray tracer runs on a CPU-only Warp on Apple Silicon and composites correctly: a MuJoCo box hides the splat wall behind it and a splat pillar hides the floor in front of it, with splat depth in the depth buffer. It is slow there: 26 ms per frame for 2 worlds at 160x120 with 2,000 splats, and 1,407 ms (median of ten) for 4 worlds at 320x240 with 4,800 splats, about 3 frames a second, after a 0.8 s first-call kernel compile. The field publishes no frame rate for this renderer; this is the CPU one, the GPU one is still unmeasured.",
  "date": "2026-09-22",
- "repo_commit": "21ab580",
+ "repo_commit": "db20c62",
  "argv": [
   "uv venv -p 3.12 && uv pip install mujoco-warp==3.13.0 'mujoco>=3.12' 'warp-lang>=1.15' numpy pillow  (a scratch venv beside the repo; the walk package stays on its 3.11 pins)",
   "python probe: mjw.create_render_context(mjm, nworld=4, cam_res=(320, 240), render_rgb=True, render_depth=True, splat_position=(N,3), splat_rotation=(N,4) wxyz, splat_scale=(N,3), splat_rgba=(N,4)); mjw.render(m, d, ctx) x10; the scene: a plane, a red box on a free joint, a camera at (0,-2.2,1.0); the splats: a green wall of 4,000 at y=+1.2, a blue pillar of 800 at (-0.55,-0.8)"
@@ -31,7 +31,7 @@
  },
  "protocol": "docs/78-the-scene-loop.md §4 E0/E2; docs/e2e-research/75 §4",
  "caveats": [
-  "CPU only: the box's GPU rate is the number that matters for training and is unmeasured.",
+  "CPU only: the WSL machine's GPU rate is the number that matters for training and is unmeasured.",
   "A synthetic scene of a few thousand splats; a captured scene is hundreds of thousands to millions, and the CPU cost will scale with the BVH depth and the hits per ray (max 32).",
   "Timing by wall clock around wp.synchronize() on a laptop with other processes; the median of ten is reported, not the minimum."
  ]

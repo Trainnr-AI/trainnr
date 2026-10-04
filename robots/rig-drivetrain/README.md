@@ -2,7 +2,7 @@
 
 The rig's two-motor drivetrain as a fittable MuJoCo model. **Every dynamics
 number in `model.xml` is a placeholder**, and that is the point: this bundle
-exists so Paper 0 (docs/23-research-agenda.md) has a parameter vector to fit
+exists so Paper 0 (the maintainers' research agenda (private)) has a parameter vector to fit
 into. After the fit, this directory carries the parameters *with confidence
 intervals* and becomes the catalogue's entry #0.
 
@@ -18,7 +18,7 @@ here must name the exact recording (`name@hash`) it was fitted from.
 ## Session 2026-08-24: the first real fits are in `fits/`
 
 Three sweeps (b, c, d), ratio-form fits — see the anchor note inside
-each record. Findings, all live in docs/07 and the paper draft queue:
+each record. Findings, all live in the maintainers' progress log (private) and the paper draft queue:
 the torque scale is unobservable exactly as the rehearsal predicted
 (the ~2 ms motor defeats the armature anchor at 50 Hz), the ratio
 `gear/damping` pins at ~1.5% per run, and **cross-run spread (5.6%

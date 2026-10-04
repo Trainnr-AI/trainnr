@@ -2,9 +2,9 @@
  "id": "scene-gap-neverwhere-hurdle-2026-09-22",
  "claim": "The first audit of a published splat scene's visible surface against its own collision proxy: on Neverwhere's hurdle_226_blue_carpet_v3 (MIT; 753,226 gaussians in the web splat, 145,241 collision faces, not watertight), the splat and the proxy are well aligned at the floor (the splats over the course sit at a median height of -0.002 m, median distance to the proxy 0.014 m) yet the gap is large away from it: inside the proxy's footprint the chamfer is 0.046 m, the 95th-percentile visible-to-proxy distance 0.185 m, 44.8 % of the visible surface lies more than 0.02 m from any collider, and 73.6 % of the proxy's surface lies more than 0.02 m from any visible gaussian (32 % beyond 0.05 m, 7 % beyond 0.10 m; the unseen samples sit at a median height of 0.17 m: hurdle faces and low walls). 91.0 % of the scene's visible surface lies inside the proxy's footprint at all; the rest is the corridor the course never covers. A first pass that audited the whole capture instead of the footprint reported a 3.2 m 95th percentile on this well-aligned scene, which is why the audit is scoped.",
  "date": "2026-09-22",
- "repo_commit": "49ffccd",
+ "repo_commit": "683aedc",
  "argv": [
-  "import_scene(source=<scratch>/neverwhere (hurdle_226_blue_carpet_v3.zip unpacked; sha256 b36604d74cf4b733...), name='hurdle-blue-carpet')  [MCP door, project scenes-mac on the Mac]",
+  "import_scene(source=<scratch>/neverwhere (hurdle_226_blue_carpet_v3.zip unpacked; sha256 b36604d74cf4b733...), name='hurdle-blue-carpet')  [MCP door, project scenes-mac on the M1 Mac]",
   "rq_pipeline.scenes.gap.measure(splats, proxy.obj, tolerance_m=0.02, seed=0): visible = opacity >= 0.5; footprint = the proxy's extent grown by 0.5 m; 200,000 visible centres sampled inside it against the proxy by Open3D ray casting; 100,000 proxy surface samples against the nearest visible centre anywhere by k-d tree",
   "diagnostic (scratch venv): the hidden fraction at 0.02 / 0.05 / 0.10 m tolerances and the unseen samples' height; the checkpoint's centres against the web file's (nearest 0.0000 m: the same frame); the author's visual mesh under collision_tf.json against the collision mesh (median 0.000 m)"
  ],
@@ -23,7 +23,7 @@
   "source": "https://huggingface.co/datasets/ziyc/neverwhere (MIT), scenes/hurdle_226_blue_carpet_v3.zip, 198,253,978 bytes, manifest dated 2026-09-16"
  },
  "artifacts": {
-  "record": "projects/scenes-mac/scenes/hurdle-blue-carpet/scene.json (the Mac; projects/ is not tracked)",
+  "record": "projects/scenes-mac/scenes/hurdle-blue-carpet/scene.json (the M1 Mac; projects/ is not tracked)",
   "splat": "projects/scenes-mac/scenes/hurdle-blue-carpet/splat.ply (world frame, 3DGS PLY)",
   "proxy": "projects/scenes-mac/scenes/hurdle-blue-carpet/proxy.obj + proxy.xml"
  },

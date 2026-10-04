@@ -32,8 +32,8 @@ from trainnr.collect.multiply import MultiplyPlan, multiply  # noqa: E402
 from trainnr.collect.press_batch import Seed  # noqa: E402
 
 # Contact/constraint capacity per world: the kitting bundle's measured
-# pair (docs/07 2026-08-27) was 4096/8192 for a HANDFUL of worlds;
-# 512/1024 per world held at W=64 (docs/07 B3.1).
+# pair (the log 2026-08-27) was 4096/8192 for a HANDFUL of worlds;
+# 512/1024 per world held at W=64 (the log B3.1).
 NACONMAX_PER_WORLD = 512
 NJMAX_PER_WORLD = 1024
 

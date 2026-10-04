@@ -2,14 +2,14 @@
  "id": "dds-gate-go2-c2-2026-09-13",
  "claim": "A sim-to-sim gate through the vendor's own stack catches handover faults a gate through our own runtime cannot: on the Go2 policy go2-c2-model_1499, our plain-MuJoCo gate passed 20/20 while Unitree's own simulator and controller, driven from a virtual gamepad over DDS, passed 0/20 with the robot never moving. The three causes were all ours and all invisible to the MuJoCo gate: two virtual gamepad nodes (their simulator read one, our runtime moved the other), an observation their manager empties when deploy.yaml declares history_length 0, and a base orientation read off a SportModeState message their bridge fills with position and velocity only. Fixed, the same policy passes 20/20 through their stack too, tracking less tightly than through ours (error ratio 0.11-0.41 against the 0.5 bound, versus 0.08 median and 0.15 max in plain MuJoCo).",
  "date": "2026-09-13",
- "repo_commit": "2f61f57",
+ "repo_commit": "66c5cae",
  "argv": [
   "gate_deployment(name='go2-c2-deploy', trials=20, seed=1000) [MCP door, runtime mujoco]",
   "gate_deployment(name='go2-c2-deploy', trials=20, seed=1000, runtime='dds') [MCP door, the stack launched by tools/gate-deployment.py --runtime dds]"
  ],
- "instrument": "plain MuJoCo + onnxruntime driven by the manifest alone; and unitree_mujoco + go2_ctrl over DDS (unitree_rl_mjlab, built from the cached checkout) on the WSL box (RTX 3090 Ti, Ubuntu under WSL2). The exact simulator build strings are in each gate record's protocol.instrument on the box; not transcribed here.",
+ "instrument": "plain MuJoCo + onnxruntime driven by the manifest alone; and unitree_mujoco + go2_ctrl over DDS (unitree_rl_mjlab, built from the cached checkout) on the WSL machine (RTX 3090 Ti, Ubuntu under WSL2). The exact simulator build strings are in each gate record's protocol.instrument on the WSL machine; not transcribed here.",
  "outcome": {
-  "policy": "go2-c2-model_1499, 1500 iterations on the deployable actor, 41 min on the box",
+  "policy": "go2-c2-model_1499, 1500 iterations on the deployable actor, 41 min on the WSL machine",
   "arms": {
    "mujoco_gate": {
     "successes": 20,
@@ -68,22 +68,22 @@
   "policy": "go2-c2-model_1499",
   "certificate": "38/40 at the stage-1 command envelope",
   "task": "go2-walk (the declared walk, deployable actor: the reference's seven observation terms in the reference's order)",
-  "note": "the stamps are in the manifests and gate records on the box; not transcribed here"
+  "note": "the stamps are in the manifests and gate records on the WSL machine; not transcribed here"
  },
  "artifacts": {
-  "mujoco_gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
-  "dds_gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate-dds.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate-dds.json (the WSL box)",
-  "their_controller_log": "projects/go2-walk/deploy/go2-c2-deploy/unitree/logs/controller.log (the WSL box)"
+  "mujoco_gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL machine; projects/ is not tracked)",
+  "dds_gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate-dds.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate-dds.json (the WSL machine)",
+  "their_controller_log": "projects/go2-walk/deploy/go2-c2-deploy/unitree/logs/controller.log (the WSL machine)"
  },
  "sources": {
-  "unitree_rl_mjlab": "the reference checkout at ~/.cache/trainnr/unitree_rl_mjlab on the box, read 2026-09-11",
-  "unitree_sdk2": "built and installed to /usr/local on the box, 2026-09-11"
+  "unitree_rl_mjlab": "the reference checkout at ~/.cache/trainnr/unitree_rl_mjlab on the WSL machine, read 2026-09-11",
+  "unitree_sdk2": "built and installed to /usr/local on the WSL machine, 2026-09-11"
  },
  "protocol": "docs/77-the-unitree-loop.md §7",
  "caveats": [
   "Sim only: both gates are simulators. No telemetry from a real Go2 exists for this robot, so nothing here claims hardware behaviour.",
   "The two gates are not a like-for-like pair: they draw their own seeded commands, and the DDS gate clips to what a gamepad stick can reach (1 m/s, 1 rad/s) whatever the manifest's ranges say.",
   "n is 20 per gate; the interval is the claim, not the point estimate.",
-  "Recorded on the WSL box and transcribed here on the Mac from the box's own run and its documented records (docs/77 §7). The gate JSONs that back every number live on the box because projects/ is not tracked; this record was not recomputed on the Mac, and the fields it could not read there say so rather than guess."
+  "Recorded on the WSL machine and transcribed here on the M1 Mac from the WSL machine's own run and its documented records (docs/77 §7). The gate JSONs that back every number live on the WSL machine because projects/ is not tracked; this record was not recomputed on the M1 Mac, and the fields it could not read there say so rather than guess."
  ]
 }

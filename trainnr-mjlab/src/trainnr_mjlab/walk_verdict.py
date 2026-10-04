@@ -297,7 +297,7 @@ class VerdictFeed:
 
 def blanked(images: Any) -> Any:
     """The camera, blanked: zeros of the frames' own shape and dtype.
-    The control the campaign 3 plan asks first (docs/07 2026-09-03):
+    The control the campaign 3 plan asks first (the log 2026-09-03):
     a student judged WITHOUT its image, with the full state still in
     hand — if the score holds, the image was never used, and the next
     distill trains without the privileged state."""

@@ -2,7 +2,7 @@
 
 The Studio can launch the viewer and index a project, but until now it
 could not POINT the viewer at an artifact: a click showed a card. This is
-the door docs/64 §3 named `show_in_studio` and never built. One function
+the door docs/80 named `show_in_studio` and never built. One function
 per kind, each logging the artifact into Rerun with a blueprint that fits
 it — a robot as its meshes in a 3D view; a recording's channels as time
 series with a scrubber; an experiment's curves; a certificate's funnel as

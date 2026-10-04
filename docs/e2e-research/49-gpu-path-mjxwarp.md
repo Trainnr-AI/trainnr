@@ -18,7 +18,7 @@ order.*
 
 ## Headline, all VERIFIED by execution on 2026-08-27
 
-- **`uv pip install "mujoco-mjx[warp]"` works on the Mac.**
+- **`uv pip install "mujoco-mjx[warp]"` works on the M1 Mac.**
   mujoco_warp is vendored inside mujoco-mjx; Warp's CPU backend runs
   the full pipeline on Apple Silicon (no Metal, CPU device — the
   mujoco_warp README: NVIDIA GPU "for fast simulation, but supports
@@ -98,7 +98,7 @@ through for busy scenes. The acceptance gauntlet
 (`tests/test_mjx_backend.py`) admits it by contract: census parity
 through the same gate, shape-refusal parity, instrument stamp
 (`mjx-warp-3.12.0+warp-1.16.0+cpu` measured here), and a divergence
-bound against the reference instrument — MEASURED on the Mac:
+bound against the reference instrument — MEASURED on the M1 Mac:
 **3.52e-07 max over 3 worlds x 50 steps** on the pendulum scene
 (bound set at 1e-3: a conversion-layer bug is orders of magnitude, not
 float32 noise). All four tests green on the Warp CPU backend, exactly
@@ -127,7 +127,7 @@ came from a scratch venv resolving fresh.
 
 The adapter's first run on a GPU and on a real scene, both the same
 night. The pendulum gauntlet passes on the card with the same
-divergence the Mac measured on Warp's CPU backend (3.52e-07). The
+divergence the M1 Mac measured on Warp's CPU backend (3.52e-07). The
 kitting bundle (105 geoms, 23 bodies) with MJX's default contact and
 constraint capacities **dumped core** — not a warning, not an
 exception: the process died. With `naconmax=4096, njmax=8192` it runs:

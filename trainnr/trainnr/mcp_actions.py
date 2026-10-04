@@ -240,7 +240,7 @@ class Actions:
         argv += ["--episodes", str(episodes), "--seed", str(seed)]
         argv += ["--dr-span", str(dr_span)]
         if shards > 1:
-            argv += ["--shards", str(shards)]  # docs/66 D4: N runs, one merged batch
+            argv += ["--shards", str(shards)]  # a note D4: N runs, one merged batch
         return self.jobs.start("generate-planned-demos", argv, PIPELINE_DIR)
 
     def multiply_demos(

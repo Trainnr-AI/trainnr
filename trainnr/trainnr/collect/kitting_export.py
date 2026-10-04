@@ -155,7 +155,7 @@ def write_episode(  # noqa: PLR0913 - the whole episode, every part named
             frames_dir / DemoLayout.FRAME_FILE.format(tick=tick), quality=JPEG_QUALITY
         )
     # The multi-camera layout: frames/<camera_key>/<tick>.jpg — one
-    # subdirectory per declared camera (docs/66 §4; the flat layout
+    # subdirectory per declared camera (a note; the flat layout
     # stays what every committed single-camera batch reads as).
     for camera, cam_frames in (camera_frames or {}).items():
         camera_dir = frames_dir / camera

@@ -77,7 +77,7 @@ class DatasheetSummary:
     # kept or not, so a sharded batch states an EXACT keep rate where
     # a single run can only bound it.
     merged: MergedRate | None = None
-    # Visual draws (lighting, camera pose — docs/66 §4), spread per
+    # Visual draws (lighting, camera pose — a note), spread per
     # scalar knob or per vector component; empty for batches pressed
     # without visual DR.
     visuals: dict[str, DynamicsSpread] = field(default_factory=dict)
@@ -153,7 +153,7 @@ def summarize(demos_dir: str | Path) -> DatasheetSummary:
     the two entry points is the bug (review 2026-09-01)."""
     demos_dir = Path(demos_dir)
     # An episode directory without its manifest yet belongs to a shard
-    # still writing it (two presses fill one directory, docs/66 D4):
+    # still writing it (two presses fill one directory, a note D4):
     # not kept yet, not counted - a crash here took a shard down with
     # it (2026-09-03). A manifest that exists but does not parse still
     # raises: that is corruption, not timing.

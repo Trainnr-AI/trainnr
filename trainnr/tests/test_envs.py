@@ -247,7 +247,7 @@ class GymnasiumContract(unittest.TestCase):
             scale = drawn["joints.damping_scale"]
             self.assertTrue(np.allclose(env.model.dof_damping, nominal_damping * scale))
             gain = drawn["actuators.gain_scale"]
-            # BOTH kp terms, so the setpoint stays put (docs/07, the gain
+            # BOTH kp terms, so the setpoint stays put (the log, the gain
             # that was a setpoint).
             self.assertTrue(
                 np.allclose(env.model.actuator_gainprm[:, 0], nominal_gain * gain)

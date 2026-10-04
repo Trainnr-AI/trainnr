@@ -568,7 +568,7 @@ per check, run by an agent when it decides to.
 
 ### 9.2 Built (2026-09-13)
 
-*Built on the Mac (M1 Pro).*
+*Built on the M1 Mac (M1 Pro).*
 
 `trainnr/fleet/drift.py` (the rule, the record, `judge`), the kind's
 marker imported from there by `project/kinds.py`, the project's
@@ -1087,7 +1087,7 @@ lives. The cloud feed that follows a remote log stays as it is; the
 remote's own feeds now leave their files beside the remote's artifacts,
 which is what a pull brings home.
 
-**Built (2026-09-13, on the Mac).** The seam: `trainnr/viz.py`
+**Built (2026-09-13, on the M1 Mac).** The seam: `trainnr/viz.py`
 (`open_stream`, `sinks`, `viewer_file`, `viewer_files`,
 `studio_listening`, the `TRAINNR_VIEWER_FILE` knob). Through it: the
 mjlab recorder (a training run's `.viewer/train.rrd`, the reward

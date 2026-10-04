@@ -2,11 +2,11 @@
  "id": "go2-fit-delay-margin-replicated-2026-09-26",
  "claim": "The delay margin a measured joints fit buys the Go2 holds across seeds, and it is specific to the world each policy trained in: with the action 2 control ticks (40 ms) late in the fitted world (fit@0ad6202797c5, a public log's Go2), the three fit-trained seeds track 18, 16 and 13 of 40 (47/120 pooled) against the three declared-trained seeds' 0, 4 and 0 of 40 (4/120); in the declared world the picture flips, weaker: declared-trained 5, 9, 8 of 40 against fit-trained 1, 2, 0. With no delay every seed walks 38-40/40 in either world; at 3 ticks late every policy collapses (0-3/40). Training under a random 0-40 ms command lag (go2-c4-fit-lag, 1,500 iterations) did NOT widen the margin: it ended with twice the speed error (0.93 against 0.49), tracked 22/40 in its own world with no delay, 13/40 at 2 ticks and 5/40 at 3 - not converged at this length, not a refutation of the idea.",
  "date": "2026-09-26",
- "repo_commit": "b449b99",
+ "repo_commit": "a66b482",
  "argv": [
   "scratchpad batch.py through the doors: train_walk(agent='g3', robot='go2', iterations=1500, envs=4096, seed=1001|1002[, fit=FIT][, lag_dr_ms=40]); evaluate_walk(<run>/model_1499.pt, trials=40, seed=1000, device='cuda:0'[, judge_in_fit=<other world>][, delay=2|3])"
  ],
- "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL box; trainings 34-48 min each; 40 paired trials per cell",
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL machine; trainings 34-48 min each; 40 paired trials per cell",
  "outcome": {
   "arms": {
    "go2-c2-s1001 in the fitted world": {
@@ -361,7 +361,7 @@
   "Delay is walk_verdict's Delayed wrapper (the whole action late by whole control ticks of 20 ms)."
  ],
  "artifacts": {
-  "verdicts": "docs/artifacts/go2/certificates/ (go2-c2-s100*, go2-c3-fit-s100*, go2-c4-fit-lag-* certificate.json, one per cell); recorded at projects/go2-walk/runs/<run>/verdict/ (the WSL box; projects/ is not tracked)",
+  "verdicts": "docs/artifacts/go2/certificates/ (go2-c2-s100*, go2-c3-fit-s100*, go2-c4-fit-lag-* certificate.json, one per cell); recorded at projects/go2-walk/runs/<run>/verdict/ (the WSL machine; projects/ is not tracked)",
   "log": "the batch driver's log (scratchpad, not tracked)",
   "figure.svg": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.svg",
   "figure.pdf": "docs/figures/go2-fit-delay-margin-replicated-2026-09-26.pdf",

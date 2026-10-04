@@ -144,7 +144,7 @@ hashable — the one design tension the transcription must resolve;
 - G1: microduck MJCF in a stamped bundle; scene compiles on both
   engines; census tests.
 - G2: the env builds through trainnr_mjlab with zero linter findings and
-  the m6 bundle's stamp on the cfg; a 2-minute smoke train on the box
+  the m6 bundle's stamp on the cfg; a 2-minute smoke train on the WSL machine
   moves in the Studio.
 - G3: the real training run (on rented compute) reaches a walking
   gait; recorder + feed archives the run. **CLOSED 2026-09-01**: 8,000

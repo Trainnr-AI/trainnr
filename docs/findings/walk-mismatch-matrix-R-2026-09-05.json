@@ -2,7 +2,7 @@
  "id": "walk-mismatch-matrix-R-2026-09-05",
  "claim": "The mismatch matrix on the walk (R alone): the C1 policies point, narrow, wide (replicates pooled) judged pinned at the fit scaled by s (only R moved) and under drawn spans, 40 matched trials per run \u2014 point (trained none): x0.7 91/120, x0.8 97/120, x0.9 100/120, fit 108/120, x1.1 103/120, x1.2 100/120, x1.3 101/120, pm0.1 101/120, pm0.3 85/120; narrow (trained \u00b10.1): x0.7 94/120, x0.8 102/120, x0.9 102/120, fit 108/120, x1.1 107/120, x1.2 107/120, x1.3 106/120, pm0.1 105/120, pm0.3 95/120; wide (trained \u00b10.3): x0.7 87/120, x0.8 88/120, x0.9 88/120, fit 84/120, x1.1 86/120, x1.2 87/120, x1.3 84/120, pm0.1 87/120, pm0.3 90/120.",
  "date": "2026-09-05",
- "repo_commit": "d989135-dirty",
+ "repo_commit": "0927782-dirty",
  "argv": [
   "tools/walk-matrix-fold.py",
   "docs/artifacts/walk-c1",

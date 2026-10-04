@@ -253,7 +253,7 @@ for step 3's checkpoint.
   the flag is `trainnr.envs`; LeRobot 0.6.1's `eval_info.json`
   carries `per_task[].metrics.successes` as a list in episode order and
   **no per-episode seed** — the fold (step 4) derives `seed + i` from
-  the order and writes our own record; and the WSL box's D3D12 renderer
+  the order and writes our own record; and the WSL machine's D3D12 renderer
   is not bit-exact (±1 LSB in ~20 pixels, once ±2), so pixel pairing is
   asserted to within that noise while physics pairing stays exact.
 - **Step 4, the record**: `evaluate/records.py` — `EpisodeRecord`
@@ -423,7 +423,7 @@ with `--env.type=trainnr --env_eval_freq=600 --env.record_to=…` (the
 trainer's own in-loop eval wrote two of our records) → `lerobot-eval`
 with records (0/4, CP95 [0, 0.602], funnel `part_moved 2/4`) →
 `train-watch --play` on the checkpoint → 216/216 in both venvs. Twenty
-minutes on the WSL card. Found by running the full suite under the
+minutes on the WSL machine's GPU. Found by running the full suite under the
 train venv's MuJoCo 3.12 for the first time: a cross-version enum
 comparison in `arm_ik` (the review's joint-type guard refused every
 hinge), draccus's top-level `tests` package shadowing ours, and the

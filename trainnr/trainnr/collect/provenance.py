@@ -5,7 +5,7 @@ exporters (kitting_export, lerobot_export) and their tests."""
 PROVENANCE_FILE = "provenance.json"
 # An expert stamp is `<labeler>[+dagger:<driver>]`: the labeler produced
 # the actions the dataset learns from; the driver, when present, chose
-# the states (DAgger, docs/66 §6). Two datasets are one story when their
+# the states (DAgger, a note). Two datasets are one story when their
 # LABELERS agree — the driver is part of the story, not a second story.
 DAGGER_SEP = "+dagger:"
 

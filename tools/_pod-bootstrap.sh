@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The train venv on a rented machine — the WSL box's own recipe (docs/07
+# The train venv on a rented machine — the WSL box's own recipe (the log
 # 2026-08-26), verbatim: apt for the GL and rsync bits, uv, the lockfile's
 # extras, then a torch/CUDA/mujoco check that names the card.
 #

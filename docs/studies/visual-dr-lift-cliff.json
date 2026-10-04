@@ -56,7 +56,7 @@
         "headlight.diffuse_scale=0.5:1.5",
         "front.offset_m=-0.01,-0.01,-0.01:0.01,0.01,0.01"
       ],
-      "visual_basis": "declared visual span: headlight 0.5-1.5, front camera \u00b11 cm (docs/66 \u00a74; the so101 scenes are lit by the headlight only, docs/07 2026-09-02)"
+      "visual_basis": "declared visual span: headlight 0.5-1.5, front camera \u00b11 cm (the maintainers' data-engine note (private) \u00a74; the so101 scenes are lit by the headlight only, the maintainers' progress log (private) 2026-09-02)"
     }
   },
   "caveats": [

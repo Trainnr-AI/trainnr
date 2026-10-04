@@ -6,7 +6,7 @@ are. At r = 0.92 with five policies the 95% interval spans roughly
 [0.2, 1.0], which cannot tell an instrument from noise. Every function
 here therefore reports or enforces n, and the certificate quantity is
 `top_pick_probability` — the number a purchase decision actually turns on.
-(docs/e2e-research/30-the-pipeline.md, stage ③.)
+(docs/76, stage ③.)
 """
 
 from __future__ import annotations

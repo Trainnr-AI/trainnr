@@ -69,7 +69,7 @@ class _DevicePrograms:
     loaded model, and the jitted programs built over them — held on the
     backend, once per loaded model, so a new episode or a new stepper
     never recompiles. JAX keys its cache on the function object: a
-    fresh closure per call cost 0.8 s per call, measured (docs/07
+    fresh closure per call cost 0.8 s per call, measured (the log
     2026-08-27), before this cache."""
 
     mx: Any

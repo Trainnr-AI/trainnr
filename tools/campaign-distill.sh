@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The distill campaign (docs/66 D2, the paid half), on a rented card:
+# The distill campaign (a note D2, the paid half), on a rented card:
 #   press N teacher demonstrations -> export -> lerobot-train a vision
 #   student -> certify the student on 40 trials. Every stage's output
 #   lands in ONE log the Studio's cloud feed tails; the final line is a
 #   sentinel the feed turns into a card (a pod cannot stop itself
-#   without the API key we never ship - docs/07 2026-09-01).
+#   without the API key we never ship - the log 2026-09-01).
 #
 #   tools/campaign-distill.sh <run_root> <teacher.pt> [episodes] [steps] [worlds] [frame_every]
 #   e.g. /workspace/trainnr/runs/campaign-2 runs/microduck-walk/<stamp>/model_7999.pt 120 30000 48 1
@@ -13,7 +13,7 @@
 #   export | train | certify): a campaign parked after its export
 #   (2026-09-03) trains the next day from the dataset already on the
 #   volume. BLANK=1 adds the blanked-camera certificate after the sighted
-#   one (docs/07 2026-09-03, the plan's item 0).
+#   one (the log 2026-09-03, the plan's item 0).
 #
 # frame_every is the dataset's cadence in control ticks AND the student's
 # stride at certificate time: they must be equal, and for this gait they

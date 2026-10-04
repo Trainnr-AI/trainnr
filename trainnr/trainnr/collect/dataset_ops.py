@@ -2,7 +2,7 @@
 
 The inventory of 2026-09-02 named "no dataset operations" as gap 11:
 export took a directory whole, and two batches could not become one
-dataset. The DAgger loop (docs/66 §6) needs exactly that — the base
+dataset. The DAgger loop (a note) needs exactly that — the base
 teacher dataset plus each round's relabeled episodes, as one dataset
 the next student trains on. LeRobot ships the aggregator; this module
 wraps it so the union carries provenance: every source's sidecar

@@ -1,4 +1,4 @@
-# Newton delta + live probe: it runs on the Mac, and it drops our sensors
+# Newton delta + live probe: it runs on the M1 Mac, and it drops our sensors
 
 *Historical snapshot (2026-08-27): the release state (Newton 1.5.0 latest,
 1.6.0 expected mid-September) and the Isaac Lab beta status below are as
@@ -82,7 +82,7 @@ shows no sign of firing before late 2026.
 
 Unmodified: stay MJX/mujoco_warp; revisit Newton at Isaac Lab 3.0
 stable with manipulation support. The delta adds one plus (a future
-Newton adapter could be smoke-tested on the Mac, no CUDA needed) and
+Newton adapter could be smoke-tested on the M1 Mac, no CUDA needed) and
 one minus (the sensor drop is now verified by execution, not just
 documented — sensor plumbing would be a rebuild against Newton's own
 Sensor classes, strengthening the mjModel-parity argument for

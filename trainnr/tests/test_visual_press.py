@@ -1,5 +1,5 @@
 """Visual DR in the press (docs/66 §4) and the press's feed seam
-(docs/66 §0): draws through the REAL appliers on a compiled model,
+(a note): draws through the REAL appliers on a compiled model,
 the refusals at the adapter door, the manifest and datasheet carrying
 the draws, the multi-camera episode layout, and the loop reporting
 every attempt to its feed."""

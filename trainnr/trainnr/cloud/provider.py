@@ -2,7 +2,7 @@
 
 A training run at recipe scale rents a card (docs/31 §5). Which vendor
 rents it is the same kind of decision as which physics engine steps
-the scene — a backend behind a seam, never a foundation (docs/30 §3.5).
+the scene — a backend behind a seam, never a foundation (docs/76).
 This module is the seam: what an offer looks like, what a machine
 looks like, what a provider must do, and a registry that resolves
 providers by name (`trainnr.gpu_providers` entry points, the

@@ -2,7 +2,7 @@
 
 The RL stack (mjlab, warp, torch 2.13) and LeRobot (its own torch pin)
 cannot share an interpreter, and a vision student is a LeRobot
-checkpoint that must be JUDGED in the mjlab env (docs/66 D2, the
+checkpoint that must be JUDGED in the mjlab env (a note D2, the
 distill half). So the student runs as a subprocess in the train venv
 and the env talks to it over a pipe — which is also the shape of the
 real deployment (a policy server, a robot loop), not a workaround.

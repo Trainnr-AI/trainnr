@@ -8,7 +8,7 @@
   "pipeline tests/test_tasks_gripper_pick.py::Ladder (tasks/acceptance.accept once per rung of tasks/gripper_pick.LADDER)",
   "a 5 x 5 grid of cube starts over cube_spawn_x x cube_spawn_y (both -0.05..0.05 m), each rung through the same expert and referee (a scratch probe, not a tool)"
  ],
- "instrument": "mujoco-3.11.0+x86_64 (CPU MuJoCo; Newton solver, elliptic cone, impratio 10, Euler, 2 ms), the WSL box",
+ "instrument": "mujoco-3.11.0+x86_64 (CPU MuJoCo; Newton solver, elliptic cone, impratio 10, Euler, 2 ms), the WSL machine",
  "outcome": {
   "arms": {
    "expert": {"successes": 4, "trials": 4, "interval_95": [0.398, 1.0]},

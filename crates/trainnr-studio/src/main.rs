@@ -7,7 +7,7 @@
 //! `model.rs`), a MuJoCo-rendered viewport (via
 //! `viewport::ViewportFeed` — MuJoCo never runs in-process, see that
 //! module) and — filling the rest — **the actual Rerun viewer,
-//! embedded**, not an imitation of it. No chat panel (docs/64,
+//! embedded**, not an imitation of it. No chat panel (docs/80,
 //! 2026-09-02) and no code panel (2026-09-09), deliberately: the agent
 //! lives in the developer's own tool and drives this window through the
 //! MCP surface; code stays on the developer's laptop or GitHub; the

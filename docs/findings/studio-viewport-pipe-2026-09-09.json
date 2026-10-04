@@ -1,8 +1,8 @@
 {
  "id": "studio-viewport-pipe-2026-09-09",
- "claim": "The Studio's MuJoCo viewport pipe delivers 32.6 fps (p50 30.6 ms, p90 34.0 ms between frames) on the kitting scene on this Mac, against a native window's display rate; the render is 26.1 ms/frame at 1024x576 and the same at 1920x1080, of which the shadow pass is 17 ms and reflection 3.5 ms (6.2 ms with both off); with shadows off the pipe delivers 41.0 fps, bounded next by the render running inline with physics on macOS; a CGL context renders from a background thread at 12.2 ms/frame, so that coupling is removable.",
+ "claim": "The Studio's MuJoCo viewport pipe delivers 32.6 fps (p50 30.6 ms, p90 34.0 ms between frames) on the kitting scene on this M1 Mac, against a native window's display rate; the render is 26.1 ms/frame at 1024x576 and the same at 1920x1080, of which the shadow pass is 17 ms and reflection 3.5 ms (6.2 ms with both off); with shadows off the pipe delivers 41.0 fps, bounded next by the render running inline with physics on macOS; a CGL context renders from a background thread at 12.2 ms/frame, so that coupling is removable.",
  "date": "2026-09-09",
- "repo_commit": "b28df24",
+ "repo_commit": "fd54f4f",
  "argv": [
   "tools/studio-render-stream.py kitting --shm=<ring> | token-rate reader (14 s)",
   "mujoco.Renderer(model, 576, 1024).render() x40 with scene.flags toggled",

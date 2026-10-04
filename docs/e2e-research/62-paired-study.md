@@ -37,7 +37,7 @@ either way — the instrument reports what is, not what sells.*
 
 
 > **Caveat added 2026-09-04.** Every lift-study evaluation before commit
-> `ecb04ac` was judged through a harness that played each policy action
+> `6dfbbc2` was judged through a harness that played each policy action
 > for ONE control tick while the datasets were pressed at `frame_every=5`
 > (10 Hz) — every chunk five times too fast (the walk's cadence bug in a
 > second costume; found 2026-09-04). The two nulls stand as measured:

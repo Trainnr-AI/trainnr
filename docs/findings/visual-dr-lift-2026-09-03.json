@@ -2,7 +2,7 @@
  "id": "visual-dr-lift-2026-09-03",
  "claim": "On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera \u00b11 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth.",
  "date": "2026-09-03",
- "repo_commit": "ecb04ac-archive",
+ "repo_commit": "6dfbbc2-archive",
  "argv": [
   "../tools/study.py",
   "finding",

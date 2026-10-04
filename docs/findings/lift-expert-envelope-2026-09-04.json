@@ -2,7 +2,7 @@
  "id": "lift-expert-envelope-2026-09-04",
  "claim": "The SO-101 lift's scripted expert is insensitive to joint damping (identical success from 1x to 5x) and fails on servo gain alone: 4/4 at gain 1.0 and 0.75, 3/4 at 0.5, 1/4 at 0.35, 0/4 at 0.25 and 0.15 on the 4-trial grid; at 12 trials, 9/12 at 0.5, 12/12 at 0.45, 10/12 at 0.4 \u2014 the cliff is below 0.4 and the 4-trial grid was too coarse to place it \u2014 the folklore \u00b130% span never reaches the cliff, which is why every lift study at gain 0.75-0.85 scored 80/80.",
  "date": "2026-09-04",
- "repo_commit": "9709cd9",
+ "repo_commit": "7252eb5",
  "argv": [
   "uv run --extra sim python ../tools/lift-envelope-cell.py <damping> <gain> [trials]  # one process per cell"
  ],

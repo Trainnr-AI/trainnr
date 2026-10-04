@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One DAgger round on the walk (docs/66 §6), on a pod: the current
+# One DAgger round on the walk (a note), on a pod: the current
 # student drives N episodes over the bridge, the teacher labels every
 # state, the referee keeps the passes; the kept episodes are exported
 # and APPENDED to the student's dataset; a new student trains on the

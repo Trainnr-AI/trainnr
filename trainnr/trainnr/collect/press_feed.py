@@ -87,7 +87,7 @@ class StudioPressFeed:
         # operator can scrub the episode; the attempt timeline stays
         # set, so scrubbing attempts shows each keeper's last frame.
         # JPEG-compressed: raw RGB at 50 Hz over three cameras would
-        # sit on the viewer's throat (docs/07 2026-09-03).
+        # sit on the viewer's throat (the log 2026-09-03).
         cameras = dict(result.camera_frames or {})
         if result.frames:  # the single-camera path (kitting's layout)
             cameras.setdefault("camera", result.frames)

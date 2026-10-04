@@ -308,7 +308,7 @@ def compose_rig(*, car: bool = True) -> Any:
 # ------------------------------------------------------------ rear pick --
 
 # The rear floor pick, tuned in the twin 2026-08-24 (probe log in
-# docs/07). Grasp point in the CHASSIS frame; the basin is a measured
+# the log). Grasp point in the CHASSIS frame; the basin is a measured
 # 15/15 across +-8 mm in both axes — the parking spec for the fetch.
 # The tuning found two things a spec sheet never would: the claw's V
 # tilts with the hand (no wrist roll exists to level it), so dead-centre

@@ -152,7 +152,7 @@ def synthesize(condition: Condition, seconds: float = 6.0) -> ExcitationData:
 
     sample_times = np.arange(0.0, seconds, 1.0 / condition.telemetry_hz)
     # Amplitude dwarfs the ~20-count blind band (protocol rule 1,
-    # docs/23-research-agenda.md) and stays inside ctrlrange — the
+    # a note) and stays inside ctrlrange — the
     # governor's territory is deliberately never entered (rule 2).
     commands = staged_excitation(
         sample_times, frequencies_hz=[0.3, 0.9, 2.1], peak_amplitude=0.8, stages=3

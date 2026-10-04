@@ -2,7 +2,7 @@
  "id": "go2-walks-the-captured-garden-2026-09-23",
  "claim": "A plane-trained Go2 policy walks a captured real space under full physics: go2-c2 (38/40 on the trained plane), staged on the Mip-NeRF 360 garden captured through the chain (185 stills, COLMAP poses, a 6,674,386-gaussian splat, a declared scale of 0.56 m per unit, the ground as a heightfield and the overhangs as convex parts), completes the operator's six-waypoint course around the table 6/6 [0.541, 1.000] at 0.60-0.80 m/s with no fall, reaching every waypoint within 0.3 m inside the budget; the contact-site gap between the surface the splat shows and the proxy the feet touch is 0.7 cm chamfer, 2.5 cm at the 95th percentile.",
  "date": "2026-09-23",
- "repo_commit": "ffeea89",
+ "repo_commit": "6112cce",
  "argv": [
   "stage_deployment('go2-c2-deploy', scene='mipnerf-garden', name='go2-c2-garden-loop')",
   "gate_deployment('go2-c2-garden-loop', trials=6, seed=1000)  # the course gate: a staged scene is judged along its course"
@@ -52,7 +52,7 @@
  },
  "artifacts": {
   "gate": "docs/artifacts/go2/deploy/go2-c2-garden-loop/gate.json",
-  "scene": "projects/go2-walk/scenes/mipnerf-garden (the WSL box; projects/ is not tracked)",
+  "scene": "projects/go2-walk/scenes/mipnerf-garden (the WSL machine; projects/ is not tracked)",
   "figure": "docs/figures/viewport-deploy/garden-twin-in-splat-2026-09-26.png"
  },
  "protocol": "docs/78-the-scene-loop.md §8.9",

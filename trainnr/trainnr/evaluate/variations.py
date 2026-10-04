@@ -62,7 +62,7 @@ class VariationKeys:
     OFFSET_M = "offset_m"
 
     # The purely-visual knobs — what a generation-time visual-DR spec
-    # may draw (docs/66 §4). collect/scripted_demos.py refuses the
+    # may draw (a note). collect/scripted_demos.py refuses the
     # rest: dynamics draws have their own contract and their own basis.
     VISUAL_NAMES = frozenset({DIFFUSE_SCALE, OFFSET_M})
 

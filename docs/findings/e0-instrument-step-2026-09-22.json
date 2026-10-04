@@ -2,7 +2,7 @@
  "id": "e0-instrument-step-2026-09-22",
  "claim": "The instrument step costs nothing measurable for the Go2 walk: go2-c2's final checkpoint (1500 iterations, deployable actor), judged on mjlab 1.6.0 with mujoco and mujoco_warp overridden from 3.11.0 to 3.13.0 (warp 1.17.0, CUDA), certifies 38/40 with Clopper-Pearson 95 % [0.831, 0.994] and a median tracking-error ratio of 0.2727 - the 3.11 certificate's numbers to the last digit - and all 40 seeded trials have the same outcome and the same length on both instruments, the same two (12 and 23) failing on both. Two costs were found on the way and removed: mujoco_warp 3.13 turns every overflow warning on and printed the line-search one about 149,000 times in a 20-iteration smoke train (25 MB of log; 16 KB with the line-search warning off, physics untouched), and the certificate's identity did not include the instrument, so the 3.13 judgment would have taken the 3.11 certificate's name.",
  "date": "2026-09-22",
- "repo_commit": "5e90f8f",
+ "repo_commit": "14127fa",
  "argv": [
   "rq_mjlab/pyproject.toml [tool.uv] override-dependencies = ['mujoco==3.13.0', 'mujoco-warp==3.13.0']; uv lock; uv sync --locked --extra viz",
   "evaluate_walk(checkpoint='projects/go2-walk/runs/go2-c2/model_1499.pt', trials=40, seed=1000) [MCP door -> python -m rq_mjlab.walk_verdict, project go2-walk]",

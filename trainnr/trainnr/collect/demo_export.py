@@ -48,14 +48,14 @@ __all__ = [
 # threads per camera, no extra processes. Without it every frame is
 # encoded and written on the export's one thread — campaign 3
 # (2026-09-03) spent 12 minutes writing 240,000 frames the press had
-# rendered in 4.5 (docs/07); the writer is the export's wall, not the
+# rendered in 4.5 (the log); the writer is the export's wall, not the
 # reads.
 IMAGE_WRITER_THREADS_PER_CAMERA = 4
 
 
 def episode_camera_keys(episode_dir: Path) -> tuple[str, ...]:
     """The cameras a pressed episode stored: subdirectory names under
-    `frames/` (the multi-camera layout, docs/66 §4), or `()` for the
+    `frames/` (the multi-camera layout, a note), or `()` for the
     legacy flat single-camera layout every committed batch uses."""
     frames_dir = Path(episode_dir) / DemoLayout.FRAMES_DIR
     if not frames_dir.is_dir():
@@ -70,7 +70,7 @@ def guard_constant_dims(root: Path, *, floor: float = 1e-6) -> list[str]:
     `(x - mean) / (std + 1e-8)` then turns the mean's own float32
     rounding error into a hundreds-of-sigma training target — measured
     2026-08-31: the wrist normalized to ±453 and ACT's L1 pinned at
-    ~73 for a whole run (docs/07). With std = 1 a constant dimension
+    ~73 for a whole run (the log). With std = 1 a constant dimension
     normalizes to ~0 and unnormalizes to its constant, which is the
     only honest reading of "no variance". Returns the patched keys."""
     import json  # noqa: PLC0415
@@ -157,7 +157,7 @@ def export_episodes(  # noqa: PLR0913 - every fact of one dataset, named
         {getattr(m, "dynamics_basis", None) for m in manifests},
         "the dynamics basis",
     )
-    # Same rule for the visual ranges (docs/66 §4): the DRAWS should
+    # Same rule for the visual ranges (a note): the DRAWS should
     # differ per episode — that is the point — but where the ranges
     # came from must be one story per dataset.
     _one(
@@ -387,7 +387,7 @@ def export_demos(
 @dataclass(frozen=True)
 class ExportSpec(JsonRecord):
     """What a batch needs to become a dataset, written by the press that
-    made it (docs/66 §4: the dataset carries the rig): the state
+    made it (a note: the dataset carries the rig): the state
     vector's width and names, the camera keys, the instruction, the
     bundle the robot came from. A press with no `Task` object (the RL
     rollout press, D2) exports through the same engine as one with.

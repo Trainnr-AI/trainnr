@@ -2,12 +2,12 @@
  "id": "gate-attribution-fit-knobs-go2-c2-2026-09-25",
  "date": "2026-09-25",
  "claim": "Under the gate's own rule and the paired draw, go2-c2 (trained on the Go2's DECLARED joints: armature 0.01/0.02, no joint damping or friction) still passes with a real Go2's MEASURED joints set in: at the IIT chirp fit's armature, damping and Coulomb friction together it tracks 17/20 [0.621, 0.968], exactly at the gate's floor of 0.85 (certificate 38/40 minus 0.10), so it holds - by no margin. Alone, the fit's friction costs one trial (17/20), damping none (18/20), armature none (19/20). The ladders say where the margin runs out: added joint friction falls at 1 N*m (15/20), inside the fit's own 0.10-1.33 N*m span; armature survives 4x and damping 0.5 N*m*s/rad. First by the rung they fall at: kp 0.8x (15/20) and kd 2x (16/20), then latency 2 ticks (0/20, the only collapse), payload 6 kg, tilt 8 deg, push 2 m/s; friction scaled to 0.2x and encoder noise survive.",
- "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL box (Ubuntu under WSL2, x86_64); every rung 20 paired held twists at the gate's own seed 1000 (per-trial draw)",
+ "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL machine (Ubuntu under WSL2, x86_64); every rung 20 paired held twists at the gate's own seed 1000 (per-trial draw)",
  "protocol": "docs/77-the-unitree-loop.md §9",
  "argv": [
-  "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --fit projects/go2-sysid/robots/go2/fits/iit-go2-chirp@645b846a7d38.json (24 spawned workers); run twice (7fd186e, ac8f0e7), identical counts"
+  "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --fit projects/go2-sysid/robots/go2/fits/iit-go2-chirp@645b846a7d38.json (24 spawned workers); run twice (78b0bb1, d3894b3), identical counts"
  ],
- "repo_commit": "ac8f0e7",
+ "repo_commit": "d3894b3",
  "inputs": {
   "deployment": "go2 policy model_1499 (policy go2-c2-model_1499@99b1655e2cec)",
   "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f, 38/40 [0.8308, 0.9939]",
@@ -133,7 +133,7 @@
   "sensitivity": "most sensitive to kp 0.8 x, then kd 2 x"
  },
  "artifacts": {
-  "record": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/attribution.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/attribution.json (the WSL box; projects/ is not tracked); a copy at docs/figures/attribution/go2-c2-deploy-cited-attribution-fit-2026-09-25.json",
+  "record": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/attribution.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/attribution.json (the WSL machine; projects/ is not tracked); a copy at docs/figures/attribution/go2-c2-deploy-cited-attribution-fit-2026-09-25.json",
   "stream": "projects/go2-walk/deploy/go2-c2-deploy-cited/.viewer/attribution.rrd",
   "replays": "projects/go2-walk/deploy/go2-c2-deploy-cited/.viewer/attribution-poses.npz (39 rungs' worst trials); frames docs/figures/attribution/viewport-attribution-fit-999.png, viewport-attribution-latency2-347.png"
  },

@@ -95,7 +95,7 @@ class CameraCapture:
     """Every declared camera rendering on a cadence: `frame_every=0`
     means no renderer at all (headless generation and the unit tests -
     a GL context is a per-box concern, not the physics'). Otherwise
-    EVERY declared camera renders (docs/66 §4: the task declares a
+    EVERY declared camera renders (a note: the task declares a
     rig, the dataset carries the rig), renderers shared across cameras
     of the same resolution."""
 

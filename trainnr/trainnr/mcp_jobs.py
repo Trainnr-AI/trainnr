@@ -164,7 +164,7 @@ class JobRecord(JsonRecord):
 
 
 # The spawner is injectable so tests assert the exact command lines
-# without ever running the heavy tools (docs/64 §6 S2: "a test that
+# without ever running the heavy tools (docs/80 S2: "a test that
 # fakes the heavy call").
 Spawner = Callable[[Sequence[str], Path, Path], subprocess.Popen]
 

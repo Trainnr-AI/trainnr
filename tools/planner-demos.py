@@ -9,7 +9,7 @@ The planner (`trainnr.collect.choreography.PickPlacePlanner`) reads
 the object and the goal off each seated scene, writes the beats, and
 executes them by chained IK; the task's own referee keeps or discards.
 Dynamics are drawn per episode from ±`--dr-span` around nominal (0 =
-the nominal condition). Streams to the Studio by default (docs/66 §0).
+the nominal condition). Streams to the Studio by default (a note).
 """
 
 import argparse

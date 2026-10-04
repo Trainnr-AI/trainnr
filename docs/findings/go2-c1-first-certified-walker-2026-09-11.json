@@ -2,13 +2,13 @@
  "id": "go2-c1-first-certified-walker-2026-09-11",
  "claim": "The first certified Go2 walker: go2-c1, mjlab's velocity task on Unitree's go2.xml with the declared actuator constants, 8,000 PPO iterations over 4,096 worlds, certified at its trained command envelope on 40 seed-matched trials at two checkpoints: model_1400 walks 40/40 [0.912, 1.000] and model_7999 walks 40/40 [0.912, 1.000], median tracking-error ratios 0.25 and 0.20 against the 0.5 bound, no falls.",
  "date": "2026-09-11",
- "repo_commit": "8150ce4",
+ "repo_commit": "eacbf65",
  "argv": [
   "train_walk(agent='g3', task='go2-flat', name='go2-c1', seed=42)",
   "evaluate_walk('runs/go2-c1/model_1400.pt', trials=40, seed=1000, robot='go2')",
   "evaluate_walk('runs/go2-c1/model_7999.pt', trials=40, seed=1000, robot='go2')"
  ],
- "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL box)",
+ "instrument": "mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL machine)",
  "outcome": {
   "arms": {
    "go2-c1 model_1400, declared world": {
@@ -48,7 +48,7 @@
  "artifacts": {
   "certificates": "docs/artifacts/go2/certificates/go2-c1-model_{1400,7999}-cuda-seed1000-n40-p4bcbca/certificate.json",
   "records": "docs/artifacts/go2/certificates/go2-c1-records-cuda.jsonl",
-  "run": "projects/go2-walk/runs/go2-c1 (the WSL box; projects/ is not tracked)"
+  "run": "projects/go2-walk/runs/go2-c1 (the WSL machine; projects/ is not tracked)"
  },
  "protocol": "docs/77-the-unitree-loop.md §3 (the loop's protocol; the run's own notes of 2026-09-10 and 2026-09-11 are in the maintainers' log, not public)",
  "caveats": [

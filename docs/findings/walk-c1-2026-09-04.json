@@ -2,7 +2,7 @@
  "id": "walk-c1-2026-09-04",
  "claim": "C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared \u00b10.10 span, and the folklore \u00b10.30 span \u2014 same G3 recipe \u2014 each certified AT THE FIT (no law DR, pushes on) on 120 matched trials; a second certificate per run judges the policy under law DR drawn from \u00b10.10 around the fit (the module constant LAW_DR_SPAN, the same span for every arm \u2014 not each arm's own span).",
  "date": "2026-09-04",
- "repo_commit": "9cb7916-archive",
+ "repo_commit": "eaa497f-archive",
  "argv": [
   "../tools/walk-c1-fold.py",
   "/workspace/robotiq/runs/studies/walk-c1"

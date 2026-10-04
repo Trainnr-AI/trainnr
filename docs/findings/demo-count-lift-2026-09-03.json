@@ -2,7 +2,7 @@
  "id": "demo-count-lift-2026-09-03",
  "claim": "On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm.",
  "date": "2026-09-03",
- "repo_commit": "634de76-archive",
+ "repo_commit": "8efe0d5-archive",
  "argv": [
   "../tools/study.py",
   "finding",

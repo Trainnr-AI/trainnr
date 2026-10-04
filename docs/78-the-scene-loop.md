@@ -129,14 +129,14 @@ number).
 
 | # | experiment | gate, provable here |
 |---|---|---|
-| E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the box (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
-| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk — **met 2026-09-23 (§8.8-8.10):** a public capture (Mip-NeRF 360's garden, 185 stills) through the chain on the box, gsplat beside Brush, the scene staged and walked; a phone video of a room is still to come |
+| E0 | **The instrument step.** mujoco-warp 3.13, mujoco 3.13, warp ≥1.15 in the walk package; the walk suite; go2-c2's evaluation re-run on the new instrument so the certificate names it (both instruments' certificates stand, each with its stamp). | the suite green; a certificate on the new instrument, its interval overlapping the old one's or the difference recorded as a finding — **met 2026-09-22 on the WSL machine (§8.2):** 38/40 on both, identical to the last digit, every trial the same (finding `e0-instrument-step-2026-09-22`) |
+| E1 | **Capture to scene.** The `scene` kind and its record; `import_scene` for a Neverwhere folder (built 2026-09-22), `capture_scene(video, name)` for a phone video (next: COLMAP, Brush, the 2DGS proxy chain); the Studio reads it. | **half met 2026-09-22**: the first scene is the field's own (finding `scene-gap-neverwhere-hurdle-2026-09-22`: alignment verified, the gap measured and scoped, the card, drawer and viewer checked by capture); the capture chain built 2026-09-23 (§8.6) and measured against a known scene by a synthetic walk — **met 2026-09-23 (§8.8-8.10):** a public capture (Mip-NeRF 360's garden, 185 stills) through the chain on the WSL machine, gsplat beside Brush, the scene staged and walked; a phone video of a room is still to come |
 | E2 | **The walk in the scene.** The Go2 walk takes a scene as its stage: the proxy is the terrain, the splat is what the cameras see, rendered by mujoco_warp's ray tracer across every world; mjlab's camera passes the splat arrays through (the patch offered upstream); the Studio's Simulator shows the scene. Reward preview, then a smoke train. | camera observations from N worlds with the robot occluding the scene and the scene occluding the robot, checked by capture; the smoke train's reward terms in the Live view; frame rate with splats measured and recorded (the field has no number) — **half met 2026-09-22 (§8.1):** the stage, the cameras from the splat checked by capture on one CPU world with the frame time recorded, the contact-site gap and the assay's plumbing; the smoke train with cameras and the N-world rate wait for the box — **met 2026-09-23 (§8.5):** the Go2 trains on the scene's heightfield from the course's start, the head camera sees the splat in every world, its picture is in the actor, the Studio films it; 256 worlds at 64x64 over 393,684 gaussians: 393 steps/s against 4,054 without the camera and 4,500 on the plane |
 | E3 | **Data in the scene.** `generate_walk_demos` in the captured scene with camera frames; the batch cites the scene's version, the datasheet names the gap and the physics basis; camera pose, exposure and lighting as declared spans on the batch. | a batch whose provenance names the scene, the gap and the basis; the Studio's datasheet shows the frames from the scene — **built 2026-09-23 (§8.7), the batch empty by the referee:** the press stands on the scene, films the head camera inside the env and names the scene, its gap and its floor on every manifest; the first scene-trained walker survives 38/40 and tracks 0/40 on its own scene, so no episode passes the criterion and the record says so |
 | E4 | **Reproduction of the field's own number, in our stack.** Neverwhere's Go1 parkour scenes (MIT, the only legged splat benchmark with code and paired real trials) loaded as scene artifacts; a walk trained on their proxy terrain; our evaluation against their published 15/20 and 12/20 real, with the interval. | our sim rate on their scene, with the exact interval, beside their real rate; the gap between the two recorded as a finding, never explained away |
 | E5 | **The physics, measured (designed, gated on hardware).** A robot on the real floor of E1's capture: friction from interaction with an interval (the field's DROPO shape through `mujoco.sysid`'s intervals), the randomization span set from the interval, `check_drift` on a later recording of the same floor. | waits on a robot; the record's fields and the door's refusal ("declared, not measured") are built in E1 |
 
-E0 through E3 need the box's GPU and a phone. E4 needs their data and
+E0 through E3 need the WSL machine's GPU and a phone. E4 needs their data and
 a day. E5 needs a robot and is where the loop closes.
 
 *Build notes (2026-09-22): the order of work while the GPU workstation was unavailable.* Probed
@@ -144,7 +144,7 @@ the same day, before any building: mujoco_warp 3.13's splat renderer
 runs on a CPU-only Warp on a Mac (M1 Pro) and composites correctly, at about 3 frames a
 second for four worlds at 320 by 240 (finding
 `splat-renderer-cpu-2026-09-22`), so E2 can be smoked here at a small
-resolution and measured for real on the box later. Brush ships an
+resolution and measured for real on the WSL machine later. Brush ships an
 Apple-Silicon binary under Apache that trains a splat from COLMAP data
 on Metal and logs into Rerun; COLMAP 4.2 installs from Homebrew; CoACD
 and Open3D install from PyPI. And Neverwhere's scenes (MIT) each ship
@@ -319,7 +319,7 @@ moves to tier 3 beside `scenes`. Fourteen new tests.
    it, the meshes occluding the splat.
 5. **The assay's plumbing runs; its number waits for a walker.** Nine
    stages, every gate 0/2 with the smoke checkpoint, the cliff recorded
-   as unmeasurable by name. go2-c2 on the box is the first policy that
+   as unmeasurable by name. go2-c2 on the WSL machine is the first policy that
    can measure it.
    *2026-09-24: the dynamics cliff exists now, on the plane
    (docs/77 §9, `deploy/attribution.py`: latency, friction, payload,
@@ -327,7 +327,7 @@ moves to tier 3 beside `scenes`. Fourteen new tests.
    still waits for a walker that clears a course.*
 
 Still E2's: the smoke train with camera observations (mjlab's
-CameraSensor passing the splat arrays through, the box's GPU), the
+CameraSensor passing the splat arrays through, the WSL machine's GPU), the
 frame rate at N worlds, the Go2's real camera pose from the bundle.
 
 ## 8.2 E0 as built (2026-09-22, the GPU workstation)
@@ -402,7 +402,7 @@ Two consequences:
    would be recorded as unmeasurable, as it was with the smoke
    checkpoint; the course gate commands along the course the scene's
    author laid out and judges arrival.
-2. **The gate's cameras are dark on the box** (open). The gate runs in the
+2. **The gate's cameras are dark on the WSL machine** (open). The gate runs in the
    pipeline's environment, which is still mujoco 3.11 without
    mujoco_warp; the splat renderer is 3.13's. E0 moved the walk package
    only. Pictures in the gate mean the pipeline's own instrument step,
@@ -552,7 +552,7 @@ hides:
   vote on which side is up and the noise of six thousand floor points
   outvoted the box on it; the floor abstains now.)
 - **The proxy.** No dense reconstruction runs on a laptop (COLMAP's
-  patch-match needs CUDA; the 2DGS chain of §3 waits on the box), so
+  patch-match needs CUDA; the 2DGS chain of §3 waits on the WSL machine), so
   the proxy is the visible surface itself: the visible centres' top on
   a 2 cm grid, each cell its highest centre, a hole filled from its
   neighbours only when at least three of the eight around it are seen
@@ -763,7 +763,7 @@ the linker wants. Three pins were each a failed build first: an nvvm a
 minor newer than nvcc emitted PTX the assembler refused; runtime headers
 newer than nvcc lacked its launch stub; the wheels ship
 `libcudart.so.13` without `libcudart.so`. The kernels build in 109 s
-on the box.
+on the WSL machine.
 
 Measured on the garden, same poses, same GPU: gsplat 33 iterations a
 second at the start and 26 with 266k splats after densification began,
@@ -860,7 +860,7 @@ Three things were learned on the way, each by a measurement:
   cm to 11.5 cm).
 - **A component a minute.** CoACD holds one core; 78 components in
   series were an hour. They run across a process pool now (twelve
-  workers on the box's 24 cores): eight minutes.
+  workers on the WSL machine's 24 cores): eight minutes.
 - **Where the walker stops.** With the top open and a course down the
   line farthest from every leg, `go2-c2-under-between-legs` reaches the
   table's mouth in four of four trials and gets no farther: the base's

@@ -319,7 +319,7 @@ jobs:
           uv run --extra viz python -m unittest discover -s tests -t .
         working-directory: trainnr-mjlab
       - name: python tests (USD import, Newton)
-        # Its own environment: Newton cannot share a venv with mjx (docs/07
+        # Its own environment: Newton cannot share a venv with mjx (the log
         # 2026-09-25); a skip fails the step, as in tools/verify.sh.
         run: |
           UV_PROJECT_ENVIRONMENT=.venv-usd uv sync --extra usd --extra sim --extra gpu

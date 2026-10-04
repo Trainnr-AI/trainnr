@@ -106,7 +106,7 @@ class RustGateConformance(unittest.TestCase):
         )
 
     def test_the_recording_tells_the_logged_story(self) -> None:
-        # docs/07 records this session's shape; the parser must see it too:
+        # the log records this session's shape; the parser must see it too:
         # the arm genuinely tracked (many distinct pulse triples), and all
         # stalls latched at the very end (battery switch-off, not a fault).
         recording = parse_recording(CHASE_RECORDING)

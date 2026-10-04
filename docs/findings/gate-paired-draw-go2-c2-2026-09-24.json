@@ -2,13 +2,13 @@
  "id": "gate-paired-draw-go2-c2-2026-09-24",
  "claim": "Paired by trial index, go2-c2's plane gate reads 18/20 [0.683, 0.9877] where the count-dependent draw read 20/20 [0.8316, 1.0]: it still passes the gate's own tolerance rule (0.90 against the certificate's 0.95 minus 0.10), but the strict cliff rule can no longer attribute it, because at 20 trials only 20/20 clears the certificate's exact lower bound of 0.8308. The earlier ranking (latency 2 ticks, then kd x4) stands as a reading of the old draw only.",
  "date": "2026-09-24",
- "repo_commit": "c451dcf",
+ "repo_commit": "7e1181d",
  "argv": [
   "tools/gate-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited",
   "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --no-still",
   "tools/preflight-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited"
  ],
- "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL box (Ubuntu under WSL2, x86_64); 20 held twists at seed 1000, each trial drawn from its own (seed, trial) stream (deploy.gate.DRAW_NOW = per-trial/2)",
+ "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL machine (Ubuntu under WSL2, x86_64); 20 held twists at seed 1000, each trial drawn from its own (seed, trial) stream (deploy.gate.DRAW_NOW = per-trial/2)",
  "outcome": {
   "gate_count_draw": {
    "successes": 20,
@@ -68,7 +68,7 @@
   "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f"
  },
  "artifacts": {
-  "gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL box; projects/ is not tracked)",
+  "gate": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/gate.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/gate.json (the WSL machine; projects/ is not tracked)",
   "preflight": "docs/artifacts/go2/deploy/go2-c2-deploy-cited/preflight.json; recorded at projects/go2-walk/deploy/go2-c2-deploy-cited/preflight.json",
   "old_records": "the 2026-09-12 gate record was replaced by the re-run (its numbers are kept here, gate_count_draw); attribution.json beside the manifest is still the count-draw record, and the card marks it 'drawn by count (re-run to pair)'"
  },

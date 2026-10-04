@@ -2,11 +2,11 @@
  "id": "usd-import-2f85-equality-2026-09-24",
  "claim": "Newton's USD importer, written to MJCF by SolverMuJoCo, carries the Isaac Robotiq 2F-85 across with every joint limit and every mass equal to a pxr read of the USD: 8/8 hinge limits equal (radians, 1e-5) and 11/11 link masses equal (1e-4 relative); the loop closures hold within 7.5 mm at the closed target.",
  "date": "2026-09-24",
- "repo_commit": "f22a1ee",
+ "repo_commit": "c0e3dc9",
  "argv": [
   "pipeline tests/test_usd_import.py (HINGES = 8, BODIES = 12: the world and 11 links); the recipe in docs/e2e-research/77-usd-import-2026-09.md §4"
  ],
- "instrument": "Newton add_usd + SolverMuJoCo(save_to_mjcf), mujoco 3.11.0 (the project venv), the WSL box",
+ "instrument": "Newton add_usd + SolverMuJoCo(save_to_mjcf), mujoco 3.11.0 (the project venv), the WSL machine",
  "outcome": {
   "equality_counts": {
    "joint_limits": {

@@ -260,7 +260,7 @@ trial, on the RTX 3090 Ti box's x86-64 CPU:
 | cg | pyramidal | euler | fail | 3.3 | 11.79 | 8.2 |
 | pgs | pyramidal | euler | **PASS** | 3.9 | 1.58 | 57.6 |
 
-Two rows moved. **PGS passes here and fails on the Mac**, and every
+Two rows moved. **PGS passes here and fails on the M1 Mac**, and every
 penetration figure differs (baseline 1.5 mm there, 2.39 mm here; the
 pyramidal Newton row 4.7 vs 2.95). Same engine version, same inputs,
 different CPU architecture — arm64's and x86-64's floating point do

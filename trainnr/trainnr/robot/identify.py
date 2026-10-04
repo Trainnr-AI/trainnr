@@ -10,7 +10,7 @@ The deliverable is deliberately not "we identified your robot." It is
 **"here is what is pinned, what is not, and by how much"** — a parameter
 whose interval spans its allowed range was not identified by the data,
 and the report says so instead of pretending
-(docs/e2e-research/30-the-pipeline.md, stage ② sub-step 4).
+(docs/76, stage ② sub-step 4).
 """
 
 from __future__ import annotations

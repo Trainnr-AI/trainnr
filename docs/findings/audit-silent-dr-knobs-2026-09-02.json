@@ -2,11 +2,11 @@
  "id": "audit-silent-dr-knobs-2026-09-02",
  "claim": "Silent no-op domain-randomization knobs: five DR entries in Pollen's microduck_rl that measurably do nothing \u2014 two overwritten by the BAM actuator at construction (frictionloss, damping), one IMU field never read, one mass randomizer that is a no-op under mjlab 1.3, and config-dict writes the framework ignores (docs/e2e-research/57 \u00a75) \u2014 plus one in our own scene (lights.diffuse_scale on a model with nlight == 0); a construction-time linter now refuses the overwritten class.",
  "date": "2026-09-02",
- "repo_commit": "70c078c",
+ "repo_commit": "19ef78b",
  "argv": [
   "read at source (docs/e2e-research/57 \u00a75)",
   "tools/verify (rq_mjlab.linter tests)",
-  "uv run --extra sim python -  # pixel check, docs/07 2026-09-02"
+  "uv run --extra sim python -  # pixel check, the maintainers' progress log (private) 2026-09-02"
  ],
  "instrument": "mujoco-3.11.0+arm64 (pixel check); mjlab-1.6.0 (linter)",
  "outcome": {

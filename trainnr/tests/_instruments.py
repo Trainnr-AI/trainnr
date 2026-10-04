@@ -54,7 +54,7 @@ SO101_EXPERT_RATE: dict[str, dict[str, float]] = {
 }
 
 
-# The planner expert (docs/66 D3) on the same tasks, measured 2026-09-02
+# The planner expert (a note D3) on the same tasks, measured 2026-09-02
 # with the default PlannerKnobs: the scripted experts' ceiling, matched.
 SO101_PLANNER_RATE: dict[str, dict[str, float]] = {
     LIFT: {"mujoco-3.11.0+x86_64": 1.0},

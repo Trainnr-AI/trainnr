@@ -81,7 +81,7 @@ XL330_REFIT_BUNDLE = REPO / "robots" / "actuator-bundles" / "xl330-refit.m6.bund
 # fourteen are XL330s (57 §2, confirmed against the compiled model).
 SERVO_JOINTS = (r"^(?!trunk_base_freejoint).*",)
 TRUNK = "trunk_base"
-# The head (docs/07 2026-09-05): four actuated joints - neck_pitch,
+# The head (the log 2026-09-05): four actuated joints - neck_pitch,
 # head_pitch, head_yaw, head_roll - that the walk rewards nowhere
 # (upstream's head is command-driven at deployment, and that command is
 # not part of the walk), so the policy parks them at their limits and

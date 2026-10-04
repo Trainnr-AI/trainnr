@@ -612,7 +612,7 @@ def build_insert(arm_xml: Path = DEFAULT_ARM_XML) -> Task:
 
 
 # ------------------------------------------------------- the planner --
-# docs/66 §3 source 2: the pick/place beats written from poses, not by
+# a note source 2: the pick/place beats written from poses, not by
 # hand. The scripted experts above stay as the measured ceiling the
 # planner is compared against.
 ARM_IK_JOINTS = tuple(

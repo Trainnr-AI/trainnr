@@ -2,7 +2,7 @@
  "id": "bam-xl330-bootstrap-interval-2026-09-06",
  "claim": "A block bootstrap over Rhoban's 358 public XL330 bench logs (100 replicate refits of BAM's M6, 5000 trials each) identifies the motor constant to \u00b13.5 % (kt [0.3416, 0.3662]), the resistance to \u00b19 % (R [2.545, 3.036]), the armature to \u00b17 % and viscous friction to \u00b123 %, while the friction split between motor and external sides, the Stribeck knee and the alpha exponent span most of BAM's declared search ranges (bam/model.py: alpha [0.5, 10], dtheta_stribeck [0.01, 5], the quadratic terms [0, 0.01]) \u2014 unidentified by this bench. The shipped fit's kt (0.3660) sits at the interval's upper edge. The interval and all 100 replicate vectors ride on bundle xl330-m6@e57c25635c89 (robots/actuator-bundles/xl330-refit.m6.bundle.json).",
  "date": "2026-09-06",
- "repo_commit": "09b00e6-dirty",
+ "repo_commit": "ea33a0c-dirty",
  "argv": [
   "python3 tools/bam-bootstrap.py --bam <Rhoban/bam @ aa17d1cd5a84938b79143239de09ae33e175b402> --processed <bam.process --raw data_raw_2 --logdir processed --dt 0.005> --raw-zip xl330_raw.zip --actuator xl330 --model m6 --out boot-100 --replicates 100 --trials 5000 --workers 8 --seed 7 --emit-uncertainty robots/actuators/xl330-refit/m6.uncertainty.json"
  ],

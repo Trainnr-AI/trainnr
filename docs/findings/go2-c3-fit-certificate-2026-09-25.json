@@ -2,12 +2,12 @@
  "id": "go2-c3-fit-certificate-2026-09-25",
  "claim": "go2-c2's recipe trained on a measured joints fit instead of the declared constants: go2-c3-fit (fit@0ad6202797c5, a public log's Go2 identified from IIT's in-air chirp, 31/36 terms randomized over their bootstrap intervals and the 5 unpinned over ±0.5 of the estimate; gains at the declared ±10 %) trains 1,500 PPO iterations in 35 min to a final mean reward of 84.2 and certifies in the fitted world 40/40 [0.912, 1.000], median tracking-error ratio 0.26, against go2-c2's 38/40 [0.831, 0.994] on the declared constants: at the easy rung the fit costs nothing and buys nothing measurable.",
  "date": "2026-09-25",
- "repo_commit": "aad9f8c",
+ "repo_commit": "e95b693",
  "argv": [
   "train_walk(agent='g3', robot='go2', name='go2-c3-fit', iterations=1500, envs=4096, fit='fit@0ad6202797c5')",
   "evaluate_walk('runs/go2-c3-fit/model_1499.pt', trials=40, seed=1000, robot='go2')"
  ],
- "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL box)",
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL machine)",
  "outcome": {
   "arms": {
    "go2-c3-fit model_1499, fitted world": {
@@ -50,7 +50,7 @@
  "artifacts": {
   "certificate": "docs/artifacts/go2/certificates/go2-c3-fit-model_1499-cuda-seed1000-n40-p4ffbb8/certificate.json",
   "records": "docs/artifacts/go2/certificates/go2-c3-fit-records-cuda.jsonl",
-  "run": "projects/go2-walk/runs/go2-c3-fit (the WSL box; projects/ is not tracked)"
+  "run": "projects/go2-walk/runs/go2-c3-fit (the WSL machine; projects/ is not tracked)"
  },
  "protocol": "the fit chain of docs/76-the-loop.md: identify_system on the public chirp, train_walk(fit=...), evaluate_walk at the fit; run 2026-09-25 (the maintainers' log, not public)",
  "caveats": [

@@ -1,6 +1,6 @@
 """Sharding a press: N runs with disjoint episode ranges and distinct
 seeds fill ONE batch directory, and a merge restores what sharding
-took away - the keep rate (docs/66 §5, D4).
+took away - the keep rate (a note, D4).
 
 The datasheet once REFUSED to state a keep-rate bound for a sharded
 directory (right: each press restarts its attempt counter, so the

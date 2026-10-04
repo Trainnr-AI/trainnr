@@ -2,7 +2,7 @@
  "id": "go2-legged-fit-public-logs-2026-09-24",
  "claim": "The first identification of a real Go2's joints in this repository, from public logs and not our robot: on IIT's in-air chirp (200 Hz, 23.9 s, PD command as the torque) the torque balance explains 91-99 % of every joint's torque and pins 31/36 terms (armature 0.019-0.039 kg*m^2, damping 0.15-0.26 N*m*s/rad, Coulomb 0.10-1.33 N*m, calves the highest); on DFKI's 40 s field bag (1 kHz, their MPC/WBC controller, measured effort, swing legs only under the IMU's base state) it explains 0-51 % per joint and pins 13/36, with 17 terms on their zero bound: a walking log on rocky ground under someone else's controller does not identify the joints the way a chirp does, and the record says so per joint.",
  "date": "2026-09-24",
- "repo_commit": "8600ac9-dirty",
+ "repo_commit": "de88d06-dirty",
  "argv": [
   "identify_system(robot='go2@5003bf617b5f', recording='iit-go2-chirp@645b846a7d38') [MCP door, project go2-sysid]",
   "identify_system(robot='go2@d4ede9ec594d', recording='dfki-go2-field201@bccbb0801f6c')",

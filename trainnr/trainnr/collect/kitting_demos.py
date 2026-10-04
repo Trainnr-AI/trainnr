@@ -20,7 +20,7 @@ do.
 `first_episode` numbers a shard: N generators with disjoint ranges and
 seeds fill ONE batch directory in parallel (the render is the cost — 95
 s/episode on the WSL card, 45 on a rented one; six EGL contexts on WSL
-livelocked, three did not — docs/07 2026-08-28). The sim extra is
+livelocked, three did not — the log 2026-08-28). The sim extra is
 imported when the function runs, so the package imports without it.
 """
 
@@ -204,7 +204,7 @@ def _attempt(
 
 
 # ±4 mm of part-spawn jitter for multiplication: inside the ±5 mm basin
-# where open-loop replay survives (measured 2026-08-31, docs/07 B3.1 —
+# where open-loop replay survives (measured 2026-08-31, the log B3.1 —
 # 63/63 keep at ±5 mm, 1/12 at ±30 mm). Retargeting past the basin is
 # future work; this constant IS the honest amplification radius.
 SPAWN_NOISE = 0.004

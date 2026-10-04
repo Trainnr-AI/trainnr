@@ -6,7 +6,7 @@ policy's real interval, the rank-correlation interval with its n, and
 the top-pick probability. The gate decision is taken on the Fisher
 LOWER bound — never the point estimate — and the threshold is a
 required argument because no published basis for a default exists
-(docs/e2e-research/30-the-pipeline.md, stage ③).
+(docs/76, stage ③).
 """
 
 from __future__ import annotations

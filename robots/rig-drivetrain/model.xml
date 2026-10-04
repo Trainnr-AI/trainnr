@@ -4,7 +4,7 @@
 
      ⚠️ Every dynamics number below is a NOMINAL PLACEHOLDER, not a
      measurement — this file exists so Paper 0 has a parameter vector to
-     fit into (docs/23-research-agenda.md). The bench sweep spins the
+     fit into (a note). The bench sweep spins the
      wheels FREE (on the stand, off the ground), which is exactly what
      this model describes; ground contact is deliberately out of scope.
 

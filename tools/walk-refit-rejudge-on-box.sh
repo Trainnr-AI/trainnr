@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-judge the refit arms' withdrawn certificates with the fixed DR seam
-# (docs/07 2026-09-06, commit 62b999b: pins and declared spans are built
+# (the log 2026-09-06, commit 62b999b: pins and declared spans are built
 # from the bundle's params; before it the DR event took the refit
 # bundle's INTERVAL bounds, so every pinned, drawn-±0.30 and ±0.10
 # certificate of the six refit runs was judged in the wrong world —

@@ -2,7 +2,7 @@
  "id": "walk-mismatch-matrix-refit-2026-09-06",
  "claim": "The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run \u2014 point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 1/120, x0.9 33/120, fit 52/120, x1.1 64/120, x1.2 63/120, x1.3 53/120, pm0.1 53/120, pm0.3 42/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 12/120, x0.9 39/120, fit 46/120, x1.1 58/120, x1.2 54/120, x1.3 46/120, pm0.1 53/120, pm0.3 33/120.",
  "date": "2026-09-06",
- "repo_commit": "c4612f7-dirty",
+ "repo_commit": "c5cb7b9-dirty",
  "argv": [
   "tools/walk-matrix-fold.py",
   "docs/artifacts/walk-c1",
@@ -441,7 +441,7 @@
   },
   {
    "date": "2026-09-07",
-   "what": "re-judged on the WSL box with the fixed seam (commit 62b999b; tools/walk-refit-rejudge-on-box.sh; its log is not shipped, the counts are in this record): every pinned and drawn-\u00b10.30 cell replaced, 42 certificates; the fit column is the original six. The withdrawn certificates are in git at 6bbc3a5. The withdrawal is lifted."
+   "what": "re-judged on the WSL machine with the fixed seam (commit 7c56b72; tools/walk-refit-rejudge-on-box.sh; its log is not shipped, the counts are in this record): every pinned and drawn-\u00b10.30 cell replaced, 42 certificates; the fit column is the original six. The withdrawn certificates are in git at bef0702. The withdrawal is lifted."
   }
  ]
 }

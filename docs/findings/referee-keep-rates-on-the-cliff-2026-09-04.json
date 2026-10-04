@@ -2,7 +2,7 @@
  "id": "referee-keep-rates-on-the-cliff-2026-09-04",
  "claim": "Pressing 128 lift episodes at gain 0.4: the folklore \u00b10.30 span (whose draws never reach the judged gain) needed 128 attempts; the arms that draw near it needed more \u2014 identified 151, wide 143, point 160 \u2014 the referee discarding 10-20 % of attempts exactly where the scripted expert struggles.",
  "date": "2026-09-04",
- "repo_commit": "d25fb30",
+ "repo_commit": "e62b706",
  "argv": [
   "tools/study.py generate docs/studies/c1-competent-lift-cliff.json <out> --frame-every 5"
  ],

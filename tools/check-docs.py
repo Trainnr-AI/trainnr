@@ -19,7 +19,7 @@ business asserting anything about them — the first version did, and every
 one of those was a false alarm. A checker that cries wolf gets ignored,
 and then it is worth nothing when it is right.
 
-`docs/07-progress-log.md` is exempt entirely: it is a dated history, and
+the project's private notes is exempt entirely: it is a dated history, and
 it is *supposed* to name things that were later removed.
 
 Usage:  python3 tools/check-docs.py

@@ -14,7 +14,7 @@ initialisation (what iteration 0 of a run does); `stand`, zero actions
 it is what the reward function says about behaviour nobody trained,
 so a term that is silent (a misnamed sensor), a term that dominates,
 or a scale that surprises shows before a run is paid for. The field's
-tools show terms during a run (docs/33); this shows them before one.
+tools show terms during a run (a note); this shows them before one.
 """
 
 from __future__ import annotations

@@ -2,12 +2,12 @@
  "id": "scene-walk-garden-2026-09-25",
  "claim": "With the height scans fixed to see the ground (they had looked in an empty geometry group), a Go2 trained on the captured Mip-NeRF garden survives but does not yet track: go2-garden-c1 (4,096 worlds, 3,000 iterations, no camera, commands starting at 0.5 m/s and widening to ±1 m/s by iteration 1,000) judged on the garden at ±1 m/s: model_2999 survived 36/40 and tracked 3/40, success 3/40 [0.016, 0.204]; model_2000 survived 33/40, tracked 7/40, success 3/40 [0.016, 0.204]. It moves the commanded way but too loosely: median error ratio 0.69 (the pass needs under 0.5), mean error 0.45 m/s against 0.66 m/s commanded; slow commands fail too (2/10 under 0.5 m/s). Up from the blind hurdle walker's 0/40, not a walker.",
  "date": "2026-09-25",
- "repo_commit": "8b379ce",
+ "repo_commit": "292260c",
  "argv": [
   "train_walk(agent='g3', robot='go2', name='go2-garden-c1', scene='mipnerf-garden', cameras=False, iterations=3000, envs=4096) (the MCP door)",
   "evaluate_walk('runs/go2-garden-c1/model_2999.pt', trials=40, seed=1000, device='cuda:0', scene='mipnerf-garden')"
  ],
- "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL box; about 50,000 env-steps/s, 2.0-2.2 s per iteration",
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL machine; about 50,000 env-steps/s, 2.0-2.2 s per iteration",
  "outcome": {
   "arms": {
    "model_2999 on the garden": {
@@ -55,7 +55,7 @@
   "The command schedule widened sideways speed to ±1 m/s as well; the plateau at about 1.0 m/s training error began when it did."
  ],
  "artifacts": {
-  "run": "projects/go2-walk/runs/go2-garden-c1 (the WSL box; projects/ is not tracked)",
+  "run": "projects/go2-walk/runs/go2-garden-c1 (the WSL machine; projects/ is not tracked)",
   "verdicts": "projects/go2-walk/runs/go2-garden-c1/verdict/"
  },
  "protocol": "docs/78-the-scene-loop.md (the scene loop's protocol); run 2026-09-25 (the maintainers' log, not public)"

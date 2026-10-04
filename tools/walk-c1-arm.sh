@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One arm of the walk C1 study on one pod (docs/66 §8, 2026-09-04):
+# One arm of the walk C1 study on one pod (a note, 2026-09-04):
 # train the G3 teacher recipe under a declared law-DR span, then judge
 # it at the bundle's point fit (no law DR, pushes on) on 40 matched
 # trials — so every arm is judged in the same world. Arms run one per

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The mismatch matrix on the walk C1 policies (docs/70 §9, 2026-09-04):
+# The mismatch matrix on the walk C1 policies (docs/80, 2026-09-04):
 # every trained policy — point / narrow ±0.10 / wide ±0.30, each with
 # its replicates — judged (a) pinned at the fit scaled by s for each s
 # in SCALES (no draw: "the actuator is s× what you measured"), and (b)

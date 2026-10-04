@@ -72,7 +72,7 @@ class PressResult:
     frames: list[tuple[int, NDArray]] | None = None
     note: str = ""
     # Generation-time visual draws (lighting, camera pose — keys the
-    # engine's appliers know; docs/66 §4) and where their ranges came
+    # engine's appliers know; a note) and where their ranges came
     # from. Empty when the adapter drew none.
     visuals: dict[str, Any] = field(default_factory=dict)
     visual_basis: str = ""

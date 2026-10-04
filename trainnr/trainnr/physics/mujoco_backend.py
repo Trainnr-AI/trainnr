@@ -2,7 +2,7 @@
 rollouts for sysid, and the one stepping loop (`Stepper`).
 
 `mujoco.rollout` is the same batched API the sysid toolbox is built on
-(docs/e2e-research/30-the-pipeline.md stage ③ adopts it as the evaluation
+(docs/76 stage ③ adopts it as the evaluation
 loop core: threaded on CPU, divergence detection built in, and it accepts
 homogeneous model sequences — which is how per-unit variance gets swept).
 Closed-loop episodes — a policy in the loop, sensors or pixels — are the

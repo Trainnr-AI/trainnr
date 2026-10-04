@@ -4,7 +4,7 @@
         uv run python -m trainnr_mjlab.walk_press --latest --out ../runs/walk-demos \\
         [--episodes 12] [--worlds 9] [--seed 1000] [--frame-every 5] [--no-studio]
 
-docs/66 §3 source 3 and D2: the trained walk policy (a state-based PPO
+a note source 3 and D2: the trained walk policy (a state-based PPO
 teacher with the certified stack under it) rolls out in the batched
 env, and every world's first episode is JUDGED with the certificate's
 own criterion (walk_verdict: survived AND tracked). Keepers become

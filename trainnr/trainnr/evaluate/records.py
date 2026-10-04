@@ -1,7 +1,7 @@
 """The per-trial record: one JSON line per episode, and the fold that
 turns lines into counts.
 
-Written 2026-08-26 (docs/32 §4.3, docs/30 §7). Five of the six Arena
+Written 2026-08-26 (docs/32 §4.3, docs/76). Five of the six Arena
 reports converged on this artifact: the funnel, the sensitivity table,
 the placement verdicts and the executed horizon are all fields of the
 row the runner throws away today. LeRobot's `eval_info.json` keeps a
@@ -65,7 +65,7 @@ class EpisodeRecord:
     started identically. `seed` is what the runner passed (LeRobot's
     `seed + i`), None when the harness drove the trial by index. `steps`
     is physics steps executed. `events` is reserved for milestones
-    (docs/30 §7 row 39) — empty until they land.
+    (docs/76 row 39) — empty until they land.
     """
 
     source: str  # the task/scene as name@hash
@@ -198,7 +198,7 @@ def fold(records: Sequence[EpisodeRecord]) -> tuple[SimScore, ...]:
     Refuses what would silently break pairing: a (policy, trial) seen
     twice, or policies whose trial sets differ — a hole is an error with
     a named culprit, never a dropped row (Arena and LeRobot both let an
-    unscored episode leave the denominator; docs/30 §7).
+    unscored episode leave the denominator; docs/76).
     """
     trials_by_policy: dict[str, dict[int, bool]] = {}
     for record in records:

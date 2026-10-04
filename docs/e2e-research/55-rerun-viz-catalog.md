@@ -42,7 +42,7 @@ bookkeeping (AnnotationContext, Clear, RecordingInfo).
 Three entries earn a note against earlier research: `GaussianSplats3D`
 is first-class now (the splat capture layer of the scene loop, docs/78-the-scene-loop.md,
 has a native display path waiting); the MCAP archetypes land exactly
-where docs/e2e-research/25-deployment-and-fleet-ops.md pointed for fleet logging; and
+where a maintainers' strategy review (private) pointed for fleet logging; and
 `StateTimeline` is purpose-built for the stage/milestone bands the
 funnel already produces.
 

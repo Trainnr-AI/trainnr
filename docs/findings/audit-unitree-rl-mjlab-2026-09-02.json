@@ -2,7 +2,7 @@
  "id": "audit-unitree-rl-mjlab-2026-09-02",
  "claim": "Unitree's official mjlab stack: two task families behind 22 IDs; fall detection in deploy stubbed to return false; no action clip between policy and motors; two different G1 definitions across families; zero provenance; DR limited to friction/encoder bias/CoM/pushes with gains derived from rotor inertia.",
  "date": "2026-09-02",
- "repo_commit": "aad29e0",
+ "repo_commit": "eaf9474",
  "argv": [
   "two Explore agents over the repo dump (docs/e2e-research/65)"
  ],

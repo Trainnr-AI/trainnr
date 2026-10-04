@@ -174,7 +174,7 @@ records old→new stamps. Until then it stays, and the brand doc says so.
 
 ## 6. What stays frozen, and what a user never sees
 
-Frozen (docs/07 2026-09-09): kind ids (`certificate`, `deploy`, `batch`…),
+Frozen (the maintainers' progress log (private) 2026-09-09): kind ids (`certificate`, `deploy`, `batch`…),
 the `trainnr-*/N` schema strings (several are hashed into stamps), the
 existing dataset ids, the bundle schema string above. Internal words that
 may stay in code: press, referee, presenter, rail, twin (as

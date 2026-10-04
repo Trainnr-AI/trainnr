@@ -93,7 +93,7 @@ def main() -> None:
     def say(text: str) -> None:
         print(text, file=sys.stderr, flush=True)
 
-    # docs/66 §0: everything that happens streams to the Studio -- the
+    # a note: everything that happens streams to the Studio -- the
     # press run is watchable by default, opted out per run.
     if args.shards > 1:
         plan = plan_shards(args.episodes, args.shards, args.seed, args.first_episode)

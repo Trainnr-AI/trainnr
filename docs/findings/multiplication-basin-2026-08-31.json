@@ -2,7 +2,7 @@
  "id": "multiplication-basin-2026-08-31",
  "claim": "Open-loop replay of a kept kitting episode from a jittered start survives inside a measured basin: 9/9 and 63/63 (W=64) keep at \u00b15 mm spawn jitter, 1/12 at \u00b130 mm; the seed's own actions from its own start keep 3/3 on the device and 3/3 on the CPU reference \u2014 the amplification radius (SPAWN_NOISE = 0.004) is set inside the basin, not guessed.",
  "date": "2026-08-31",
- "repo_commit": "see docs/07 B3.1",
+ "repo_commit": "see the maintainers' progress log (private) B3.1",
  "argv": [
   "tools/press-multiply.py <seeds> <out> --worlds 64 (MJXWarpBackend filter, MuJoCoBackend re-verify)"
  ],
@@ -43,6 +43,6 @@
  "sources": {},
  "protocol": "docs/e2e-research/59 \u00a75 (Mimic's contract) and docs/e2e-research/60 \u00a73",
  "caveats": [
-  "Measured on the WSL box; the run directories live there, not on the volume or in git \u2014 the numbers are the log entry's."
+  "Measured on the WSL machine; the run directories live there, not on the volume or in git \u2014 the numbers are the log entry's."
  ]
 }

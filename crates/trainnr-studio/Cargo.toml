@@ -10,7 +10,7 @@ version = "0.1.0"
 edition = "2021"
 license = "FSL-1.1-ALv2"
 
-# The Studio (docs/35; chat-free since docs/64, 2026-09-02; code-free
+# The Studio (docs/35; chat-free since docs/80, 2026-09-02; code-free
 # since 2026-09-09): the window on the loop (docs/76). A project panel
 # reads the index the Python side writes; a MuJoCo subprocess renders
 # the sim viewport into a shared-memory ring; the ACTUAL Rerun viewer

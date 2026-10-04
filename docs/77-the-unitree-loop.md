@@ -118,7 +118,7 @@ read differently, and the window must say so rather than show a gap.
 | environment defined | the walk families (`trainnr/tasks/walks.py`): `trainnr/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; trainnr_mjlab builds the simulator environment from it (`trainnr-mjlab/src/trainnr_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | trainnr_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)`; the generic `train_policy` door of phase A5 was planned and not built | door built and smoked 2026-09-10; the real run needs the pod |
-| policy evaluated | the walk verdict: paired trials, exact interval, the funnel, judged at the command envelope the checkpoint trained under (friction 20) | `evaluate_walk` (`certify_walk` until 2026-09-12); the generic `evaluate_policy` door of phase A5 was planned and not built | done 2026-09-10 on the box: go2-c1 40/40 twice, go2-c2 38/40 |
+| policy evaluated | the walk verdict: paired trials, exact interval, the funnel, judged at the command envelope the checkpoint trained under (friction 20) | `evaluate_walk` (`certify_walk` until 2026-09-12); the generic `evaluate_policy` door of phase A5 was planned and not built | done 2026-09-10 on the WSL machine: go2-c1 40/40 twice, go2-c2 38/40 |
 | deployment exported | the deploy manifest (A6, `trainnr-mjlab/src/trainnr_mjlab/walk_export.py`): joint and actuator orders, gains, home pose, action scale and offset, the ordered observations, the control rate, the SDK joint map, every number read from the BUILT environment; ONNX with normalization folded in and checked against the actor; the trained scene as MJCF; the sim-to-sim gate (`trainnr/deploy/`) driving the ONNX through the manifest alone in plain MuJoCo | `export_deployment`, `gate_deployment` | built 2026-09-11 on a laptop checkpoint; the certified Go2 policy's export waits for its checkpoint here |
 | drift monitored | fresh telemetry identified without writing a fit record, judged against the union of the pinned intervals (docs/76 §9.1); empty on the Go2 — a method since 2026-09-24, no telemetry of ours yet (§8) | `check_drift` (A7) | built 2026-09-13, proved on the rig; waits on a real Go2 here |
 
@@ -178,12 +178,12 @@ read differently, and the window must say so rather than show a gap.
    layout is known to the walk package.
 
 7. **A bundle's stamp depended on the machine it was onboarded on**
-   (found and fixed 2026-09-10, the WSL box). `bundle.json` recorded the
+   (found and fixed 2026-09-10, the WSL machine). `bundle.json` recorded the
    source as an absolute path, and the record lives inside the directory
    the stamp hashes, so the Go2 onboarded from the same clone at the same
    commit was `go2@b6170cf88b09` on one machine and `go2@a185f9103878` on
    another. Fixed: the record keeps the source's last three path components
-   (`unitree_go2/xmls/go2.xml`), the same on every machine; the box's Go2
+   (`unitree_go2/xmls/go2.xml`), the same on every machine; the WSL machine's Go2
    is `go2@5003bf617b5f`, and the other machine's stamp changes when it re-onboards.
    The task stamp (`go2-walk@0e7e123a7de7`) was identical on both machines
    from the start, as a content hash should be.
@@ -249,7 +249,7 @@ read differently, and the window must say so rather than show a gap.
     green, fallen red, up but off-command blue). The run's presenter
     puts the stills on the iteration timeline next to the curves, so
     scrubbing the reward curve in the Studio shows the robot at that
-    checkpoint. Smoke on the box with three checkpoints: 17 s including
+    checkpoint. Smoke on the WSL machine with three checkpoints: 17 s including
     the env build, so the eighty-one stills of a finished run are a
     three-minute pass. Seen: the sheet, and the Live view with the
     still beside the curves at iteration 5669. Caveat: the rollout is
@@ -302,7 +302,7 @@ read differently, and the window must say so rather than show a gap.
 
 ## 5. The first run, by the doors (2026-09-10)
 
-**Done on the box, 2026-09-10.** The reference cloned at commit
+**Done on the WSL machine, 2026-09-10.** The reference cloned at commit
 `1425b15` into `~/.cache/trainnr/`, the venvs synced with their extras
 (the recorder tests need `rerun`, the dataset tests `pyarrow`: sync
 with `--extra viz` and `--extra sim --extra viz --extra mcp`). The
@@ -420,7 +420,7 @@ from the box (with its verdicts) so the export cites `go2-c1`'s
 evaluation and the gate judges against 40/40; then the reference's DDS
 simulator on a Linux box as a second, independent gate; then A7.
 
-**Done on the box, 2026-09-11.** The Mac's two commits pulled, both
+**Done on the WSL machine, 2026-09-11.** The Mac's two commits pulled, both
 venvs synced (onnx, onnxruntime 1.30), 634 pipeline tests green. Then
 by the doors: `export_deployment(run="go2-c1", checkpoint="model_7999.pt",
 name="go2-c1-deploy")` - `policy.onnx`, `deploy.json` citing the
@@ -602,7 +602,7 @@ MuJoCo gate's record standing beside it.
 
 Frictions on the way: 25, `libddsc.so.0` not found by their controller
 - `make install` put it under `/usr/local/lib`, which the loader does
-not search until `ldconfig`; the box's `trainnr/wsl.env` now carries
+not search until `ldconfig`; the WSL machine's `trainnr/wsl.env` now carries
 it and the stack passes it on. 26, a 0.15 s chord was missed by their
 1 kHz state machine (a press edge lives one message frame at ~900
 LowState messages a second); 0.3 s holds, each chord twice (a repeat
@@ -622,7 +622,7 @@ Closed on the GPU workstation, 2026-09-12/13 (§7.1): the real number, on
 go2-c2 trained on the deployable actor - certificate 38/40, MuJoCo
 gate 20/20, DDS gate 20/20, both judged against the certificate on
 `go2-c2-deploy-cited`, and the DDS gate mirrored into the Studio.
-Their simulator's window still takes the box's X11 path (the physics
+Their simulator's window still takes the WSL machine's X11 path (the physics
 thread is what publishes, so the gate does not care).
 
 What the loop still lacks on this robot: telemetry from a real Go2
@@ -640,7 +640,7 @@ root-only again after a reboot, with the line that fixes it.
 ### 7.1 The result: certificate, then export, then two gates
 
 **The second gate's first real number (2026-09-12/13).** go2-c2 -
-1500 iterations on the deployable actor, 41 minutes on the box, the
+1500 iterations on the deployable actor, 41 minutes on the WSL machine, the
 first run allowed there - certified 38/40 at the stage-1 envelope,
 exported as `go2-c2-deploy`, MuJoCo gate 20/20, and the DDS gate
 0/20 with the robot never moving. The DDS gate then found three
@@ -769,7 +769,7 @@ followed on 2026-09-25 (40/40 in the fitted world, finding
 ### 8.1 The window follows the run (2026-09-13)
 
 From today every feed on this branch saves its stream inside the
-artifact it narrates (docs/76 §10.5): the next training run on the box
+artifact it narrates (docs/76 §10.5): the next training run on the WSL machine
 leaves `runs/<run>/.viewer/train.rrd`, its evaluation
 `.viewer/verdict-<checkpoint>.rrd`, its gates
 `.viewer/gate-mujoco.rrd` and `.viewer/gate-dds.rrd`. A pull of the
@@ -1132,7 +1132,7 @@ the hot thread is "WSI", the presentation thread inside Mesa's dzn
 Vulkan driver, spin-waiting to present to an Xwayland surface that
 has no vertical blank. Presenting without vsync changed nothing; the
 OpenGL path (Mesa's D3D12 driver, WSLg's usual route) refuses the
-viewer's R32Float render target on this box even under the driver
+viewer's R32Float render target on this machine even under the driver
 environment. Left as is: the load is inside the driver, the window
 stays live. (b) The maintainer's pointer landed a row below where it
 hovered, while a pointer moved through X directly (XTest) hit the
@@ -1166,7 +1166,7 @@ app's colour"): the window's chrome is ours on every platform that
 lets a client draw it (`crates/trainnr-studio/src/chrome.rs`), the way
 Rerun's own viewer does - our top bar is the title bar (drag,
 double-click to maximize), re_ui's caption buttons at its right on
-Windows and Linux, invisible resize zones on the edges; the Mac keeps
+Windows and Linux, invisible resize zones on the edges; the M1 Mac keeps
 its traffic lights over a full-size content view. Rerun's helper sets
 the per-platform flags. Two things the transparent window then
 needed: the app's ground painted under everything (a see-through

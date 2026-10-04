@@ -2,7 +2,7 @@
  "id": "demo-count-lift-cliff-rep-2026-09-04",
  "claim": "The demo-count curve on the SO-101 lift NEAR THE EXPERT'S EDGE (gain 0.4, where the scripted expert scores 10/12; the id says 'cliff'), with THREE replicates per demo count \u2014 three independent presses and training runs each for 8/16/32/64/128 episodes \u2014 so the between-run variance that made the single-run curve non-monotone (n8 77/80 vs n16 56/80, 2026-09-03) is measured rather than assumed; comparisons pool the replicates (240 matched trials per count).",
  "date": "2026-09-04",
- "repo_commit": "bbf1edd-dirty",
+ "repo_commit": "8ca5ed9-dirty",
  "argv": [
   "tools/study.py",
   "finding",

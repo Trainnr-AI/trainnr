@@ -11,7 +11,7 @@ STUDIO doors (open, show, compare, time, simulate, screenshot). Reading
 and acting through the repo's public seams, never around them, so the
 answers an agent gets are the same ones the pipeline itself acts on.
 
-Two kinds of tools (docs/64 §3): the DESCRIBE family — read-only
+Two kinds of tools (docs/80): the DESCRIBE family — read-only
 windows through the repo's public seams — and, since S2, the ACT
 family (`trainnr.mcp_actions`): thin doors that spawn the CLI
 owning the work as a background job and hand back a handle
@@ -3043,7 +3043,7 @@ def build_server() -> Any:  # noqa: PLR0915
         "artifacts selected or shown, project switches, time scrubs."
     )(read_studio_events)
 
-    # The ACT family — S2's doors (docs/64 §3 stage 1), each spawning
+    # The ACT family — S2's doors (docs/80 stage 1), each spawning
     # the CLI that owns the work as a job.
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415

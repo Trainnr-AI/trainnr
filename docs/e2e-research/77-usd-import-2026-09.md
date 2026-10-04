@@ -5,7 +5,7 @@ used in the Studio directly, unchanged; and then: how USD becomes easily
 importable in the app, natively, through Newton and Warp.
 
 Four readers against primary sources, one per field, plus a hands-on
-experiment on the box with the actual asset: OpenUSD and the asset's
+experiment on the WSL machine with the actual asset: OpenUSD and the asset's
 own schemas; Newton's USD importer and its MuJoCo bridge; MuJoCo's own
 USD import status; every USD-to-MJCF converter that exists. Findings
 first, then the decision, then the plan.
@@ -23,13 +23,13 @@ five-bar finger linkage) and cannot live in a tree.
 
 ## 0. The answer in five lines
 
-1. **Not "without changing anything".** Neither MuJoCo wheel on the box
+1. **Not "without changing anything".** Neither MuJoCo wheel on the WSL machine
    (3.11.0, 3.12.0) can decode USD: the importer is a C++ decoder
    plugin that only exists in a from-source build with `MUJOCO_WITH_USD`
    (§3). The Studio loads what MuJoCo decodes, so a USD file at the
    door is refused today with "could not decode content".
 2. **Newton reads the asset natively and correctly, and writes MJCF.**
-   Measured on the box: `ModelBuilder.add_usd` on the 2F-85's
+   Measured on the WSL machine: `ModelBuilder.add_usd` on the 2F-85's
    Newton_compliant variant gives 11 bodies, 8 hinges, 2 loop closures
    and 1 mimic; `SolverMuJoCo(save_to_mjcf=…)` writes an MJCF that
    compiles in OUR mujoco 3.11.0 with every joint limit and every mass
@@ -54,7 +54,7 @@ five-bar finger linkage) and cannot live in a tree.
   aarch64, macOS and Windows for Python 3.9-3.13, and includes
   `pxr.UsdPhysics`. It composes references, sublayers, payloads and
   variant sets; it is the reader every converter below uses. Installed
-  in a scratch venv on the box and used for every number here.
+  in a scratch venv on the WSL machine and used for every number here.
 - **Newton 1.6.0** (PyPI `newton`, Apache-2.0; `warp-lang>=1.16`,
   Python 3.10-3.13, CUDA 12/13 or Warp's CPU backend). Its `importers`
   extra pins `usd-core>=25.5,<26.5` plus `newton-usd-schemas>=0.5.0`
@@ -113,7 +113,7 @@ the top level). Two variant sets:
 - The importer is `plugin/usd_decoder` in the MuJoCo tree, registered
   as a decoder plugin for `.usd|.usda|.usdc|.usdz`, built only under
   `MUJOCO_WITH_USD` (default OFF; the release wheels are built OFF).
-  Both wheels on the box lack it: no `usd`/`pxr` strings in
+  Both wheels on the WSL machine lack it: no `usd`/`pxr` strings in
   libmujoco, no plugin file, "could not decode content" on any USD
   path. Installing usd-core changes nothing (the importer is C++).
 - What it reads when built: `UsdPhysics` rigid bodies, collisions
@@ -131,7 +131,7 @@ the top level). Two variant sets:
   expects MJCF; convert USD or URDF assets". So the whole GPU stack
   below the Studio is MJCF-in, which is where our bundles already are.
 
-## 4. Newton as the importer: measured on the box
+## 4. Newton as the importer: measured on the WSL machine
 
 The experiment (scratch venv: usd-core 26.8, newton 1.6.0, warp 1.17.0,
 mujoco 3.11.0, mujoco-warp 3.11.0):
@@ -181,7 +181,7 @@ and the bundle is checked in as `robots/robotiq-2f85-isaac/` (stamp
 importer audit landed on its record the same evening, and `@a2b73f6d43bc` once
 the audit moved to `audit.json` outside the stamp (2026-09-25), and `@f8e77bf83c08`
 since the mimic carries its authored softness (the same night); 3.0 MB,
-deterministic: the scratch run and the library run gave the same stamp). Written on the box in
+deterministic: the scratch run and the library run gave the same stamp). Written on the WSL machine in
 2.9 s once Warp's kernels are cached, through the pinned venv (newton
 1.6.0, usd-core 26.3, newton-usd-schemas 0.5.0, warp 1.17.0, mujoco and
 mujoco-warp 3.11.0), and pinned by `trainnr/tests/test_usd_import.py`:
@@ -261,7 +261,7 @@ What building it found, beyond §4's list:
 | The test compares the compiled bundle to a fresh pxr read of the USD: joint ranges, masses, inertias where real, drive gains, equality count, actuator force range | trusting Newton's return | the test is the product's word; it also catches the next Newton release silently changing a unit |
 | Visual meshes as OBJ files under `assets/`, collision as hulls | inline vertex arrays | every bundle references files; a 31k-vertex base inline is a 3 MB XML nobody can diff |
 
-Built on 2026-09-24 (§4.1), in one sitting on the box rather than three
+Built on 2026-09-24 (§4.1), in one sitting on the WSL machine rather than three
 days, as planned with these differences: the `usd` extra is
 `newton[importers]` beside `gpu`, not `newton[importers,sim]` (§4.1,
 the 3.12 declaration); the root is `fixed` or `free` (a fixed root
@@ -334,6 +334,6 @@ Lab `converters/`; Isaac Sim `isaacsim.asset.exporter.urdf`
 (*joint_reader.py*, *urdf_writer.py*) and
 *physx_asset_to_mjc.py*; LightwheelAI/usd2mjcf; PyPI metadata for
 usd-core 26.8, newton 1.6.0, nvidia-srl-usd-to-urdf 1.0.3,
-mujoco-usd-converter 0.5.0. Hands-on: the scratch venv on the box,
+mujoco-usd-converter 0.5.0. Hands-on: the scratch venv on the WSL machine,
 the numbers in §4, the stills and the elided MJCF under
 `docs/figures/usd-import/`.
