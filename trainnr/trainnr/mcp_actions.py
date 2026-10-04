@@ -2,7 +2,7 @@
 
 Every door here is THIN: it spawns the CLI that already owns the work,
 through the venv that CLI documents, with output teed to a job log —
-`mcp_jobs.JobManager` hands back the id, `job_status` polls it, and the
+`mcp_jobs.JobManager` hands back the id, `describe_job` polls it, and the
 artifacts land under `runs/` exactly where the tool always put them.
 Nothing is re-implemented; a door's whole contract is its command line,
 which is why the tests pin those lines verbatim against a fake spawner.
@@ -227,7 +227,7 @@ class Actions:
         shards: int = 1,
     ) -> JobHandle:
         """The planner expert generates demonstrations (docs/66 D3) on a
-        task from the registry (`describe_tasks`): the planner reads each
+        task from the registry (`list_tasks`): the planner reads each
         seated scene, writes the beats and executes them by chained IK;
         the success criterion keeps or discards. Streams to the Studio."""
         argv = [
@@ -245,19 +245,19 @@ class Actions:
 
     def multiply_demos(
         self,
-        seeds_dir: str,
+        dataset: str,
         out: str,
         episodes: int = 4,
         seed: int = 11,
         worlds: int = 64,
     ) -> JobHandle:
-        """Multiply seed demonstrations (Mimic contract: device filters,
-        CPU verifies, referee gates). Needs the GPU box — the tool
-        itself refuses loudly on a CUDA-less machine."""
+        """Multiply a dataset of seed demonstrations (Mimic contract:
+        device filters, CPU verifies, the task's success criterion keeps).
+        Needs a CUDA GPU — the tool itself refuses loudly without one."""
         argv = [
             *self._uv(PIPELINE_DIR, "sim", "mjx"),
             str(TOOLS_DIR / "press-multiply.py"),
-            seeds_dir,
+            dataset,
             out,
             "--episodes",
             str(episodes),
@@ -318,7 +318,7 @@ class Actions:
         """Train a walk through trainnr_mjlab (the certified stack: stamped
         bundles, declared DR bases, the linter green by construction).
         `robot` names the walk (a registered walk family's robot: see
-        `describe_task_families`); `project` is where the robot's bundle
+        `list_task_families`); `project` is where the robot's bundle
         is searched first and where `log_dir` — the run's own folder —
         should live so the project's index sees it. `agent="smoke"` is
         the box's 2-minute check; `agent="g3"` is the flagship recipe."""
@@ -503,7 +503,7 @@ class Actions:
 
     # -- the Studio ----------------------------------------------------
 
-    def accept_task(self, name: str, project_root: str) -> JobHandle:
+    def check_task(self, name: str, project_root: str) -> JobHandle:
         """Review a declared task with the acceptance critic: the scripted
         policy must succeed on every paired trial and the floor policy on
         none. Minutes of simulation: returns a job handle; the verdict
@@ -779,7 +779,7 @@ class Actions:
 
     # -- jobs ----------------------------------------------------------
 
-    def job_status(self, job_id: str) -> JobStatus:
+    def describe_job(self, job_id: str) -> JobStatus:
         """A job's state and its log tail."""
         return self.jobs.status(job_id)
 

@@ -21,7 +21,7 @@ from tests._extras import installed, needs_numpy
 from tests.test_robots import WIRE, make_lerobot, make_mcap
 from trainnr.project import Kind, create_project, index_project
 from trainnr.project.ingest import capture as live_capture
-from trainnr.project.ingest import capture_status as status
+from trainnr.project.ingest import read_capture as status
 from trainnr.robots import resolve
 from trainnr.robots.adapter import detect
 from trainnr.robots.capture import FAILED, INGESTED, LISTENING

@@ -108,7 +108,7 @@ class EveryToolSaysWhy(unittest.TestCase):
         self.assertIn("use_project", text)
 
     def test_unknown_names_and_unsafe_ids_are_refused_with_their_reason(self) -> None:
-        self.assertIn("nope", self.call("describe_bundle", {"name": "nope"}))
+        self.assertIn("nope", self.call("describe_robot", {"robot": "nope"}))
         self.assertIn("not a job id", self.call("cancel_job", {"job_id": "../x"}))
         self.assertIn("no project", self.call("use_project", {"project": "nope"}))
 

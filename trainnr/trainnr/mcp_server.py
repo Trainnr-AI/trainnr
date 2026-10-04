@@ -16,7 +16,7 @@ windows through the repo's public seams — and, since S2, the ACT
 family (`trainnr.mcp_actions`): thin doors that spawn the CLI
 owning the work as a background job and hand back a handle
 
-(`job_status` polls, artifacts land under `runs/` as always). The
+(`describe_job` polls, artifacts land under `runs/` as always). The
 agent lives in the developer's own tool; these tools are how it
 generates data, trains, evaluates and opens the Studio.
 
@@ -41,6 +41,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# pydantic reads WalkConditions' schema; on Python < 3.12 it accepts only
+# typing_extensions' TypedDict (as mcp_jobs does).
+if sys.version_info >= (3, 12):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
+
 from trainnr.bundles.hashing import FITS_DIR, stamp
 from trainnr.bundles.locate import bundle_dirs, find_bundle
 from trainnr.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
@@ -59,7 +66,9 @@ from trainnr.project.locate import (
 # three ways once — review 2026-09-01.
 from trainnr.robot.actuator_bundle import BUNDLE_STORE
 from trainnr.robot.actuator_library import (
-    list_actuators,
+    list_actuators as library_actuators,
+)
+from trainnr.robot.actuator_library import (
     list_models,
     load_actuator,
 )
@@ -86,9 +95,9 @@ def _use_project_if_any() -> None:
         current_project()
 
 
-def describe_bundles() -> list[dict[str, Any]]:
-    """Every robot bundle the project or the library holds: name@hash
-    identity and a file census."""
+def list_robots() -> list[dict[str, Any]]:
+    """Every robot the project or the library holds: name@hash identity
+    and a file census."""
     described = []
     for name in bundle_names():
         root = bundle_dirs()[name]
@@ -105,14 +114,15 @@ def describe_bundles() -> list[dict[str, Any]]:
     return described
 
 
-def describe_bundle(name: str) -> dict[str, Any]:
-    """One bundle in full: identity, profile, every fit record, SPREAD."""
+def describe_robot(robot: str) -> dict[str, Any]:
+    """One robot in full: identity, profile, every fit record, and how
+    repeated fits agree."""
     _use_project_if_any()
-    root = find_bundle(name)
-    if root is None or name in NOT_A_BUNDLE:
-        raise KeyError(f"no bundle {name!r}; one of {bundle_names()}")
+    root = find_bundle(robot)
+    if root is None or robot in NOT_A_BUNDLE:
+        raise KeyError(f"no robot {robot!r}; one of {bundle_names()}")
     detail: dict[str, Any] = {
-        "stamp": stamp(name, root),
+        "stamp": stamp(robot, root),
         "files": sorted(p.name for p in root.iterdir()),
     }
     profile = root / "profile.json"
@@ -130,83 +140,99 @@ def describe_bundle(name: str) -> dict[str, Any]:
     return detail
 
 
-def describe_actuators() -> list[dict[str, Any]]:
-    """The vendored actuator library: every servo, its tiers, provenance."""
-    described = []
-    for slug in list_actuators():
-        model = load_actuator(slug, list_models(slug)[0])
-        described.append(
-            {
-                "slug": slug,
-                "tiers": list(list_models(slug)),
-                "source": model.provenance.source,
-                "citation": model.provenance.citation,
-                "license": model.provenance.license,
-            }
-        )
-    return described
-
-
-def describe_actuator(slug: str, tier: str = "m6") -> dict[str, Any]:
-    """One servo at one friction tier: every parameter, with provenance."""
-    from dataclasses import asdict  # noqa: PLC0415 - tiny, keeps the top clean
-
-    model = load_actuator(slug, tier)
-    return {
-        "slug": model.slug,
-        "tier": model.tier,
-        "servo": asdict(model.servo),
-        "friction": asdict(model.friction),
-        "provenance": asdict(model.provenance),
-    }
-
-
-def describe_actuator_bundles() -> list[dict[str, Any]]:
-    """Every certified actuator bundle in the committed store — stamp,
-    check flags (optimizer rails/floors) and honesty advisories."""
+def _actuator_bundles(actuator: str | None = None) -> list[dict[str, Any]]:
+    """The certified actuator bundles in the committed store, each with its
+    tier, stamp, check flags and advisories; one actuator's when named."""
     from trainnr.robot.actuator_bundle import read_bundle, verify  # noqa: PLC0415
 
     if not BUNDLE_STORE.is_dir():
         raise FileNotFoundError(
-            f"no bundle store at {BUNDLE_STORE} — an empty list here would "
-            "read as 'no bundles' when the path is simply wrong; wrap the "
+            f"no actuator-bundle store at {BUNDLE_STORE}; an empty list here "
+            "would read as 'none' when the path is simply wrong. Wrap the "
             "vendored fits with tools/actuator-bundle.py wrap --all"
         )
-    described = []
-    for path in sorted(BUNDLE_STORE.glob("*.bundle.json")):
+    found = []
+    pattern = f"{actuator}.*.bundle.json" if actuator else "*.bundle.json"
+    for path in sorted(BUNDLE_STORE.glob(pattern)):
         bundle = read_bundle(path)  # verifies on read; a bad file raises by name
-        described.append(
+        found.append(
             {
+                "tier": path.name.split(".")[-3],
                 "file": path.name,
                 "stamp": bundle["stamp"],
                 "checks": bundle["checks"],
                 "advisories": verify(bundle),
             }
         )
+    return found
+
+
+def list_actuators() -> list[dict[str, Any]]:
+    """The actuator library: every servo with its friction tiers and
+    provenance, and the certified actuator bundles wrapping its fits (one
+    per tier: stamp, parameter-bound checks, advisories)."""
+    bundles = _actuator_bundles()
+    described = []
+    for actuator in library_actuators():
+        model = load_actuator(actuator, list_models(actuator)[0])
+        described.append(
+            {
+                "actuator": actuator,
+                "tiers": list(list_models(actuator)),
+                "source": model.provenance.source,
+                "citation": model.provenance.citation,
+                "license": model.provenance.license,
+                "bundles": [b for b in bundles if b["file"].startswith(f"{actuator}.")],
+            }
+        )
+    known = set(library_actuators())
+    for actuator in sorted({b["file"].split(".")[0] for b in bundles} - known):
+        described.append(
+            {
+                "actuator": actuator,
+                "tiers": [],
+                "bundles": [b for b in bundles if b["file"].startswith(f"{actuator}.")],
+            }
+        )
     return described
 
 
-def describe_actuator_bundle(slug: str, tier: str = "m6") -> dict[str, Any]:
-    """One certified bundle in full — BAM's params verbatim plus the
-    envelope — with its advisories riding along."""
+def describe_actuator(actuator: str, tier: str = "m6") -> dict[str, Any]:
+    """One actuator at one friction tier (m1..m6): every fitted parameter
+    with its provenance, and the certified bundle for that tier (BAM's
+    parameters verbatim, the envelope) with its advisories, when one
+    exists."""
+    from dataclasses import asdict  # noqa: PLC0415 - tiny, keeps the top clean
+
     from trainnr.robot.actuator_bundle import read_bundle, verify  # noqa: PLC0415
 
-    path = BUNDLE_STORE / f"{slug}.{tier}.bundle.json"
-    if not path.exists():
-        available = sorted(p.name for p in BUNDLE_STORE.glob("*.bundle.json"))
-        raise KeyError(f"no bundle {path.name!r} in the store; have {available}")
-    bundle = read_bundle(path)
-    return {"bundle": bundle, "advisories": verify(bundle)}
+    detail: dict[str, Any] = {"actuator": actuator, "tier": tier}
+    if actuator in library_actuators():
+        model = load_actuator(actuator, tier)
+        detail |= {
+            "servo": asdict(model.servo),
+            "friction": asdict(model.friction),
+            "provenance": asdict(model.provenance),
+        }
+    path = BUNDLE_STORE / f"{actuator}.{tier}.bundle.json"
+    if path.exists():
+        bundle = read_bundle(path)
+        detail |= {"bundle": bundle, "advisories": verify(bundle)}
+    if len(detail) == 2:  # noqa: PLR2004 - only the two names given
+        have = sorted({row["actuator"] for row in list_actuators()})
+        raise KeyError(f"no actuator {actuator!r} at tier {tier!r}; one of {have}")
+    return detail
 
 
-def describe_datasheet(demos_dir: str) -> dict[str, Any]:
-    """A demo batch's datasheet, as data: kept episodes, keep-rate
-    bound, stamps, dynamics spreads with their bases, warnings."""
+def describe_dataset(dataset: str) -> dict[str, Any]:
+    """A generated dataset's datasheet, as data (`dataset` is its folder):
+    kept episodes, keep-rate bound, stamps, dynamics spreads with their
+    bases, warnings."""
     from dataclasses import asdict  # noqa: PLC0415
 
     from trainnr.collect.datasheet import summarize  # noqa: PLC0415
 
-    summary = summarize(Path(demos_dir))
+    summary = summarize(Path(dataset))
     return {
         **asdict(summary),
         # None across shards: each shard restarts its attempt counter,
@@ -215,10 +241,11 @@ def describe_datasheet(demos_dir: str) -> dict[str, Any]:
     }
 
 
-def describe_tasks() -> list[dict[str, Any]]:
-    """The task registry: what `lerobot-eval --env.task=<id>` can run."""
+def list_tasks() -> list[dict[str, Any]]:
+    """The task registry: what `lerobot-eval --env.task=<id>` can run;
+    each row's `task` is what `describe_task` takes."""
     return [
-        {"task_id": entry.task_id, "name": entry.name, "rig": entry.rig}
+        {"task": entry.task_id, "name": entry.name, "rig": entry.rig}
         for entry in tasks().values()
     ]
 
@@ -229,7 +256,7 @@ def _reason(why: BaseException) -> str:
     return str(why.args[0]) if isinstance(why, KeyError) and why.args else str(why)
 
 
-def describe_task_families() -> dict[str, Any]:
+def list_task_families() -> dict[str, Any]:
     """The families a task can be declared over — every registered task
     whose builder takes a spec — with each spec's fields, types and
     defaults. Read this, then write only what you change in `create_task`."""
@@ -242,13 +269,13 @@ def describe_task_families() -> dict[str, Any]:
 
 
 def create_task(
-    task_id: str, name: str, overlay: dict[str, Any] | None = None
+    family: str, name: str, settings: dict[str, Any] | None = None
 ) -> dict[str, Any] | Refusal:
-    """Declare an environment into the project: a family (see
-    `describe_task_families`) with `overlay` — only the spec fields you
-    change — built for real and stamped by its content. Refuses, by name,
-    an unknown field, a task with no spec, or a name already taken. The
-    next move is `accept_task(name)`."""
+    """Declare an environment into the project: a `family` (see
+    `list_task_families`) with `settings` — only the spec fields you
+    change — built for real and stamped by its content, saved as `name`.
+    Refuses, by name, an unknown field, a family with no spec, or a name
+    already taken. The next move is `check_task(name)`."""
     from trainnr.project import (  # noqa: PLC0415
         current_project,
         index_project,
@@ -258,11 +285,16 @@ def create_task(
 
     project = current_project()
     try:
-        out = declare_task(project, task_id, name, overlay)
+        out = declare_task(project, family, name, settings)
     except (KeyError, ValueError, FileExistsError, TypeError) as why:
         return refusal(_reason(why))
     write_index(project, index_project(project))
-    return {"status": DONE, **out, "next": f"accept_task({name!r})"}
+    # The reply speaks the call's words: the family and the settings given.
+    reply = {
+        {"task_id": "family", "overlay": "settings"}.get(key, key): value
+        for key, value in out.items()
+    }
+    return {"status": DONE, **reply, "next": f"check_task({name!r})"}
 
 
 def onboard_robot(
@@ -299,7 +331,9 @@ def onboard_robot(
         into: Path | None = current_project().folder(ROBOTS_FOLDER)
     except FileNotFoundError as why:
         return refusal(str(why))
-    actions = Actions(JobManager(_jobs_root()))
+    # The jobs root is resolved on every call, never fixed at start (see
+    # JobManager): every tool reads and writes the current project's table.
+    actions = Actions(JobManager(_jobs_root))
     options: dict[str, Any] = {}
     if variants is not None:
         options["variants"] = variants
@@ -345,7 +379,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     """Train a walk policy through trainnr_mjlab. `task` names a declared walk
     in the project: its robot and randomization span are used and its
     version cited by the run; `robot` alone names a registered walk
-    family's robot (`describe_task_families`). With neither, the project's
+    family's robot (`list_task_families`). With neither, the project's
     one declared walk is taken; several or none is a refusal by name.
     With a project open the trainer searches its robots first, and `name`
     — the experiment's folder under the project's `runs/` — makes the run
@@ -383,7 +417,7 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
     except ValueError as why:
         return refusal(str(why))
     try:
-        return Actions(JobManager(_jobs_root())).train_walk(
+        return Actions(JobManager(_jobs_root)).train_walk(
             agent,
             envs,
             iterations,
@@ -536,6 +570,24 @@ def checkpoint_missing(checkpoint: str, root: Path | None) -> str | None:
     return f"no checkpoint {checkpoint!r}: {folder} is not a run folder"
 
 
+class WalkConditions(TypedDict, total=False):
+    """The world an evaluation judges a policy in, when not its own; the
+    fields combine."""
+
+    # Field docstrings become the schema's descriptions; a misspelled key
+    # is refused, never silently judged in the policy's own world.
+    __pydantic_config__ = {"use_attribute_docstrings": True, "extra": "forbid"}  # type: ignore[misc]  # noqa: RUF012
+
+    in_fit: str | None
+    """Another robot world: a joints fit (fit@<stamp>) or declared (the vendor's constants); recorded under its own name, never the certificate."""  # noqa: E501 - one line, as the schema shows it
+    scale: float | None
+    """A cliff rung: the param axis pinned at the fit times this."""
+    param: str | None
+    """The axis scale moves: kp, kd, armature or all (the default)."""
+    delay: int | None
+    """The action arrives this many control ticks late."""
+
+
 def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each named
     checkpoint: str,
     trials: int = 40,
@@ -545,24 +597,21 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     horizon: int = 20,
     robot: str | None = None,
     scene: str | None = None,
-    judge_in_fit: str | None = None,
-    judge_at_scale: float | None = None,
-    judge_param: str = JUDGE_ALL_AXES,
-    delay: int = 0,
+    conditions: WalkConditions | None = None,
 ) -> JobHandle | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,
     the run's versions on every row; `robot` names the walk the checkpoint
     belongs to, else the project's one declared walk. With a project open
     its robots are searched first. `scene` names the captured scene the
     checkpoint trained on (its identity says): the certificate is judged
-    on it, and its protocol names it. `judge_in_fit` makes it a CROSS-
-    evaluation: the policy judged in another robot world - a joints fit
-    (`fit@<stamp>`) or the vendor's declared constants (`declared`) -
-    recorded under its own name, never as the policy's certificate.
-    `judge_at_scale` with `judge_param` (`kp`, `kd`, `armature` or `all`)
-    judges at a cliff rung, that law axis pinned at the fit times the
-    scale; `delay` makes the policy's action late by that many control
-    ticks. Both combine with `judge_in_fit`. Job handle."""
+    on it, and its protocol names it. `conditions` judges it in another
+    world: `in_fit` makes it a CROSS-evaluation in a joints fit
+    (`fit@<stamp>`) or the vendor's declared constants (`declared`),
+    recorded under its own name, never as the policy's certificate;
+    `scale` with `param` (`kp`, `kd`, `armature` or `all`) judges at a
+    cliff rung, that law axis pinned at the fit times the scale; `delay`
+    makes the policy's action late by that many control ticks. They
+    combine. Job handle."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
 
@@ -577,8 +626,13 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
         declared = _declared_walk(root, walk)
         assert isinstance(declared, DeclaredWalk)
         robot = declared.robot
+    held: WalkConditions = conditions or {}
+    unknown = sorted(set(held) - set(WalkConditions.__annotations__))
+    if unknown:  # a direct caller; the MCP schema refuses these first
+        known = sorted(WalkConditions.__annotations__)
+        return refusal(f"unknown conditions {unknown}; one of {known}")
     try:
-        return Actions(JobManager(_jobs_root())).evaluate_walk(
+        return Actions(JobManager(_jobs_root)).evaluate_walk(
             str(checkpoint_path(checkpoint, root)),
             trials=trials,
             seed=seed,
@@ -588,27 +642,27 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
             robot=robot,
             project=str(root) if root else None,
             scene=_scene_dir(root, scene),
-            judge_in_fit=judge_in_fit,
-            judge_at_scale=judge_at_scale,
-            judge_param=judge_param,
-            delay=delay,
+            judge_in_fit=held.get("in_fit"),
+            judge_at_scale=held.get("scale"),
+            judge_param=held.get("param") or JUDGE_ALL_AXES,
+            delay=held.get("delay") or 0,
         )
     except ValueError as why:
         return refusal(str(why))
 
 
 def export_deployment(  # noqa: PLR0911 - each return is one named refusal
-    run: str,
+    experiment: str,
     checkpoint: str,
     name: str,
-    certificate: str | None = None,
+    evaluation: str | None = None,
     unevaluated: bool = False,
 ) -> JobHandle | Refusal:
-    """Export a trained policy for deployment: `run` is an experiment in
-    the project (its folder under runs/), `checkpoint` a file in it
-    (model_7999.pt), `name` the deployment's folder. The policy artifact
-    and, unless named, the newest evaluation of that checkpoint are cited
-    from the index. A checkpoint with no evaluation is refused by name —
+    """Export a trained policy for deployment: `experiment` is its folder
+    under runs/, `checkpoint` a file in it (model_7999.pt), `name` the new
+    deployment's folder. The policy artifact and the evaluation it cites
+    (`evaluation` by version, else the checkpoint's newest) come from the
+    index. A checkpoint with no evaluation is refused by name —
     a deployment the gates cannot judge is one nobody can trust — unless
     `unevaluated` says the export is deliberate (a smoke, a mechanics
     check); the order that closes the loop is evaluate, export, gate.
@@ -617,6 +671,7 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
     ordered observations, the control rate — read from the built
     environment; the ONNX has normalization folded in; the trained scene
     rides along as MJCF. Job handle; next: `gate_deployment(name)`."""
+    run, certificate = experiment, evaluation
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project, index_project  # noqa: PLC0415
@@ -661,7 +716,7 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
             "(evaluate_walk), or pass unevaluated=True for a deliberate export "
             "whose gates will report and judge nothing"
         )
-    return Actions(JobManager(_jobs_root())).export_deployment(
+    return Actions(JobManager(_jobs_root)).export_deployment(
         str(path),
         name=name,
         robot=robot,
@@ -762,7 +817,7 @@ def _robot_of_run(run_dir: Path) -> str | None:
 
 
 def gate_deployment(
-    name: str,
+    deployment: str,
     trials: int = 20,
     seed: int = 1000,
     tolerance: float | None = None,
@@ -779,6 +834,7 @@ def gate_deployment(
     judged along the scene's course instead - forward, steered to the
     next waypoint, success = arrival (docs/78 §8.4). Job handle; the
     runtime's record lands beside the manifest and shows in the Studio."""
+    name = deployment
     from trainnr.deploy.manifest import MANIFEST_FILE  # noqa: PLC0415
     from trainnr.deploy.runtimes import (  # noqa: PLC0415
         require_platform,
@@ -797,7 +853,7 @@ def gate_deployment(
         return refusal(str(why))
     if not (project.folder(DEPLOY_FOLDER) / name / MANIFEST_FILE).is_file():
         return refusal(f"no deployment {name!r} in this project")
-    return Actions(JobManager(_jobs_root())).gate_deployment(
+    return Actions(JobManager(_jobs_root)).gate_deployment(
         name,
         project=str(project.root),
         trials=trials,
@@ -918,7 +974,7 @@ def assay_deployment(
         return refusal(f"no deployment {deployment!r} in this project")
     if not (project.scenes / scene / SCENE_FILE).is_file():
         return refusal(f"no scene {scene!r} in this project")
-    return Actions(JobManager(_jobs_root())).assay_deployment(
+    return Actions(JobManager(_jobs_root)).assay_deployment(
         deployment, scene, project=str(project.root), trials=trials, seed=seed
     )
 
@@ -975,7 +1031,7 @@ def attribute_deployment(
         gate_protocol(base, deployment, runtime, trials=trials, seed=seed)
     except (ValueError, FileNotFoundError) as why:
         return refusal(_reason(why))
-    return Actions(JobManager(_jobs_root())).attribute_deployment(
+    return Actions(JobManager(_jobs_root)).attribute_deployment(
         deployment, project=str(project.root), runtime=runtime, trials=trials, seed=seed
     )
 
@@ -1043,7 +1099,7 @@ def preflight_deployment(
         gate_twists(folder, seed)
     except (ValueError, RuntimeError) as why:
         return refusal(_reason(why))
-    return Actions(JobManager(_jobs_root())).preflight_deployment(
+    return Actions(JobManager(_jobs_root)).preflight_deployment(
         deployment, project=str(current_project().root), runtime=runtime, seed=seed
     )
 
@@ -1084,7 +1140,7 @@ def list_gate_runtimes() -> list[dict[str, Any]]:
 
 
 def play_walk(
-    run: str,
+    experiment: str,
     checkpoint: str,
     envs: int = 9,
     viewer: str = "viser",
@@ -1093,10 +1149,11 @@ def play_walk(
     """Open a checkpoint of an experiment in mjlab's own viewer - `viser`,
     its browser viewer (the URL is on the job's log), or `native`, its
     MuJoCo window - with the same rollout streamed into the Studio's Live
-    view by the recorder. `run` is the experiment's folder under runs/,
+    view by the recorder. `experiment` is its folder under runs/,
     `checkpoint` a file in it; `scene` names the captured scene a
     scene-trained checkpoint walks on (its identity says which). Job
     handle; the viewer lives until closed."""
+    run = experiment
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project, index_project  # noqa: PLC0415
@@ -1112,7 +1169,7 @@ def play_walk(
         robot = _walk_of_run(index_project(project).artifacts, run_dir)
         if robot is None:
             return refusal(f"run {run!r} names no walk")
-        return Actions(JobManager(_jobs_root())).play_walk(
+        return Actions(JobManager(_jobs_root)).play_walk(
             str(path),
             robot=robot,
             envs=envs,
@@ -1146,7 +1203,7 @@ def preview_rewards(
             return refusal(declared)
         assert root is not None
         out = root / "tasks" / task / f"preview-{controller}.json"
-        return Actions(JobManager(_jobs_root())).preview_rewards(
+        return Actions(JobManager(_jobs_root)).preview_rewards(
             robot=declared.robot,
             controller=controller,
             seconds=seconds,
@@ -1158,13 +1215,14 @@ def preview_rewards(
         return refusal(str(why))
 
 
-def accept_task(name: str) -> JobHandle | Refusal:
-    """Review a declared environment with the acceptance critic (the
-    scripted policy must succeed on every paired trial, the floor policy
-    on none). Minutes of simulation: returns a job handle; the verdict,
-    counts, funnel and reasons land beside the task as acceptance.json
-    and in its Studio drawer. Refuses a name the project does not hold,
-    or a family with no scripted expert."""
+def check_task(task: str) -> JobHandle | Refusal:
+    """Check a declared environment is doable: for an arm task the
+    scripted policy must succeed on every paired trial and the floor
+    policy on none; for a walk, two training iterations must run (the
+    learnability check). Minutes of simulation: returns a job handle; the
+    verdict, counts, funnel and reasons land beside the task as
+    acceptance.json and in its Studio drawer. Refuses a name the project
+    does not hold, or a family with no scripted expert."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
@@ -1174,15 +1232,15 @@ def accept_task(name: str) -> JobHandle | Refusal:
 
     project = current_project()
     try:
-        ref = read_task_reference(project, name)
+        ref = read_task_reference(project, task)
         if walk_robot(ref.task_id) is None:
             expert_for(ref.task_id)
     except (FileNotFoundError, KeyError, ValueError) as why:
         return refusal(_reason(why))
-    return Actions(JobManager(_jobs_root())).accept_task(name, str(project.root))
+    return Actions(JobManager(_jobs_root)).check_task(task, str(project.root))
 
 
-def describe_task(task_id: str) -> dict[str, Any]:
+def describe_task(task: str) -> dict[str, Any]:
     """One task built for real: its spec's numbers and its content stamp.
 
     Compiling the scene is what makes the stamp honest — this needs the
@@ -1190,25 +1248,25 @@ def describe_task(task_id: str) -> dict[str, Any]:
     """
     from dataclasses import asdict  # noqa: PLC0415 - tiny, keeps the top clean
 
-    entry = resolve(task_id)
-    task = entry.build()
+    entry = resolve(task)
+    built = entry.build()
     detail: dict[str, Any] = {
-        "task_id": entry.task_id,
+        "task": entry.task_id,
         "rig": entry.rig,
-        "stamp": task.stamp,
+        "stamp": built.stamp,
     }
-    spec = getattr(task, "task_spec", None)
+    spec = getattr(built, "task_spec", None)
     if spec is not None:
         detail["spec"] = asdict(spec)
     return detail
 
 
-def describe_engines() -> list[dict[str, Any]]:
+def list_engines() -> list[dict[str, Any]]:
     """The engine registry: every physics backend an evaluation can name."""
     return [{"name": entry.name, "doc": entry.doc} for entry in engines().values()]
 
 
-def describe_runs(runs_root: Path | None = None) -> list[dict[str, Any]]:
+def list_experiments(runs_root: Path | None = None) -> list[dict[str, Any]]:
     """Every run on record: the imitation chain's `run.json` manifests under
     `trainnr/runs/` (or `runs_root`), verbatim, and — when a project is open
     and no root was named — the project's own `runs/`, where a walk's
@@ -1300,7 +1358,7 @@ def _eval_records_under(root: Path, where: str | None = None) -> list[dict[str, 
     return found
 
 
-def list_eval_records(runs_root: Path | None = None) -> list[dict[str, Any]]:
+def list_evaluations(runs_root: Path | None = None) -> list[dict[str, Any]]:
     """Every episode-record file: under `trainnr/runs/` (or `runs_root`) —
     the JSONL the evaluation layer writes — and, when a project is open and
     no root was named, under the project's own `runs/`, where a walk's
@@ -1314,10 +1372,15 @@ def list_eval_records(runs_root: Path | None = None) -> list[dict[str, Any]]:
     return found
 
 
-def describe_eval(run: str, runs_root: Path | None = None) -> dict[str, Any]:
-    """One run's episode records, folded the way the evaluation is:
+def describe_evaluation(
+    evaluation: str, runs_root: Path | None = None
+) -> dict[str, Any]:
+    """One evaluation's episode records, folded the way the evaluation is:
     trials, successes, the milestone funnel, and every trial's verdict —
-    through `trainnr.evaluate.records`, never a private re-parse."""
+    through `trainnr.evaluate.records`, never a private re-parse.
+    `evaluation` is the run folder holding the records (`list_evaluations`
+    names it as `run`)."""
+    run = evaluation
     from trainnr.evaluate.records import (  # noqa: PLC0415 - keeps import cheap
         funnel,
         milestones,
@@ -1327,7 +1390,7 @@ def describe_eval(run: str, runs_root: Path | None = None) -> dict[str, Any]:
     root = _runs_root(runs_root)
     paths = sorted((root / run).glob("*episodes.jsonl"))
     if not paths:
-        known = [entry["run"] for entry in list_eval_records(runs_root)]
+        known = [entry["run"] for entry in list_evaluations(runs_root)]
         raise KeyError(f"no episode records under {run!r}; runs with records: {known}")
     detail: dict[str, Any] = {"run": run, "files": {}}
     for path in paths:
@@ -1352,8 +1415,8 @@ def describe_eval(run: str, runs_root: Path | None = None) -> dict[str, Any]:
     return detail
 
 
-def friction_curve(
-    slug: str, tier: str = "m6", points: int = 101, tau_external: float = 0.3
+def describe_friction(
+    actuator: str, tier: str = "m6", points: int = 101, tau_external: float = 0.3
 ) -> dict[str, Any]:
     """The actuator's friction-torque budget over its velocity range, as
     plottable curves — computed by `friction_torque_budget` itself, so a
@@ -1368,7 +1431,7 @@ def friction_curve(
         friction_torque_budget,
     )
 
-    model = load_actuator(slug, tier)
+    model = load_actuator(actuator, tier)
     top = model.servo.max_velocity if model.servo.max_velocity is not None else 8.0
     velocity = np.linspace(0.0, top, points)
     zero = np.zeros_like(velocity)
@@ -1377,7 +1440,7 @@ def friction_curve(
         model.friction, velocity, zero, np.full_like(velocity, tau_external)
     )
     return {
-        "slug": slug,
+        "actuator": actuator,
         "tier": tier,
         "tau_external": tau_external,
         "velocity": velocity.tolist(),
@@ -1496,7 +1559,7 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     recording, on `network` (`lo` for their simulator, the robot's
     interface for the robot), its `basis` "own robot" unless declared
     "simulation" for the stand-in. The state on disk
-    (`<project>/.index/capture.json`) is what `capture_status` and the
+    (`<project>/.index/capture.json`) is what `describe_capture` and the
     Studio read. Refused by name: no project open, a capture already
     listening for this project, a recording of that name already present,
     an unknown source, an option the source does not take, a platform it
@@ -1561,7 +1624,7 @@ def stop_capture() -> dict[str, Any] | Refusal:
     if listener is None:
         return refusal(
             "no capture is listening for this project in this server; "
-            "capture_status reads the state any process wrote"
+            "describe_capture reads the state any process wrote"
         )
     state = listener.stop()
     from trainnr.project import index_project, write_index  # noqa: PLC0415
@@ -1570,7 +1633,7 @@ def stop_capture() -> dict[str, Any] | Refusal:
     return {"status": DONE, **_capture_state(state)}
 
 
-def capture_status() -> dict[str, Any] | Refusal:
+def describe_capture() -> dict[str, Any] | Refusal:
     """The current project's capture state as written on disk: idle,
     listening (datagrams so far, last one when), ingested (the
     recording's stamp), or failed (why). Readable from any process."""
@@ -1581,7 +1644,7 @@ def capture_status() -> dict[str, Any] | Refusal:
         project = current_project()
     except FileNotFoundError as why:
         return refusal(str(why))
-    return {"status": DONE, **ingest_doors.capture_status(project)}
+    return {"status": DONE, **ingest_doors.read_capture(project)}
 
 
 def _capture_state(state: Any) -> dict[str, Any]:
@@ -1601,7 +1664,7 @@ def list_public_logs() -> list[dict[str, Any]]:
 
 
 def ingest_public_log(
-    name: str, recording_name: str | None = None, accept_unlicensed: bool = False
+    log: str, name: str | None = None, accept_unlicensed: bool = False
 ) -> JobHandle | Refusal:
     """Fetch a registered public log (every piece checked against its byte
     count and digest, cached under runs/public-logs) and ingest it into
@@ -1613,11 +1676,14 @@ def ingest_public_log(
     download that differs from the registry, a log no adapter reads and a
     network that is not there. Data whose publisher states no licence is
     refused, naming its licence state, unless `accept_unlicensed` says the
-    user's use is allowed."""
+    user's use is allowed. `log` is the registry's name for it (see
+    `list_public_logs`); `name` the new recording's, else the log's."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.robots import public_logs  # noqa: PLC0415
+
+    name, recording_name = log, name
 
     try:
         project = current_project()
@@ -1630,7 +1696,7 @@ def ingest_public_log(
         and public_logs.locate(name) is None
     ):
         return refusal(public_logs.unlicensed_reason(entry))
-    return Actions(JobManager(_jobs_root())).ingest_public_log(
+    return Actions(JobManager(_jobs_root)).ingest_public_log(
         name,
         project=str(project.root),
         recording_name=recording_name,
@@ -1748,10 +1814,22 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     )
 
 
-def show_in_studio(artifact: str) -> dict[str, Any]:
-    """Stream one artifact into the Studio's viewer as itself (a robot as
+def show_in_studio(
+    artifact: str | None = None, stream: str | None = None
+) -> dict[str, Any] | Refusal:
+    """Bring something to the front of the Studio's viewer, exactly one
+    of: `artifact` (by name or version), streamed as itself (a robot as
     its meshes in 3D, a recording as time series, an experiment as its
-    curves, an evaluation as its funnel) and switch to the Live view."""
+    curves, an evaluation as its funnel) in the Live view; or `stream`, a
+    viewer stream already playing, by the application id its tool used
+    (the Sources list's name: `trainnr-sim-<scene>` for the simulator's
+    twin, a training run's stamp, `trainnr-gate-<runtime>-<deployment>`).
+    The reply says what the viewer then shows, so a name that is not there
+    is seen, not assumed."""
+    if (artifact is None) == (stream is None):
+        return refusal("name exactly one of artifact or stream")
+    if stream is not None:
+        return _focus_stream(stream)
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import command, wait_presented  # noqa: PLC0415
 
@@ -1768,15 +1846,10 @@ def show_in_studio(artifact: str) -> dict[str, Any]:
     return {**answer, **wait_presented(project, resolved, since=since)}
 
 
-def focus_studio_recording(recording: str) -> dict[str, Any]:
-    """Bring a recording to the front of the Studio's viewer by the
-    application id the tool that streams it used (the Sources list's
-    name): the simulator's twin is `trainnr-sim-<scene>`, a training run
-    its stamp, a gate `trainnr-gate-<runtime>-<deployment>`. A human's click on
-    a card leaves that card in front, and a twin started afterwards stays
-    a row in Sources; this is how an agent turns the viewer back. Returns
-    the acknowledgement and what the viewer then reports as its live
-    recording, so a name that is not there is seen, not assumed."""
+def _focus_stream(recording: str) -> dict[str, Any]:
+    """A viewer stream to the front by its application id. A human's click
+    on a card leaves that card in front, and a twin started afterwards
+    stays a row in Sources; this is how an agent turns the viewer back."""
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import SETTLE_S, command, state  # noqa: PLC0415
 
@@ -1893,21 +1966,22 @@ def set_studio_theme(theme: str) -> dict[str, Any] | Refusal:
     return command(current_project(), "theme", theme=theme)
 
 
-def simulate_in_studio(task: str | None = None) -> dict[str, Any] | Refusal:
+def run_simulation(scene: str | None = None) -> dict[str, Any] | Refusal:
     """Run a scene in the Studio's MuJoCo simulator — a preview scene by a
-    task's name (`describe_tasks`; the simulator's own list is what the
+    task's name (`list_tasks`; the simulator's own list is what the
     Simulator page offers), `walk:<robot>` for the newest trained walk
     policy of a registered walk family, or a deployment of the open
     project (`deploy:<name>` live and drivable, `deploy:<name>:gate:
     <runtime>:<trial>` a gate trial re-run or replayed, `deploy:<name>:
     preflight:<segment>` a pre-flight segment replayed; the index's
     `viewport` summary lists them, docs/77 §11) — and switch to the Live view;
-    with no task, stop the simulator. The
+    with no scene, stop the simulator. The
     state file then reports `viewport_task` and `viewport_fps`, the
     frames drawn to the screen in the last second."""
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import command  # noqa: PLC0415
 
+    task = scene  # the Studio's command still calls it a task
     project = current_project()
     if task and task.startswith(DEPLOY_SCENE_PREFIX):
         # Refused here by name: the viewport accepted any deploy:<name> and
@@ -1932,7 +2006,7 @@ DEPLOY_SCENE_PREFIX = "deploy:"  # viewport.rs `DEPLOY_PREFIX`
 
 # One door, one simulate section: every knob of simulate's Simulation panel.
 def control_simulator(  # noqa: PLR0913, PLR0917
-    run: bool | None = None,
+    play: bool | None = None,
     step: int | None = None,
     reset: bool | None = None,
     keyframe: str | None = None,
@@ -1940,21 +2014,21 @@ def control_simulator(  # noqa: PLR0913, PLR0917
     manual: bool | None = None,
     follow: str | None = None,
 ) -> dict[str, Any]:
-    """MuJoCo simulate's Simulation section on the running scene: `run`
+    """MuJoCo simulate's Simulation section on the running scene: `play`
     (True runs, False pauses), `step` n physics steps (pauses and takes
     manual control), `reset` to the initial state or to a `keyframe` by
     name, `speed` as a real-time factor (0.01..100), `manual` (True: the
     sliders drive the scene; False: its own motion, from its start). In a
     many-worlds scene (walk), `follow` keeps the camera on a world: an
     index, worst (lowest reward), failing (an ended episode), cycle, none.
-    Refused when no scene runs — simulate_in_studio first."""
+    Refused when no scene runs — run_simulation first."""
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import command  # noqa: PLC0415
 
     return command(
         current_project(),
         "simulator",
-        run=run,
+        run=play,  # the Studio's command keeps simulate's word
         step=step,
         reset=reset,
         keyframe=keyframe,
@@ -2094,7 +2168,7 @@ def import_experiment(path: str, name: str | None = None) -> dict[str, Any] | Re
     return {"status": DONE, **out}
 
 
-def import_finding(record: str) -> dict[str, Any] | Refusal:
+def import_finding(finding: str) -> dict[str, Any] | Refusal:
     """Bring a record from the repository's findings ledger into the
     project, by id (e.g. walk-c1-2026-09-04) or by path."""
     from trainnr.project import (  # noqa: PLC0415
@@ -2108,14 +2182,14 @@ def import_finding(record: str) -> dict[str, Any] | Refusal:
 
     project = current_project()
     try:
-        out = run_import(project, record)
+        out = run_import(project, finding)
     except (FileExistsError, FileNotFoundError, ValueError) as why:
         return refusal(str(why))
     write_index(project, index_project(project))
     return {"status": DONE, **out}
 
 
-def list_ledger_findings(prefix: str = "") -> list[dict[str, str]]:
+def list_findings(prefix: str = "") -> list[dict[str, str]]:
     """The repository's findings ledger: id, date and claim of every
     record, optionally those whose id starts with `prefix`."""
     from trainnr.project.importer import ledger_findings  # noqa: PLC0415
@@ -2486,7 +2560,7 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
         return refusal(_reason(why))
     if (project.scenes / name / SCENE_FILE).is_file():
         return refusal(f"scene {name!r} already exists in this project")
-    return Actions(JobManager(_jobs_root())).capture_scene(
+    return Actions(JobManager(_jobs_root)).capture_scene(
         str(where),
         name,
         project=str(project.root),
@@ -2519,7 +2593,7 @@ def describe_scene(scene: str) -> dict[str, Any] | Refusal:
     return {"status": DONE, "scene": found.stamp, **asdict(record)}
 
 
-def describe_viewer_recording(
+def describe_viewer_stream(
     artifact: str, values: bool = False
 ) -> dict[str, Any] | Refusal:
     """The saved viewer streams an artifact carries (by version): every
@@ -2658,36 +2732,34 @@ def use_project(project: str) -> dict[str, Any] | Refusal:
 # destructive ones stop or replace something already running or made.
 READ_ONLY_TOOLS = frozenset(
     {
-        "capture_status",
         "describe_actuator",
-        "describe_actuator_bundle",
-        "describe_actuator_bundles",
-        "describe_actuators",
-        "describe_bundle",
-        "describe_bundles",
-        "describe_datasheet",
-        "describe_engines",
-        "describe_eval",
+        "describe_capture",
+        "describe_dataset",
+        "describe_evaluation",
+        "describe_friction",
         "describe_identification",
+        "describe_job",
         "describe_project",
-        "describe_runs",
+        "describe_robot",
         "describe_scene",
         "describe_studio",
         "describe_task",
-        "describe_task_families",
-        "describe_tasks",
-        "describe_viewer_recording",
-        "friction_curve",
-        "job_status",
+        "describe_viewer_stream",
+        "list_actuators",
         "list_capture_sources",
-        "list_eval_records",
+        "list_engines",
+        "list_evaluations",
+        "list_experiments",
+        "list_findings",
         "list_gate_runtimes",
         "list_identification_methods",
         "list_jobs",
-        "list_ledger_findings",
         "list_projects",
         "list_public_logs",
         "list_robot_adapters",
+        "list_robots",
+        "list_task_families",
+        "list_tasks",
         "read_studio_events",
     }
 )
@@ -2755,8 +2827,10 @@ def _guard_tools(server: Any) -> None:
 
 
 # A registration list: one statement per door, read top to bottom.
-def build_server() -> Any:  # noqa: PLR0915
-    """The MCP server over the query functions. Needs the `mcp` extra."""
+def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
+    """The MCP server over the query functions. Needs the `mcp` extra.
+    `plugins=False` leaves the installed tool plugins out: the built-in
+    API alone, as its snapshot records it."""
     from mcp.server import MCPServer  # noqa: PLC0415 - mcp extra
 
     from trainnr import __version__  # noqa: PLC0415
@@ -2768,76 +2842,70 @@ def build_server() -> Any:  # noqa: PLR0915
         instructions=(
             "trainnr's tools for robot learning. Start with create_project "
             "(or use_project); then onboard a robot, ingest or capture its "
-            "telemetry, identify its dynamics, declare and accept a task, "
+            "telemetry, identify its dynamics, declare and check a task, "
             "generate demonstrations, train, evaluate, export, gate, run "
-            "pre-flight and check drift. Describe tools read what exists; "
-            "long work returns a job handle (job_status, cancel_job); the "
+            "pre-flight and check drift. list_ and describe_ tools read what exists; "
+            "long work returns a job handle (describe_job, cancel_job); the "
             "Studio tools drive the desktop app. A refused call says why."
         ),
     )
     _guard_tools(server)
-    server.tool(description="Every robot bundle: name@hash, file census")(
-        describe_bundles
-    )
+    server.tool(description="Every robot: name@hash, file census")(list_robots)
     server.tool(
-        description="One robot bundle in full: its model census, its fit records, and "
+        description="One robot in full: its model census, its fit records, and "
         "whether repeated fits agree."
-    )(describe_bundle)
-    server.tool(description="The actuator library: servos, tiers, provenance")(
-        describe_actuators
-    )
-    server.tool(description="One servo at one friction tier (m1..m6): all parameters")(
-        describe_actuator
-    )
+    )(describe_robot)
     server.tool(
-        description="Identified actuator models: versions, parameter-bound checks, "
-        "advisories"
-    )(describe_actuator_bundles)
+        description="The actuator library: servos, friction tiers, provenance, and "
+        "each one's certified actuator bundles with checks and advisories"
+    )(list_actuators)
     server.tool(
-        description="One identified actuator model in full (fit parameters + "
-        "provenance)"
-    )(describe_actuator_bundle)
+        description="One actuator at one friction tier (m1..m6): every parameter "
+        "with provenance, and its certified actuator bundle"
+    )(describe_actuator)
     server.tool(
         description="A generated dataset's datasheet: success-rate bound, versions, "
         "randomization ranges"
-    )(describe_datasheet)
-    server.tool(description="The task registry: ids, names, rigs")(describe_tasks)
+    )(describe_dataset)
+    server.tool(description="The task registry: ids, names, rigs")(list_tasks)
     server.tool(
         description="One environment built for real: its task spec and version"
     )(describe_task)
-    server.tool(description="The physics-engine registry")(describe_engines)
+    server.tool(description="The physics-engine registry")(list_engines)
 
-    # A typed no-arg wrapper: describe_runs' `runs_root` parameter exists
-    # for the tests, not for clients — a Path in the tool schema would
-    # only invite an argument nobody should pass.
-    def runs() -> list[dict[str, Any]]:
+    # Typed no-arg wrappers: the `runs_root` parameter exists for the
+    # tests, not for clients — a Path in the tool schema would only invite
+    # an argument nobody should pass.
+    def experiments() -> list[dict[str, Any]]:
         """Training-run manifests under trainnr/runs/."""
-        return describe_runs()
+        return list_experiments()
 
     server.tool(
-        name="describe_runs",
+        name="list_experiments",
         description="Training-run manifests under trainnr/runs/",
-    )(runs)
+    )(experiments)
 
-    def evals() -> list[dict[str, Any]]:
+    def evaluations() -> list[dict[str, Any]]:
         """Every episode-record file under trainnr/runs/."""
-        return list_eval_records()
+        return list_evaluations()
 
-    def eval_detail(run: str) -> dict[str, Any]:
-        """One run's records folded: successes, funnel, per-trial verdicts."""
-        return describe_eval(run)
+    def evaluation_detail(evaluation: str) -> dict[str, Any]:
+        """One evaluation's records folded: successes, funnel, per-trial verdicts."""
+        return describe_evaluation(evaluation)
 
     server.tool(
-        name="list_eval_records",
+        name="list_evaluations",
         description="Every episode-record file under trainnr/runs/",
-    )(evals)
+    )(evaluations)
     server.tool(
-        name="describe_eval",
-        description="One run's episode records: successes, milestone funnel, trials",
-    )(eval_detail)
+        name="describe_evaluation",
+        description="One evaluation's episode records (evaluation = the run folder "
+        "holding them, as list_evaluations names it): successes, milestone "
+        "funnel, trials",
+    )(evaluation_detail)
     server.tool(
         description="An actuator's friction-torque curves over velocity, from its model"
-    )(friction_curve)
+    )(describe_friction)
 
     # The PROJECT family (docs/76): where one effort lives and where it
     # stands in the loop.
@@ -2875,7 +2943,7 @@ def build_server() -> Any:  # noqa: PLR0915
     server.tool(
         description="The project's capture state on disk: idle, listening, ingested, "
         "failed — readable from any process."
-    )(capture_status)
+    )(describe_capture)
     server.tool(
         description="The public real-robot recordings the registry can fetch: "
         "robot, source, recorded date, licence state, fetched or not; and "
@@ -2896,7 +2964,7 @@ def build_server() -> Any:  # noqa: PLR0915
     )(import_finding)
     server.tool(
         description="The findings ledger: id, date, claim; optional id prefix."
-    )(list_ledger_findings)
+    )(list_findings)
     server.tool(
         description="Every way a robot's dynamics can be identified from a recording."
     )(list_identification_methods)
@@ -2909,7 +2977,7 @@ def build_server() -> Any:  # noqa: PLR0915
         "leaves the same picture a window shows): each file's entity paths, "
         "timelines, components and size; with the viz-query extra, the scalar "
         "series' count, min, max and last value."
-    )(describe_viewer_recording)
+    )(describe_viewer_stream)
     server.tool(
         description="Bring a captured scene folder into the project: the Gaussian "
         "splat placed in the world frame, the collision proxy, the gap "
@@ -2994,16 +3062,14 @@ def build_server() -> Any:  # noqa: PLR0915
         "(its drawer opens), a table of it by title (the modal), or another project."
     )(open_in_studio)
     server.tool(
-        description="Stream one artifact into the viewer as itself (3D robot, "
-        "time-series recording, experiment curves, evaluation funnel); Live view."
+        description="To the front of the viewer, exactly one of: an artifact "
+        "streamed as itself (3D robot, recording, experiment curves, evaluation "
+        "funnel), or a stream already playing by its application id (the Sources "
+        "name: the viewport twin, a run, a gate)."
     )(show_in_studio)
     server.tool(
         description="Two artifacts side by side in the viewer, a left and b right."
     )(compare_in_studio)
-    server.tool(
-        description="Bring a recording to the front of the viewer by the application "
-        "id its tool used (the Sources name): the viewport twin, a run, a gate."
-    )(focus_studio_recording)
     server.tool(
         description="Drive the viewer timeline: cursor (seconds or sequence), "
         "play/pause, speed, time selection, follow, step. Refused if nothing streams."
@@ -3018,9 +3084,9 @@ def build_server() -> Any:  # noqa: PLR0915
     )(set_studio_theme)
     server.tool(
         description="Run a scene in the MuJoCo viewport (a task's preview scene, or "
-        "walk:<robot> for the newest trained walk) and open the Live view; no task "
+        "walk:<robot> for the newest trained walk) and open the Live view; no scene "
         "stops it. State reports viewport_fps."
-    )(simulate_in_studio)
+    )(run_simulation)
     server.tool(
         description="simulate's Simulation section on the running scene: run/pause, "
         "step n, reset (to a keyframe), speed, manual control; follow a world."
@@ -3051,7 +3117,7 @@ def build_server() -> Any:  # noqa: PLR0915
     # Jobs live in the PROJECT when one is open (its Overview shows them);
     # otherwise the legacy runs root, so a checkout with no project still
     # works exactly as before.
-    actions = Actions(JobManager(_jobs_root()))
+    actions = Actions(JobManager(_jobs_root))
 
     server.tool(
         description="Export a trained walk policy: ONNX with normalization folded in, "
@@ -3072,16 +3138,16 @@ def build_server() -> Any:  # noqa: PLR0915
     server.tool(
         description="The families an environment can be declared over, with every "
         "spec field, type and default."
-    )(describe_task_families)
+    )(list_task_families)
     server.tool(
         description="Declare an environment: a family plus the spec fields you "
-        "change, built for real and stamped by content. Next: accept_task."
+        "change, built for real and stamped by content. Next: check_task."
     )(create_task)
     server.tool(
-        description="Review a declared environment with the acceptance critic "
-        "(scripted policy every trial, floor policy none). Job handle; the "
-        "verdict lands beside the task."
-    )(accept_task)
+        description="Check a declared environment is doable (arm: scripted policy "
+        "every trial, floor policy none; walk: two training iterations run). Job "
+        "handle; the verdict lands beside the task."
+    )(check_task)
     server.tool(
         description="Generate kitting demonstrations with the scripted policy; only "
         "successful episodes are kept (DR draws recorded). Returns a job handle."
@@ -3127,15 +3193,99 @@ def build_server() -> Any:  # noqa: PLR0915
     )(actions.generate_planned_demos)
     server.tool(
         description="Add a robot from its MJCF file (meshes and includes come along) "
-        "or a USD file: a hash-stamped bundle, compiled once to check it "
+        "or a USD file: a hash-stamped robot folder, compiled once to check it "
         "loads; the reply lists the collision geoms, sites and trunk a "
         "trainer needs."
     )(onboard_robot)
-    server.tool(description="A job's state and log tail")(actions.job_status)
+    server.tool(description="A job's state and log tail")(actions.describe_job)
     server.tool(description="SIGTERM a job's process group")(actions.cancel_job)
     server.tool(description="Every job on record, newest first")(actions.list_jobs)
-    register_plugin_tools(server)
+    if plugins:
+        register_plugin_tools(server)
+    for (
+        registered
+    ) in server._tool_manager.list_tools():  # the SDK keeps no public setter
+        registered.parameters = trim_schema(registered.parameters)
     return server
+
+
+def tool_api(server: Any) -> list[dict[str, Any]]:
+    """What a client reads of `server`'s tools at session start, sorted by
+    name: each tool's name, description, input schema and annotations.
+    The API snapshot (tools/api-snapshot.py) is this, written down."""
+    import asyncio  # noqa: PLC0415
+
+    listed = asyncio.run(server.list_tools())
+    return sorted(
+        (
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "inputSchema": tool.input_schema,
+                "annotations": tool.annotations.model_dump(exclude_none=True)
+                if tool.annotations
+                else {},
+            }
+            for tool in listed
+        ),
+        key=lambda tool: tool["name"],
+    )
+
+
+def trim_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """An input schema without pydantic's noise, saying the same thing: no
+    `title` keys (each repeats its property's name), an optional value as
+    its type with default null rather than an anyOf with null, and a
+    nested object written in place rather than under $defs. What a call
+    may pass is unchanged — the SDK validates arguments with the pydantic
+    model, never with this text — and every tool's schema is read on every
+    session start, so the words are paid for each time."""
+    defs = schema.get("$defs", {})
+
+    def node(value: Any, optional: bool = False, depth: int = 0) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if depth > 16:  # noqa: PLR2004 - a recursive model; never ours
+            raise RecursionError("a recursive input schema")
+        ref = value.get("$ref", "")
+        if ref.startswith("#/$defs/"):
+            rest = {k: v for k, v in value.items() if k != "$ref"}
+            return node(
+                {**defs[ref.removeprefix("#/$defs/")], **rest}, optional, depth + 1
+            )
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            if key in {"title", "$defs"}:
+                continue
+            if key == "properties":
+                required = set(value.get("required", ()))
+                out[key] = {
+                    name: node(prop, name not in required, depth + 1)
+                    for name, prop in item.items()
+                }
+            elif key in {"items", "additionalProperties"}:
+                out[key] = node(item, depth=depth + 1)
+            elif key == "anyOf":
+                out[key] = [node(option, depth=depth + 1) for option in item]
+            else:
+                out[key] = item
+        options = out.get("anyOf")
+        if (
+            optional
+            and isinstance(options, list)
+            and len(options) == 2  # noqa: PLR2004 - a type and null
+            and {"type": "null"} in options
+            and out.get("default") is None
+        ):
+            (kept,) = [option for option in options if option != {"type": "null"}]
+            out.pop("anyOf")
+            out = {**kept, **out}
+        return out
+
+    try:
+        return node(schema)
+    except RecursionError:
+        return schema
 
 
 # The extension seam for tools: an installed package names a callable

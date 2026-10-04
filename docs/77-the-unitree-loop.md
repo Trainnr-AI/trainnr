@@ -115,7 +115,7 @@ read differently, and the window must say so rather than show a gap.
 | asset onboarded | Menagerie `go2.xml` into `projects/go2-walk/robots/go2` | `onboard_robot` | done by the door; two frictions (§3) |
 | telemetry recorded | none of our own — no Go2 in the room. The live Unitree adapter is BUILT (2026-09-24, `trainnr/trainnr/robots/dds_capture.py`): `start_capture(source="dds", network=<the robot's interface>)` records `rt/lowstate` AND `rt/lowcmd` as one recording, basis "own robot"; rehearsed on their simulator and controller (basis "simulation", 2026-09-24). Since 2026-09-24: a REAL Go2's public bag (YibinWu/leg-odometry, 12 min of `/lowstate` at 499.8 Hz measured) enters through the rosbag2 adapter (`trainnr/trainnr/robots/adapters/rosbag2.py`) with a provenance block, and the strip's chip reads "Telemetry · public log", never met (2026-09-24) | `ingest_recording`, `ingest_public_log` | a real robot's telemetry, not ours; shown as such |
 | system identified | **declared, not identified**: the reference's gains and armatures as the actuator basis, with a domain-randomization span around them (the way `trainnr-mjlab/src/trainnr_mjlab/go1_walk.py` already does for the Go1) | `identify_system` when a recording exists; the `legged-joints` method exists since 2026-09-24 (§8) and has fit public logs of other people's Go2s | declared for this robot; a method, no recording of ours |
-| environment defined | the walk families (`trainnr/tasks/walks.py`): `trainnr/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; trainnr_mjlab builds the simulator environment from it (`trainnr-mjlab/src/trainnr_mjlab/go2_walk.py`) | `create_task`, `accept_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
+| environment defined | the walk families (`trainnr/tasks/walks.py`): `trainnr/go2-walk` with a `WalkSpec` (span, terrain, episode length, trials) stamped by content, built over the project's bundle; trainnr_mjlab builds the simulator environment from it (`trainnr-mjlab/src/trainnr_mjlab/go2_walk.py`) | `create_task`, `check_task` (the learnability smoke, §3) | done 2026-09-10: `go2-flat` declared, accepted in 10 s, cited by a smoke run |
 | data generated | **not a stage for RL**: the policy learns from its own rollouts; the strip must say "not needed" | — | friction (§3) |
 | policy trained | trainnr_mjlab's walk trainer, `--robot go2 --project …`, 4096 envs, 8000 iterations on the pod | `train_walk(robot="go2", name=…)`; the generic `train_policy` door of phase A5 was planned and not built | door built and smoked 2026-09-10; the real run needs the pod |
 | policy evaluated | the walk verdict: paired trials, exact interval, the funnel, judged at the command envelope the checkpoint trained under (friction 20) | `evaluate_walk` (`certify_walk` until 2026-09-12); the generic `evaluate_policy` door of phase A5 was planned and not built | done 2026-09-10 on the WSL machine: go2-c1 40/40 twice, go2-c2 38/40 |
@@ -159,7 +159,7 @@ read differently, and the window must say so rather than show a gap.
    iterations, the environment built from the project's bundle, the
    actor's twelve outputs and the critic's seventy-two inputs shaped by
    the declared constants — which the train door runs in ten seconds on
-   a laptop CPU. `accept_task` on a walk family will run exactly that and
+   a laptop CPU. `check_task` on a walk family will run exactly that and
    record it as the verdict; a `floor` half (hold home, must not track)
    comes with the verdict tool.
 5. **The Menagerie Go2 is not in the simulator's shape** (2026-09-10).
@@ -309,7 +309,7 @@ with `--extra viz` and `--extra sim --extra viz --extra mcp`). The
 project made by hand (`projects/go2-walk/project.json`, loop
 `reinforcement`), then by the doors: `onboard_robot` (friction 7 above,
 then `go2@5003bf617b5f`), `create_task("go2-walk", "go2-flat", {span
-0.10, flat, 20 s, 40 trials})` → `go2-walk@0e7e123a7de7`, `accept_task`
+0.10, flat, 20 s, 40 trials})` → `go2-walk@0e7e123a7de7`, `check_task`
 → ACCEPTED by the learnability smoke (2 environments, 2 PPO iterations).
 The run: `walk_train --agent g3 --robot go2 --project <root> --dr-span
 0.1 --task-stamp go2-walk@0e7e123a7de7 --log-dir <root>/runs/go2-c1
@@ -369,7 +369,7 @@ reaches "policy evaluated".
 close this section; the Studio frictions of the same days are in the
 appendix.*
 
-`export_deployment(run, checkpoint, name)` spawns `trainnr_mjlab.walk_export`
+`export_deployment(experiment, checkpoint, name)` spawns `trainnr_mjlab.walk_export`
 in the walk package's venv: the actor as ONNX (rsl_rl's exporter,
 observation normalization inside the graph, a fixed batch of one, as a
 runtime uses it), checked against the torch actor on sixty-four random
@@ -386,7 +386,7 @@ timestep, so a plain MuJoCo loads the model the policy trained in with
 the bundle's meshes. The door finds the checkpoint's policy and newest
 evaluation in the index and cites them.
 
-`gate_deployment(name, trials, seed, tolerance)` spawns
+`gate_deployment(deployment, trials, seed, tolerance)` spawns
 `tools/gate-deployment.py` in the pipeline's venv (`--extra deploy`:
 onnxruntime): `trainnr.deploy.runtime` computes each observation
 term from MuJoCo state the way mjlab does (the IMU's velocimeter and
@@ -422,7 +422,7 @@ simulator on a Linux box as a second, independent gate; then A7.
 
 **Done on the WSL machine, 2026-09-11.** The Mac's two commits pulled, both
 venvs synced (onnx, onnxruntime 1.30), 634 pipeline tests green. Then
-by the doors: `export_deployment(run="go2-c1", checkpoint="model_7999.pt",
+by the doors: `export_deployment(experiment="go2-c1", checkpoint="model_7999.pt",
 name="go2-c1-deploy")` - `policy.onnx`, `deploy.json` citing the
 policy `go2-c1-model_7999@62a6474496a7`, the run, the robot, the
 declared task `go2-walk@0e7e123a7de7` and the evaluation
@@ -1045,7 +1045,7 @@ and a gate started while no Studio listened was only a saved file.
 
 **The source** (`trainnr/trainnr/deploy/viewport_source.py`), a
 registry of modes behind one scene grammar the picker, the drawer and
-the agent's `simulate_in_studio` share:
+the agent's `run_simulation` share:
 
 | scene | what the simulator shows |
 |---|---|
@@ -1402,7 +1402,7 @@ before anything else moved), world resets as events, and the Compute
 card counting the job. That is the recorder mjlab's API defined and
 never implemented, our Rerun sink, and nothing else.
 
-`play_walk(run, checkpoint, envs, viewer)` opens a checkpoint in
+`play_walk(experiment, checkpoint, envs, viewer)` opens a checkpoint in
 mjlab's own viewer - the library's viewers as they are - with the same
 rollout streamed into the Live view by the recorder; `walk_play` now
 takes the walk by robot and project like the other tools (it was

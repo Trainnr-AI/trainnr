@@ -263,14 +263,14 @@ class TheDoorAndTheWindow(unittest.TestCase):
         return project, path
 
     def test_the_door_lists_and_describes_the_files(self) -> None:
-        from trainnr.mcp_server import describe_viewer_recording  # noqa: PLC0415
+        from trainnr.mcp_server import describe_viewer_stream  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
             project, path = self._project(Path(tmp))
             os.environ[PROJECT_ENV] = str(project.root)
             try:
                 robot = index_project(project).by_kind(Kind.ROBOT)[0].stamp
-                out = describe_viewer_recording(robot, values=False)
+                out = describe_viewer_stream(robot, values=False)
                 self.assertEqual(out["status"], "done")
                 self.assertEqual(out["kind"], "robot")
                 [rec] = out["recordings"]
@@ -278,7 +278,7 @@ class TheDoorAndTheWindow(unittest.TestCase):
                 self.assertIn("/rig/note", rec["entities"])
                 self.assertIn("1 saved stream", out["note"])
                 self.assertEqual(
-                    describe_viewer_recording("nobody@000000000000")["status"],
+                    describe_viewer_stream("nobody@000000000000")["status"],
                     "refused",
                 )
             finally:

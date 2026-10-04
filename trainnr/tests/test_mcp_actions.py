@@ -91,7 +91,7 @@ class TheDoors(unittest.TestCase):
 
     def test_accept_task_reviews_a_declared_task_in_its_project(self) -> None:
         with harness() as (actions, spawner):
-            handle = actions.accept_task("tray-far", "/p/aloha")
+            handle = actions.check_task("tray-far", "/p/aloha")
             [(argv, cwd)] = spawner.calls
             self.assertEqual(
                 argv,
@@ -110,7 +110,7 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(cwd, PIPELINE_DIR)
             self.assertTrue(str(handle["job_id"]).startswith("accept-task-"))
             with self.assertRaises(ValueError):
-                actions.accept_task("a/b", "/p")
+                actions.check_task("a/b", "/p")
 
     def test_generate_planned_demos_spawns_the_planner_on_the_task(self) -> None:
         with harness() as (actions, spawner):
@@ -420,7 +420,7 @@ class TheJobLifecycle(unittest.TestCase):
             # than poll (a poll saw "ended (unrecorded)" first whenever
             # the fake pid was dead on the box, 2026-09-02).
             actions.jobs.join()
-            status = actions.job_status(str(handle["job_id"]))
+            status = actions.describe_job(str(handle["job_id"]))
             self.assertEqual(status["state"], "done")
             self.assertEqual(status["log_tail"], ["line one", "line two"])
 
@@ -428,7 +428,7 @@ class TheJobLifecycle(unittest.TestCase):
         with harness() as (actions, _spawner):
             actions.train_walk(robot="microduck")
             with self.assertRaises(KeyError) as ctx:
-                actions.job_status("nope-123")
+                actions.describe_job("nope-123")
             self.assertIn("train-walk-", str(ctx.exception))
 
     def test_list_is_newest_first(self) -> None:

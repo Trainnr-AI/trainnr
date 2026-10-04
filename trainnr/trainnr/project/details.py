@@ -617,7 +617,7 @@ def _task(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             _kv(
                 "Acceptance",
                 [("verdict", UNREVIEWED)],
-                note="run accept_task to review it",
+                note="run check_task to review it",
             )
         )
     try:

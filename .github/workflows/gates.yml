@@ -244,6 +244,10 @@ jobs:
       - name: mypy (trainnr)
         run: uv run --extra sim --extra mcp --extra deploy --extra viz --with mypy==2.3.1 mypy trainnr
         working-directory: trainnr
+      # A renamed tool or argument, a reworded description: the API an
+      # agent reads at session start, changed only on purpose.
+      - name: MCP tool API matches its snapshot
+        run: python3 tools/api-snapshot.py
       - name: python tests (trainnr), with line coverage
         run: |
           uv run --extra sim --extra mcp --extra deploy --extra viz --with coverage \

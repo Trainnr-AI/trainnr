@@ -97,5 +97,5 @@ def capture(
     )
 
 
-def capture_status(project: Project) -> dict[str, Any]:
+def read_capture(project: Project) -> dict[str, Any]:
     return capture_state(project.root / INDEX_DIR)

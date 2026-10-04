@@ -133,7 +133,7 @@ fifteen trained arms of the microduck walk study (docs/e2e-research/63) and the 
   interval, funnel and protocol, citing the policy, robot, environment
   and run; the trial records copied beside it).
 - `import_finding(project, id)` — a ledger record into `findings/`.
-- Doors: `import_experiment`, `import_finding`, `list_ledger_findings`.
+- Doors: `import_experiment`, `import_finding`, `list_findings`.
 - The run's console log comes along: its own `train.log`, else the
   segment of a study log whose `log_dir:` banner names the run (a study
   launches several runs into one log; a restarted run leaves two
@@ -233,7 +233,7 @@ families below are the design, with the counts of 2026-09-24.*
   (the three capture doors were written 2026-09-09 and registered
   2026-09-24), identify, create and accept tasks, export and gate a
   deployment, check drift, capture and stage a scene, and the job
-  handles (`job_status`, `cancel_job`, `list_jobs`) that make long work
+  handles (`describe_job`, `cancel_job`, `list_jobs`) that make long work
   pollable.
 - **STUDIO** (built, 14 tools): launch, quit, open, show, compare, time,
   panels, simulate, the simulator's controls, screenshot, events.
@@ -408,17 +408,17 @@ a rejection returns the funnel showing where it failed, so the fix is
 visible. This is the gate that keeps a policy from being trained on a
 task that was never doable.
 
-**Built 2026-09-09 (A4).** Three doors. `describe_task_families` lists
+**Built 2026-09-09 (A4).** Three doors. `list_task_families` lists
 every registered task whose builder takes a spec — kitting and the lift
 study today — with each spec field's type and default, so the agent
-writes only what it changes. `create_task(task_id, name, overlay)`
-builds the family with the overlay replaced into its spec
+writes only what it changes. `create_task(family, name, settings)`
+builds the family with the settings replaced into its spec
 (`trainnr/tasks/overlay.py`: an unknown field is refused naming the
 real ones; a task that composes a fixed scene is refused naming the
 families; JSON lists become the tuples the spec keeps), stamps it by
 content (`Task.stamp`, so two agents writing the same numbers get the
 same version) and writes it into the project as a task reference of kind
-`declared` under `name`, spec and all. `accept_task(name)` runs the
+`declared` under `name`, spec and all. `check_task(name)` runs the
 critic as a job (`tools/accept-task.py --project … --name …`): the
 scripted policy must succeed on every paired trial and the floor policy
 on none; the verdict, counts, funnel and reasons land beside the task as
@@ -739,11 +739,11 @@ Reset, returns the scene to its own motion from its start; Reset to a
 keyframe stays manual. Speed is a real-time factor the physics paces
 to (0.01–100), reported back as the factor achieved.
 
-**The agent's doors.** `simulate_in_studio(task)` starts or stops a
-scene; `control_simulator(run, step, reset, keyframe, speed, manual)`;
+**The agent's doors.** `run_simulation(scene)` starts or stops a
+scene; `control_simulator(play, step, reset, keyframe, speed, manual)`;
 `set_simulator_input(value, actuator= | joint= | command=)` — an actuator or joint slider, or in a walk scene one twist axis (vx, vy, wz) for the followed world on mjlab's own joystick override, `command="own"` handing back; `set_simulator_view(flag, on | group=, kind=, on | camera= | inspect= | fullscreen=)` — a MuJoCo flag, one group-mask bit (geom, site, joint, tendon, actuator, flex, skin; 0-5), a named camera view (front, side, top, reset), the Inspect drawer's tab (control, joints, physics, visuals, close), or the viewport alone on the page.
 Names are the model's own and a wrong one is refused naming the
-choices; nothing runs → refused with "simulate_in_studio first". The
+choices; nothing runs → refused with "run_simulation first". The
 state file carries `simulator: {time, rtf, paused, manual, speed,
 render_ms}` beside `viewport_task` and `viewport_fps`.
 
@@ -1004,7 +1004,7 @@ with `presenter.age_s`) as distinct from `pending` (nobody answered).
 (3) A show or compare by a door is logged `by: agent`; `by: studio` marks
 the window's own moves (the turn to Live when a recording arrives).
 (4) `set_studio_time` refuses a timeline the recording has not got, naming
-the ones it has; `focus_studio_recording` answers `not shown` when the
+the ones it has; `show_in_studio` answers `not shown` when the
 live recording after the command is not the one asked for. (5) The
 recording the presenter lands is brought to the front (`ActivateApp`),
 so a second show is seen, not streamed behind the first. (6) Application
@@ -1063,7 +1063,7 @@ it the door reads the columns — rows per clock, and for every scalar
 series on each clock it was logged on: its count, its width (components
 per row), minimum and maximum over every component, and the last row. Without it the door
 says so by name and gives the inventory. The door is
-`describe_viewer_recording(artifact)`: the files inside the artifact,
+`describe_viewer_stream(artifact)`: the files inside the artifact,
 each described.
 
 **The window follows the file.** "Show in viewer" on an artifact that
@@ -1097,7 +1097,7 @@ feed (`.viewer/press.rrd`), the gate's mirror
 (`.viewer/gate-<runtime>.rrd`), and the training watcher's own file
 flag. The reader: `trainnr/project/viewer.py` — Rerun's command
 line for the inventory, Rerun's local catalog (the `viz-query` extra,
-DataFusion, 98 MB) for the values. The door `describe_viewer_recording`
+DataFusion, 98 MB) for the values. The door `describe_viewer_stream`
 and the replay in `project/present.py`. Tests in
 `trainnr/tests/test_viewer_stream.py`.
 

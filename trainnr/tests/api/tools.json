@@ -1,0 +1,1856 @@
+[
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Test how a staged deployment tolerates scene error: it is gated nine times with the terrain shifted ±20 mm per axis and turned ±5°, and the drop in success is reported. A job.",
+    "inputSchema": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "scene": {
+          "type": "string"
+        },
+        "seed": {
+          "default": 1000,
+          "type": "integer"
+        },
+        "trials": {
+          "default": 20,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deployment",
+        "scene"
+      ],
+      "type": "object"
+    },
+    "name": "assay_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Find which parameter breaks a policy first: a passing gate is re-run with one dynamics parameter pushed at a time (latency, friction, payload, gains, noise, slope, pushes), ranked by where it fails. A job.",
+    "inputSchema": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "runtime": {
+          "default": "mujoco",
+          "type": "string"
+        },
+        "seed": {
+          "default": null,
+          "type": "integer"
+        },
+        "trials": {
+          "default": null,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deployment"
+      ],
+      "type": "object"
+    },
+    "name": "attribute_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": true,
+      "read_only_hint": false
+    },
+    "description": "SIGTERM a job's process group",
+    "inputSchema": {
+      "properties": {
+        "job_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "type": "object"
+    },
+    "name": "cancel_job"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Turn a phone video or a folder of frames into a scene: frames, camera poses (COLMAP), a Gaussian splat, the floor at z=0, a collision proxy and the measured gap. A job of minutes to an hour.",
+    "inputSchema": {
+      "properties": {
+        "brush": {
+          "default": null,
+          "type": "string"
+        },
+        "floor_friction": {
+          "default": null,
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "fps": {
+          "default": 2.0,
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "scale": {
+          "default": null,
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        },
+        "splatter": {
+          "default": "auto",
+          "type": "string"
+        },
+        "steps": {
+          "default": 30000,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "capture_scene"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Drift monitoring: identify fresh telemetry (a recording, by version) without writing a fit record and judge every parameter against the robot's identified intervals; writes a drift record naming what left and recommending re-identification.",
+    "inputSchema": {
+      "properties": {
+        "against": {
+          "default": null,
+          "type": "string"
+        },
+        "method": {
+          "default": null,
+          "type": "string"
+        },
+        "name": {
+          "default": null,
+          "type": "string"
+        },
+        "recording": {
+          "type": "string"
+        },
+        "robot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "robot",
+        "recording"
+      ],
+      "type": "object"
+    },
+    "name": "check_drift"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk: two training iterations run). Job handle; the verdict lands beside the task.",
+    "inputSchema": {
+      "properties": {
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "check_task"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Two artifacts side by side in the viewer, a left and b right.",
+    "inputSchema": {
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "type": "object"
+    },
+    "name": "compare_in_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "simulate's Simulation section on the running scene: run/pause, step n, reset (to a keyframe), speed, manual control; follow a world.",
+    "inputSchema": {
+      "properties": {
+        "follow": {
+          "default": null,
+          "type": "string"
+        },
+        "keyframe": {
+          "default": null,
+          "type": "string"
+        },
+        "manual": {
+          "default": null,
+          "type": "boolean"
+        },
+        "play": {
+          "default": null,
+          "type": "boolean"
+        },
+        "reset": {
+          "default": null,
+          "type": "boolean"
+        },
+        "speed": {
+          "default": null,
+          "type": "number"
+        },
+        "step": {
+          "default": null,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "control_simulator"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Make a project (a bare name lands in ~/trainnr/projects) and make it the current one; never overwrites an existing project.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "default": "",
+          "type": "string"
+        },
+        "loop": {
+          "default": "",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "create_project"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Declare an environment: a family plus the spec fields you change, built for real and stamped by content. Next: check_task.",
+    "inputSchema": {
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "default": null,
+          "type": "object"
+        }
+      },
+      "required": [
+        "family",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "create_task"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "One actuator at one friction tier (m1..m6): every parameter with provenance, and its certified actuator bundle",
+    "inputSchema": {
+      "properties": {
+        "actuator": {
+          "type": "string"
+        },
+        "tier": {
+          "default": "m6",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actuator"
+      ],
+      "type": "object"
+    },
+    "name": "describe_actuator"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The project's capture state on disk: idle, listening, ingested, failed — readable from any process.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "describe_capture"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "A generated dataset's datasheet: success-rate bound, versions, randomization ranges",
+    "inputSchema": {
+      "properties": {
+        "dataset": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "type": "object"
+    },
+    "name": "describe_dataset"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "One evaluation's episode records (evaluation = the run folder holding them, as list_evaluations names it): successes, milestone funnel, trials",
+    "inputSchema": {
+      "properties": {
+        "evaluation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "evaluation"
+      ],
+      "type": "object"
+    },
+    "name": "describe_evaluation"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "An actuator's friction-torque curves over velocity, from its model",
+    "inputSchema": {
+      "properties": {
+        "actuator": {
+          "type": "string"
+        },
+        "points": {
+          "default": 101,
+          "type": "integer"
+        },
+        "tau_external": {
+          "default": 0.3,
+          "type": "number"
+        },
+        "tier": {
+          "default": "m6",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actuator"
+      ],
+      "type": "object"
+    },
+    "name": "describe_friction"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "A robot's fit records: each parameter's estimate and interval, whether it is identified, and how repeated fits agree.",
+    "inputSchema": {
+      "properties": {
+        "robot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "robot"
+      ],
+      "type": "object"
+    },
+    "name": "describe_identification"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "A job's state and log tail",
+    "inputSchema": {
+      "properties": {
+        "job_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id"
+      ],
+      "type": "object"
+    },
+    "name": "describe_job"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The current project: artifacts by kind with versions and lineage, the loop map (each state proved or missing), the next move.",
+    "inputSchema": {
+      "properties": {
+        "refresh": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "describe_project"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "One robot in full: its model census, its fit records, and whether repeated fits agree.",
+    "inputSchema": {
+      "properties": {
+        "robot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "robot"
+      ],
+      "type": "object"
+    },
+    "name": "describe_robot"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "A captured scene's record: source, capture, the tool chain with licences, the splat and proxy facts, the alignment, the gap's four numbers, and every physics parameter with its basis (measured with an interval, or declared with a span).",
+    "inputSchema": {
+      "properties": {
+        "scene": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene"
+      ],
+      "type": "object"
+    },
+    "name": "describe_scene"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "What the Studio shows now: project, page, selected artifact, viewer recording and time cursor, presenter; with alive/heartbeat.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "describe_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "One environment built for real: its task spec and version",
+    "inputSchema": {
+      "properties": {
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "describe_task"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The saved viewer streams an artifact carries (a headless run leaves the same picture a window shows): each file's entity paths, timelines, components and size; with the viz-query extra, the scalar series' count, min, max and last value.",
+    "inputSchema": {
+      "properties": {
+        "artifact": {
+          "type": "string"
+        },
+        "values": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "artifact"
+      ],
+      "type": "object"
+    },
+    "name": "describe_viewer_stream"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Evaluate a walk policy: paired episodes, exact confidence intervals, versions on every row; robot names the walk, else the project's one declared walk. Job handle.",
+    "inputSchema": {
+      "properties": {
+        "checkpoint": {
+          "type": "string"
+        },
+        "conditions": {
+          "additionalProperties": false,
+          "default": null,
+          "description": "The world an evaluation judges a policy in, when not its own; the\nfields combine.",
+          "properties": {
+            "delay": {
+              "description": "The action arrives this many control ticks late.",
+              "type": "integer"
+            },
+            "in_fit": {
+              "description": "Another robot world: a joints fit (fit@<stamp>) or declared (the vendor's constants); recorded under its own name, never the certificate.",
+              "type": "string"
+            },
+            "param": {
+              "description": "The axis scale moves: kp, kd, armature or all (the default).",
+              "type": "string"
+            },
+            "scale": {
+              "description": "A cliff rung: the param axis pinned at the fit times this.",
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
+        "device": {
+          "default": null,
+          "type": "string"
+        },
+        "horizon": {
+          "default": 20,
+          "type": "integer"
+        },
+        "robot": {
+          "default": null,
+          "type": "string"
+        },
+        "scene": {
+          "default": null,
+          "type": "string"
+        },
+        "seed": {
+          "default": 1000,
+          "type": "integer"
+        },
+        "student": {
+          "default": null,
+          "type": "string"
+        },
+        "trials": {
+          "default": 40,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "checkpoint"
+      ],
+      "type": "object"
+    },
+    "name": "evaluate_walk"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Export a trained walk policy: ONNX with normalization folded in, a manifest of joint orders, gains, observations and control rate, and the scene as MJCF. Cites the checkpoint's evaluation. A job.",
+    "inputSchema": {
+      "properties": {
+        "checkpoint": {
+          "type": "string"
+        },
+        "evaluation": {
+          "default": null,
+          "type": "string"
+        },
+        "experiment": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "unevaluated": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "experiment",
+        "checkpoint",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "export_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "The sim-to-sim gate: drive the exported policy through its manifest alone by a registered runtime (plain MuJoCo, or Unitree's simulator over DDS), judge it the evaluation's way, pass within a stated tolerance of the cited evaluation. Job handle.",
+    "inputSchema": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "runtime": {
+          "default": "mujoco",
+          "type": "string"
+        },
+        "seed": {
+          "default": 1000,
+          "type": "integer"
+        },
+        "tolerance": {
+          "default": null,
+          "type": "number"
+        },
+        "trials": {
+          "default": 20,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deployment"
+      ],
+      "type": "object"
+    },
+    "name": "gate_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Generate kitting demonstrations with the scripted policy; only successful episodes are kept (DR draws recorded). Returns a job handle.",
+    "inputSchema": {
+      "properties": {
+        "episodes": {
+          "default": 10,
+          "type": "integer"
+        },
+        "out": {
+          "default": null,
+          "type": "string"
+        },
+        "seed": {
+          "default": 20260826,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "generate_kitting_demos"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Generate demonstrations with a motion planner on a registered task: waypoints solved by inverse kinematics, kept by the task's success criterion, streamed to the Studio. Job handle.",
+    "inputSchema": {
+      "properties": {
+        "dr_span": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "episodes": {
+          "default": 8,
+          "type": "integer"
+        },
+        "out": {
+          "default": null,
+          "type": "string"
+        },
+        "seed": {
+          "default": 17,
+          "type": "integer"
+        },
+        "shards": {
+          "default": 1,
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "generate_planned_demos"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Generate demonstrations from a trained walk policy: its rollouts that succeed become a stamped batch with camera frames; failures are logged. Job handle.",
+    "inputSchema": {
+      "properties": {
+        "checkpoint": {
+          "default": null,
+          "type": "string"
+        },
+        "episodes": {
+          "default": 12,
+          "type": "integer"
+        },
+        "frame_size": {
+          "default": null,
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "out": {
+          "default": null,
+          "type": "string"
+        },
+        "project": {
+          "default": null,
+          "type": "string"
+        },
+        "robot": {
+          "default": null,
+          "type": "string"
+        },
+        "scene": {
+          "default": null,
+          "type": "string"
+        },
+        "seed": {
+          "default": 1000,
+          "type": "integer"
+        },
+        "worlds": {
+          "default": 9,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "generate_walk_demos"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "System identification: fit a robot's dynamics from a recording (both by version); writes the fit record with intervals and verdicts.",
+    "inputSchema": {
+      "properties": {
+        "method": {
+          "default": null,
+          "type": "string"
+        },
+        "recording": {
+          "type": "string"
+        },
+        "robot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "robot",
+        "recording"
+      ],
+      "type": "object"
+    },
+    "name": "identify_system"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Bring a trained trainnr-mjlab experiment into the project: run, policy and one evaluation per verdict, each citing the others by version.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "default": null,
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "import_experiment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Bring a findings-ledger record into the project by id or path.",
+    "inputSchema": {
+      "properties": {
+        "finding": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding"
+      ],
+      "type": "object"
+    },
+    "name": "import_finding"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Bring a captured scene folder into the project: the Gaussian splat placed in the world frame, the collision proxy, the gap between what is seen and what is touched, and the floor's friction.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "import_scene"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Fetch a registered public log (size and digest checked) and ingest it with its provenance, as a job; the telemetry stage reads 'public log'.",
+    "inputSchema": {
+      "properties": {
+        "accept_unlicensed": {
+          "default": false,
+          "type": "boolean"
+        },
+        "log": {
+          "type": "string"
+        },
+        "name": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "required": [
+        "log"
+      ],
+      "type": "object"
+    },
+    "name": "ingest_public_log"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap or rosbag2 .db3) into the project as a stamped recording with channels, units, measured rates, census.",
+    "inputSchema": {
+      "properties": {
+        "adapter": {
+          "default": null,
+          "type": "string"
+        },
+        "name": {
+          "default": null,
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "name": "ingest_recording"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Start the Studio window on the current project; waits for its heartbeat. Refuses when one already runs.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "launch_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The actuator library: servos, friction tiers, provenance, and each one's certified actuator bundles with checks and advisories",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_actuators"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every protocol a live capture listens on (udp, dds), its options, and whether it runs on this machine.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_capture_sources"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The physics-engine registry",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_engines"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every episode-record file under trainnr/runs/",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_evaluations"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Training-run manifests under trainnr/runs/",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_experiments"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The findings ledger: id, date, claim; optional id prefix.",
+    "inputSchema": {
+      "properties": {
+        "prefix": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_findings"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every runtime the sim-to-sim gate can drive a policy through, with the platforms each runs on.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_gate_runtimes"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every way a robot's dynamics can be identified from a recording.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_identification_methods"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every job on record, newest first",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_jobs"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every project (the projects home, ~/trainnr/projects by default): name, root, whether it is current, stages proved.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_projects"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The public real-robot recordings the registry can fetch: robot, source, recorded date, licence state, fetched or not; and the ones no adapter reads, with why.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_public_logs"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every source format a recording can enter through.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_robot_adapters"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "Every robot: name@hash, file census",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_robots"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The families an environment can be declared over, with every spec field, type and default.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_task_families"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "The task registry: ids, names, rigs",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_tasks"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Multiply seed demonstrations under randomization: candidates generated on the GPU, replayed on the CPU, kept by the task's success criterion. Needs a CUDA GPU. Returns a job handle.",
+    "inputSchema": {
+      "properties": {
+        "dataset": {
+          "type": "string"
+        },
+        "episodes": {
+          "default": 4,
+          "type": "integer"
+        },
+        "out": {
+          "type": "string"
+        },
+        "seed": {
+          "default": 11,
+          "type": "integer"
+        },
+        "worlds": {
+          "default": 64,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dataset",
+        "out"
+      ],
+      "type": "object"
+    },
+    "name": "multiply_demos"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Add a robot from its MJCF file (meshes and includes come along) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
+    "inputSchema": {
+      "properties": {
+        "accept_changes": {
+          "default": false,
+          "type": "boolean"
+        },
+        "model_path": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "root": {
+          "default": null,
+          "type": "string"
+        },
+        "variants": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null,
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_path",
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "onboard_robot"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Navigate the Studio: a page by name, an artifact by version (its drawer opens), a table of it by title (the modal), or another project.",
+    "inputSchema": {
+      "properties": {
+        "artifact": {
+          "default": null,
+          "type": "string"
+        },
+        "project": {
+          "default": null,
+          "type": "string"
+        },
+        "search": {
+          "default": null,
+          "type": "string"
+        },
+        "section": {
+          "default": null,
+          "type": "string"
+        },
+        "table": {
+          "default": null,
+          "type": "string"
+        },
+        "view": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "open_in_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Open a checkpoint of an experiment in mjlab's own viewer (viser in the browser, or native), the same rollout streamed into the Studio's Live view. Job handle; the viewer lives until closed.",
+    "inputSchema": {
+      "properties": {
+        "checkpoint": {
+          "type": "string"
+        },
+        "envs": {
+          "default": 9,
+          "type": "integer"
+        },
+        "experiment": {
+          "type": "string"
+        },
+        "scene": {
+          "default": null,
+          "type": "string"
+        },
+        "viewer": {
+          "default": "viser",
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment",
+        "checkpoint"
+      ],
+      "type": "object"
+    },
+    "name": "play_walk"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Check a deployment before the first tick on a robot: joint order, gains, a dry run's targets and torques against limits, compute per tick, the robot's state, then the ramp-in and stops measured. A job.",
+    "inputSchema": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "runtime": {
+          "default": "mujoco",
+          "type": "string"
+        },
+        "seed": {
+          "default": null,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "deployment"
+      ],
+      "type": "object"
+    },
+    "name": "preflight_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "See the reward before training: roll the declared walk for a few seconds untrained or standing, every reward term streamed into the Studio, a per-term summary written beside the task. Job handle.",
+    "inputSchema": {
+      "properties": {
+        "controller": {
+          "default": "untrained",
+          "type": "string"
+        },
+        "seconds": {
+          "default": 5.0,
+          "type": "number"
+        },
+        "seed": {
+          "default": 1000,
+          "type": "integer"
+        },
+        "task": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "preview_rewards"
+  },
+  {
+    "annotations": {
+      "destructive_hint": true,
+      "read_only_hint": false
+    },
+    "description": "Close the Studio (a quit command, then by pid).",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "quit_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": true
+    },
+    "description": "What the human did in the Studio since a time: pages opened, artifacts selected or shown, project switches, time scrubs.",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 200,
+          "type": "integer"
+        },
+        "since_ns": {
+          "default": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "read_studio_events"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "The whole chain: generate -> dataset -> train -> paired evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle.",
+    "inputSchema": {
+      "properties": {
+        "episodes": {
+          "default": null,
+          "type": "integer"
+        },
+        "from_stage": {
+          "default": null,
+          "type": "string"
+        },
+        "name": {
+          "default": "mcp",
+          "type": "string"
+        },
+        "scale": {
+          "default": "smoke",
+          "type": "string"
+        },
+        "steps": {
+          "default": null,
+          "type": "integer"
+        },
+        "until_stage": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "run_chain"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Run a scene in the MuJoCo viewport (a task's preview scene, or walk:<robot> for the newest trained walk) and open the Live view; no scene stops it. State reports viewport_fps.",
+    "inputSchema": {
+      "properties": {
+        "scene": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "run_simulation"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "See the window: a PNG of the whole Studio (optionally after opening a page or an artifact); read the returned path to look at it.",
+    "inputSchema": {
+      "properties": {
+        "artifact": {
+          "default": null,
+          "type": "string"
+        },
+        "section": {
+          "default": null,
+          "type": "string"
+        },
+        "width": {
+          "default": 1600,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "screenshot_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "One Control or Joint slider by name: an actuator's control value or a joint's position; takes manual control.",
+    "inputSchema": {
+      "properties": {
+        "actuator": {
+          "default": null,
+          "type": "string"
+        },
+        "command": {
+          "default": null,
+          "type": "string"
+        },
+        "joint": {
+          "default": null,
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_simulator_input"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "What the simulator shows: a MuJoCo flag by name with on, a camera view (front/side/top/reset), the Inspect drawer (control/joints/physics/close).",
+    "inputSchema": {
+      "properties": {
+        "camera": {
+          "default": null,
+          "type": "string"
+        },
+        "flag": {
+          "default": null,
+          "type": "string"
+        },
+        "fullscreen": {
+          "default": null,
+          "type": "boolean"
+        },
+        "group": {
+          "default": null,
+          "type": "integer"
+        },
+        "inspect": {
+          "default": null,
+          "type": "string"
+        },
+        "kind": {
+          "default": null,
+          "type": "string"
+        },
+        "on": {
+          "default": null,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_simulator_view"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Expand or toggle the viewer's blueprint (left) and selection (right) panels.",
+    "inputSchema": {
+      "properties": {
+        "blueprint": {
+          "default": null,
+          "type": "string"
+        },
+        "selection": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_studio_panels"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "The Studio's theme: light, dark or system; the viewer, the pages and the card pictures follow, and the choice is kept.",
+    "inputSchema": {
+      "properties": {
+        "theme": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "theme"
+      ],
+      "type": "object"
+    },
+    "name": "set_studio_theme"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Drive the viewer timeline: cursor (seconds or sequence), play/pause, speed, time selection, follow, step. Refused if nothing streams.",
+    "inputSchema": {
+      "properties": {
+        "end": {
+          "default": null,
+          "type": "number"
+        },
+        "follow": {
+          "default": null,
+          "type": "boolean"
+        },
+        "play": {
+          "default": null,
+          "type": "boolean"
+        },
+        "seconds": {
+          "default": null,
+          "type": "number"
+        },
+        "sequence": {
+          "default": null,
+          "type": "integer"
+        },
+        "speed": {
+          "default": null,
+          "type": "number"
+        },
+        "start": {
+          "default": null,
+          "type": "number"
+        },
+        "step": {
+          "default": null,
+          "type": "integer"
+        },
+        "timeline": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_studio_time"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "To the front of the viewer, exactly one of: an artifact streamed as itself (3D robot, recording, experiment curves, evaluation funnel), or a stream already playing by its application id (the Sources name: the viewport twin, a run, a gate).",
+    "inputSchema": {
+      "properties": {
+        "artifact": {
+          "default": null,
+          "type": "string"
+        },
+        "stream": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "show_in_studio"
+  },
+  {
+    "annotations": {
+      "destructive_hint": true,
+      "read_only_hint": false
+    },
+    "description": "Copy a deployment onto a captured scene as a new deployment: the flat floor replaced by the scene's collision proxy, the robot placed on the scene's course. gate_deployment then judges it there.",
+    "inputSchema": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "heading_deg": {
+          "default": null,
+          "type": "number"
+        },
+        "name": {
+          "default": null,
+          "type": "string"
+        },
+        "scene": {
+          "type": "string"
+        },
+        "start_x": {
+          "default": null,
+          "type": "number"
+        },
+        "start_y": {
+          "default": null,
+          "type": "number"
+        },
+        "terrain": {
+          "default": "heightfield",
+          "type": "string"
+        }
+      },
+      "required": [
+        "deployment",
+        "scene"
+      ],
+      "type": "object"
+    },
+    "name": "stage_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Record a robot's telemetry live into the project, over UDP or Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from the robot or its simulator); stop_capture saves it as a recording.",
+    "inputSchema": {
+      "properties": {
+        "basis": {
+          "default": null,
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "network": {
+          "default": null,
+          "type": "string"
+        },
+        "port": {
+          "default": null,
+          "type": "integer"
+        },
+        "source": {
+          "default": null,
+          "type": "string"
+        },
+        "window_s": {
+          "default": null,
+          "type": "number"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "start_capture"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Stop the project's listener and ingest the capture as a stamped recording; a session with no datagrams fails by name.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "stop_capture"
+  },
+  {
+    "annotations": {
+      "destructive_hint": true,
+      "read_only_hint": false
+    },
+    "description": "Stop a running deployment: writes a STOP file that a guarded run answers with a soft stop (gains blended to damping, never cut).",
+    "inputSchema": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "reason": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "required": [
+        "deployment"
+      ],
+      "type": "object"
+    },
+    "name": "stop_deployment"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Train a walk policy with trainnr-mjlab on a declared walk task or a registered robot. agent=smoke runs in minutes; agent=g3 is the full walk-training recipe (hours on a GPU). Job handle.",
+    "inputSchema": {
+      "properties": {
+        "agent": {
+          "default": "smoke",
+          "type": "string"
+        },
+        "cameras": {
+          "default": true,
+          "type": "boolean"
+        },
+        "envs": {
+          "default": null,
+          "type": "integer"
+        },
+        "fit": {
+          "default": null,
+          "type": "string"
+        },
+        "iterations": {
+          "default": null,
+          "type": "integer"
+        },
+        "lag_dr_ms": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "name": {
+          "default": null,
+          "type": "string"
+        },
+        "robot": {
+          "default": null,
+          "type": "string"
+        },
+        "scene": {
+          "default": null,
+          "type": "string"
+        },
+        "seed": {
+          "default": null,
+          "type": "integer"
+        },
+        "task": {
+          "default": null,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "train_walk"
+  },
+  {
+    "annotations": {
+      "destructive_hint": false,
+      "read_only_hint": false
+    },
+    "description": "Choose the current project by name or path; later calls and later sessions act on it.",
+    "inputSchema": {
+      "properties": {
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "name": "use_project"
+  }
+]

@@ -8,7 +8,7 @@ as native Rerun views with a curated blueprint, into whatever viewer
 holds the standard port (the Studio itself, or standalone Rerun):
 
 - every evaluation run's milestone funnel and success count
-  (`describe_eval`, the same fold the certificate uses);
+  (`describe_evaluation`, the same fold the certificate uses);
 - every fit-carrying bundle's parameters as estimate and interval bounds
   per sweep, with the SPREAD verdicts as a document beside them;
 - the STS3215's friction budget at M1 and M6, unloaded and under load,
@@ -27,11 +27,11 @@ bootstrap()
 import rerun as rr  # noqa: E402
 import rerun.blueprint as rrb  # noqa: E402
 from trainnr.mcp_server import (  # noqa: E402
-    describe_bundle,
-    describe_bundles,
-    describe_eval,
-    friction_curve,
-    list_eval_records,
+    describe_evaluation,
+    describe_friction,
+    describe_robot,
+    list_evaluations,
+    list_robots,
 )
 
 FRICTION_SERVO = "feetech_sts3215_7_4V"
@@ -40,9 +40,9 @@ FRICTION_TIERS = ("m1", "m6")
 
 def log_evals() -> list[str]:
     origins = []
-    for entry in list_eval_records():
+    for entry in list_evaluations():
         run = entry["run"]
-        detail = describe_eval(run)
+        detail = describe_evaluation(run)
         for file, data in detail["files"].items():
             milestones = data["milestones"]
             for policy, counts in data["funnel"].items():
@@ -73,11 +73,11 @@ def log_evals() -> list[str]:
 def log_fits() -> tuple[list[str], list[str]]:
     param_origins: list[str] = []
     verdict_origins: list[str] = []
-    for bundle in describe_bundles():
+    for bundle in list_robots():
         if not bundle["has_fits"]:
             continue
         name = bundle["name"]
-        detail = describe_bundle(name)
+        detail = describe_robot(name)
         records = [
             (file, record)
             for file, record in detail["fits"].items()
@@ -118,7 +118,7 @@ def log_friction(recording: rr.RecordingStream) -> list[str]:
     gets its natural clock instead."""
     origins = []
     for tier in FRICTION_TIERS:
-        curve = friction_curve(FRICTION_SERVO, tier)
+        curve = describe_friction(FRICTION_SERVO, tier)
         origin = f"friction/{FRICTION_SERVO}/{tier}"
         for velocity, unloaded, loaded in zip(
             curve["velocity"], curve["unloaded"], curve["loaded"], strict=True

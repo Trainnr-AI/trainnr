@@ -272,7 +272,7 @@ class Composition(unittest.TestCase):
 @needs_sim
 class Ladder(unittest.TestCase):
     """The acceptance critic, rung by rung, through `tasks/acceptance.accept`
-    — the same call `tools/accept-task.py` and the `accept_task` door make."""
+    — the same call `tools/accept-task.py` and the `check_task` door make."""
 
     @classmethod
     def setUpClass(cls) -> None:

@@ -1,7 +1,7 @@
 """Job handles for the MCP surface's long-running tools.
 
 The pattern docs/64 §5.2 picked from the MCP spec's own blessing:
-a `*_start` tool returns a job id immediately, `job_status` polls it,
+a `*_start` tool returns a job id immediately, `describe_job` polls it,
 and the artifacts land under `runs/` exactly as the wrapped CLI always
 put them. The manager is deliberately dumb: spawn the command with its
 output teed to a log file, remember the pid, record the exit code when
@@ -87,7 +87,7 @@ DONE = "done"
 
 
 class JobHandle(TypedDict):
-    """A started job: what `job_status` polls."""
+    """A started job: what `describe_job` polls."""
 
     job_id: str
     log: str
@@ -133,7 +133,7 @@ def refusal(reason: str) -> Refusal:
     return {"status": REFUSED, "reason": reason}
 
 
-# How much of a job's log `job_status` returns by default — enough to
+# How much of a job's log `describe_job` returns by default — enough to
 # see the current stage line and the last error, not the whole run.
 DEFAULT_TAIL_LINES = 20
 
@@ -417,10 +417,26 @@ def prepare_uv(argv: Sequence[str], cwd: Path) -> None:
 class JobManager:
     """Start, poll, tail and cancel the doors' subprocesses."""
 
-    def __init__(self, runs_root: Path, *, spawner: Spawner = _spawn) -> None:
-        self.jobs_dir = Path(runs_root) / JOBS_DIR_NAME
+    def __init__(
+        self,
+        runs_root: Path | Callable[[], Path],
+        *,
+        spawner: Spawner | None = None,
+    ) -> None:
+        # A root given as a function is resolved on every use: the server
+        # builds its job manager once, at start, before an agent has made
+        # or chosen a project, and a root fixed then left the job readers
+        # on another table than the one the job starters wrote
+        # ("no job …; known: []", an agent run 2026-10-04).
+        self._root = runs_root
         self._spawner = spawner
         self._watchers: list[threading.Thread] = []
+
+    @property
+    def jobs_dir(self) -> Path:
+        """Where the job records live, resolved now."""
+        root = self._root() if callable(self._root) else self._root
+        return Path(root) / JOBS_DIR_NAME
 
     def join(self, timeout: float | None = None) -> None:
         """Wait for every watcher to record its exit — the tests' teardown
@@ -435,7 +451,9 @@ class JobManager:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         job_id = f"{tool}-{uuid.uuid4().hex[:8]}"
         log_path = self.jobs_dir / f"{job_id}.log"
-        process = self._spawner(argv, Path(cwd), log_path)
+        # The module's spawn is looked up now, not at construction: the
+        # server builds a job manager per call, and a test stubs it here.
+        process = (self._spawner or _spawn)(argv, Path(cwd), log_path)
         record = JobRecord(
             id=job_id,
             tool=tool,

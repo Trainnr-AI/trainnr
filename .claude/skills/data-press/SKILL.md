@@ -16,7 +16,7 @@ span). Every run writes `datasheet.md` beside the batch.
 
 With the trainnr MCP server connected, the same work is tool calls:
 `generate_kitting_demos(episodes, seed, out)` → job handle;
-`multiply_demos(seeds_dir, out, ...)` (GPU box);
+`multiply_demos(dataset, out, ...)` (GPU box);
 `run_chain(name, scale, ...)` — the whole generate→train→evaluate chain;
 `generate_walk_demos(checkpoint|latest, episodes, worlds, seed, out)` — the RL
 teacher generates demonstrations (keepers judged by the
@@ -32,15 +32,15 @@ the keep rate exactly;
 `evaluate_walk(checkpoint, student=<pretrained_model>, horizon, ...)` judges
 the distilled vision student through the same chase camera, over the
 policy bridge (`trainnr.envs.policy_bridge`);
-`job_status(job_id)` polls, artifacts land under `runs/` as always.
+`describe_job(job_id)` polls, artifacts land under `runs/` as always.
 
 ## Commands (from `trainnr/`)
 
 - Kitting batch: `uv run --extra sim python ../tools/kitting-demos.py N <out> --seed S`
   (episodes and out are POSITIONAL, in that order)
 - Datasheet for an existing batch (one import, no CLI needed):
-  `uv run python -c "from trainnr.collect.datasheet import write_datasheet; print(write_datasheet('<demos_dir>'))"`
-- MCP (read-only): `describe_datasheet(demos_dir)`
+  `uv run python -c "from trainnr.collect.datasheet import write_datasheet; print(write_datasheet('<dataset>'))"`
+- MCP (read-only): `describe_dataset(dataset)`
 
 ## Interpreting a datasheet
 

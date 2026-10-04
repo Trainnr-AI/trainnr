@@ -111,7 +111,7 @@ agent  create_project("go2")                        → ~/trainnr/projects/go2, 
 
 ```text
 you    Train a walk on that fit, evaluate it, and gate the export.
-agent  create_task("trainnr/go2-walk"), accept_task → accepted: learnability check
+agent  create_task("trainnr/go2-walk", "go2-walk"), check_task → accepted: learnability check
        train_walk(agent="g3", fit="fit@…")          → an mjlab experiment on the fit
        evaluate_walk(trials=8)                      → survived 8/8, tracked 0/8, CP95 [0.00, 0.37]
        export_deployment, gate_deployment           → ONNX + manifest, sim-to-sim gate passed
@@ -219,7 +219,7 @@ randomization and kept by the task's success criterion, with a datasheet.
 
 <img alt="An experiment's page: the reward curve, provenance, the trainer's settings and the training table" src="docs/figures/readme/studio-experiment.png">
 
-`create_task` · `accept_task` · `train_walk` · `generate_walk_demos` · `multiply_demos` · `run_chain`
+`create_task` · `check_task` · `train_walk` · `generate_walk_demos` · `multiply_demos` · `run_chain`
 
 ### Evaluation with an interval, not a clip
 
@@ -229,7 +229,7 @@ a funnel of how far each episode got; gates read the lower bound.
 
 <img alt="An evaluation's page: 38 of 40 with its 95 % interval, survived and tracked bars, provenance and the protocol" src="docs/figures/readme/studio-evaluation.png">
 
-`evaluate_walk` · `describe_eval` · `list_eval_records` · `friction_curve`
+`evaluate_walk` · `describe_evaluation` · `list_evaluations` · `describe_friction`
 
 ### Sim-to-real deployment through a gate
 
@@ -257,7 +257,7 @@ deployed Go2 walking in it.
 
 <sub>Scene: Mip-NeRF 360 "garden" (Barron et al., CVPR 2022), reconstructed by trainnr's scene pipeline.</sub>
 
-`capture_scene` · `import_scene` · `simulate_in_studio` · `control_simulator` · `screenshot_studio`
+`capture_scene` · `import_scene` · `run_simulation` · `control_simulator` · `screenshot_studio`
 
 ### Deployment telemetry back to training: the data flywheel
 
@@ -270,7 +270,7 @@ the last.
 
 <img alt="A drift check's page: parameters out of interval, within interval and undetermined, with the recommendation" src="docs/figures/readme/studio-drift.png">
 
-`check_drift` · `describe_project` · `describe_runs` · `list_ledger_findings`
+`check_drift` · `describe_project` · `list_experiments` · `list_findings`
 
 ## Robots
 
@@ -329,10 +329,10 @@ confidence bound, never on the point estimate.
 | 2. Real-to-sim | hardware proximity, measured: the robot's own telemetry fitted into the model it trains on, every parameter with an interval and a pinned / NOT PINNED verdict; the captured space with its see-versus-touch gap measured | `onboard_robot`, `identify_system`, `import_scene` | the robot bundle `name@hash`, the fit record, the scene record |
 | 3. Build data | demonstrations generated under recorded randomization, kept by the task's success criterion, exported as LeRobot v3 with a datasheet | `generate_kitting_demos`, `generate_walk_demos`, `multiply_demos` | datasets with provenance |
 | 4. Train | reinforcement learning on mjlab or imitation through LeRobot, on the identified model with a measured randomization span | `train_walk`, `run_chain` | experiments and policies |
-| 5. Evaluate | a clip cannot tell 10 % from 99 %; an evaluation here is paired, seed-matched trials with an exact confidence interval and a milestone funnel, and the gate reads the lower bound | `evaluate_walk`, `list_eval_records`, `describe_eval` | evaluations that gate on the lower bound |
+| 5. Evaluate | a clip cannot tell 10 % from 99 %; an evaluation here is paired, seed-matched trials with an exact confidence interval and a milestone funnel, and the gate reads the lower bound | `evaluate_walk`, `list_evaluations`, `describe_evaluation` | evaluations that gate on the lower bound |
 | 6. Sim-to-real | the deployment is the last evaluation: the export, a gate on two runtimes (ours and the vendor's) against the same rows at a declared tolerance, a failed gate attributed to its cause (latency first), pre-flight before the first tick | `export_deployment`, `gate_deployment`, `attribute_deployment`, `preflight_deployment` | deployments with their gate and pre-flight |
 | 7. Deploy and watch | the policy on the vendor's runtime; its telemetry back into turn 1; the robot re-identified against its fitted intervals | `stage_deployment`, `check_drift` | drift records |
-| 8. Query and learn | every record above, from the agent or the Studio: which policy, on which model, under which conditions, with what interval | `describe_project`, `describe_runs`, `friction_curve`, `list_ledger_findings` | the next turn's question |
+| 8. Query and learn | every record above, from the agent or the Studio: which policy, on which model, under which conditions, with what interval | `describe_project`, `list_experiments`, `describe_friction`, `list_findings` | the next turn's question |
 
 </details>
 
@@ -364,6 +364,7 @@ identity is `name@hash` everywhere; nothing is nameable without its hash.
 | `port 9876 (the viewer server) is held by another process` | Another Studio or a standalone Rerun viewer is running; close it, then launch again. |
 | Slow or black rendering under WSL | The WSL launch settings live in `trainnr/wsl.env`; they apply only on WSL and never override a variable you set. |
 | `the publisher states no licence for this data` from `ingest_public_log` | Pass `accept_unlicensed=True` once you have checked your use is allowed. |
+| `Unknown tool` for a name an older prompt or note uses | The tool names changed on 2026-10-04; the CHANGELOG lists each old name with its new one. |
 
 ## Community
 

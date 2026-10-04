@@ -15,7 +15,7 @@ bundles, 8 motors × m1..m6).
 
 - Wrap every vendored fit: `uv run python ../tools/actuator-bundle.py wrap --all`
 - Verify any bundle: `uv run python ../tools/actuator-bundle.py verify <file.bundle.json>`
-- MCP (read-only): `describe_actuator_bundles`, `describe_actuator_bundle(slug, tier)`
+- MCP (read-only): `list_actuators`, `describe_actuator(actuator, tier)`
 
 ## Interpreting output
 

@@ -68,7 +68,7 @@ def main() -> None:
         "--overlay",
         default=None,
         help="a variant: JSON with the spec fields you change "
-        "(describe_task_families lists them)",
+        "(list_task_families lists them)",
     )
     args = parser.parse_args()
     if args.project is not None or args.name is not None:

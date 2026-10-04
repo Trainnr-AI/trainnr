@@ -300,7 +300,7 @@ def _accept_task_module() -> Any:
     if str(TOOLS) not in sys.path:  # the tools import their `_lab` neighbour
         sys.path.insert(0, str(TOOLS))
     spec = importlib.util.spec_from_file_location(
-        "accept_task", TOOLS / "accept-task.py"
+        "check_task", TOOLS / "accept-task.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

@@ -41,7 +41,7 @@ measurement.
 
 Certified bundles: every vendored fit has a stamped envelope in
 `robots/actuator-bundles/` (wrap/verify via `tools/actuator-bundle.py`;
-MCP `describe_actuator_bundles`). Read the check flags — a value on the
+MCP `list_actuators`). Read the check flags — a value on the
 optimizer rail or floor is a certification signal — and never present a
 point-estimate bundle as carrying uncertainty; the `/actuator-bundles`
 skill has the full discipline.

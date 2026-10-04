@@ -8,6 +8,14 @@ All notable changes to trainnr. The format follows
 
 First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
+### Changed (breaking)
+
+- MCP tools follow one naming rule: `verb_noun`, `list_` for a collection, `describe_` for one item, an existing artifact named by its kind and `name` only for a new one. There are no aliases; an agent prompt or note using an old name must be updated.
+  - Renamed: `describe_bundles` → `list_robots`, `describe_bundle(name)` → `describe_robot(robot)`, `describe_runs` → `list_experiments`, `describe_tasks` → `list_tasks` (rows carry `task`), `describe_task_families` → `list_task_families`, `describe_engines` → `list_engines`, `describe_task(task_id)` → `describe_task(task)`, `list_eval_records` → `list_evaluations`, `describe_eval(run)` → `describe_evaluation(evaluation)`, `list_ledger_findings` → `list_findings`, `friction_curve(slug, …)` → `describe_friction(actuator, …)`, `job_status` → `describe_job`, `capture_status` → `describe_capture`, `accept_task(name)` → `check_task(task)`, `describe_viewer_recording` → `describe_viewer_stream`, `simulate_in_studio(task)` → `run_simulation(scene)`, `describe_datasheet(demos_dir)` → `describe_dataset(dataset)`.
+  - Merged: `describe_actuators` and `describe_actuator_bundles` → `list_actuators` (one row per actuator, its certified bundles inside); `describe_actuator` and `describe_actuator_bundle` → `describe_actuator(actuator, tier)` (the model and that tier's bundle); `focus_studio_recording(recording)` → `show_in_studio(stream=…)`, which takes exactly one of `artifact` or `stream`.
+  - Arguments: `export_deployment(run, …, certificate)` → `(experiment, …, evaluation)`; `gate_deployment(name)` → `(deployment)`; `create_task(task_id, name, overlay)` → `(family, name, settings)`; `play_walk(run)` → `(experiment)`; `ingest_public_log(name, recording_name)` → `(log, name)`; `import_finding(record)` → `(finding)`; `control_simulator(run)` → `(play)`; `multiply_demos(seeds_dir)` → `(dataset)`; `evaluate_walk`'s `judge_in_fit`, `judge_at_scale`, `judge_param` and `delay` → one `conditions` object (`in_fit`, `scale`, `param`, `delay`), which refuses an unknown key.
+- Tool input schemas drop pydantic's titles and null wrappers; what a call may pass is unchanged. The surface an agent reads at session start went from 9,161 to 6,175 tokens (cl100k). `tools/api-snapshot.py` checks the API against `trainnr/tests/api/tools.json`.
+
 ### Changed
 
 - NOTICE names the copyright holder, Prakhar Aggarwal.
@@ -33,6 +41,7 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Fixed
 
+- A job started after `create_project` is found by `describe_job` and `list_jobs`: the server's job table was fixed at start, before a project existed, so the readers answered "no job …; known: []".
 - Tests that render skip, with the reason, where no OpenGL context opens (CI's macOS virtual machines); the capture-tool test no longer assumes the host has apt.
 
 - Every tool's failure reaches the agent with its reason; `trainnr mcp` without the extras names the command that installs them; the Studio download error names the build-from-source line.

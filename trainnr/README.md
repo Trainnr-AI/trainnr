@@ -50,7 +50,7 @@ package never imports `trainnr_mjlab` or the Studio.
 
 ## Tasks
 
-Registered task families (`describe_task_families` lists them):
+Registered task families (`list_task_families` lists them):
 
 | Family | Robot | What it is |
 |---|---|---|
