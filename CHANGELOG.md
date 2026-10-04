@@ -57,6 +57,8 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Added
 
+- `tools/agent-e2e.py`: a real agent, given only the trainnr server and a plain-language task, does the laptop half of the Quickstart; a release check.
+
 - One version everywhere (`tools/release.py`, checked in CI); a supply-chain
   job (pip-audit on every locked Python set, cargo-deny on the Studio,
   zizmor on the workflows); a pre-commit config; a threat model in

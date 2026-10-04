@@ -79,6 +79,20 @@ subset. Both must be green:
   and `tools/check-numbers.py` (every number in the docs resolves to a
   record): in CI, in the pre-commit hook and in `tools/verify.sh`.
 
+Before a release, and in any pull request that changes a tool's name,
+arguments or description, run the agent test: a real Claude Code session
+that sees only the trainnr server is given the laptop half of the
+Quickstart in plain words, with no tool names, and must finish it.
+
+```sh
+python3 tools/agent-e2e.py --go2 <unitree_rl_mjlab>/src/assets/robots/unitree_go2/xmls/go2.xml
+```
+
+It prints the tools the agent called, the errors it hit, its turns, time
+and cost, and PASS or FAIL. Paste that block into the pull request. CI
+cannot run it (it needs a logged-in Claude account and costs about $0.25
+a run).
+
 A screen you changed is verified by looking at it: launch the Studio,
 read every label as a user would, and attach the screenshot to the pull
 request.
