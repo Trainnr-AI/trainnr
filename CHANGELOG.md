@@ -10,6 +10,8 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 
 ### Changed
 
+- NOTICE names the copyright holder, Prakhar Aggarwal.
+
 - Projects live in `~/trainnr/projects` (`TRAINNR_PROJECTS`, `TRAINNR_HOME`); `create_project` makes the new project current and the new `use_project` tool chooses one; user caches move to `~/trainnr/cache` (existing checkout caches are kept).
 - Tool descriptions are in plain words, every tool is annotated read-only or destructive, and the server reports its version.
 - Actuator-bundle readers accept `trainnr-actuator-bundle/1` as well as the frozen `robotiq-actuator-bundle/1`.
