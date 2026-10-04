@@ -1,0 +1,28 @@
+# Files moved out of the repository to the release asset named in
+# docs/artifacts/README.md ("Large files"): path, bytes, SHA-256.
+# tools/check-docs.py treats a path listed here as present.
+docs/artifacts/dagger/round-1/press.log	22390	7cc2fb7e0f1a13a3897f83c241b267794a3ad0431d92691b05a239692d39c617
+docs/artifacts/lift-studies/c1-competent-lift/study.log	5723951	037ec8d5e0b17fb23b67e22d0693997a82ae61ae9d951dffecd9c540697e6aff
+docs/artifacts/lift-studies/c1-competent-lift-cliff/study.log	7636421	a422b7c82f9c854532e3edde34361e582e9ca5956a1caf8c66e76119f3f478ea
+docs/artifacts/lift-studies/demo-count-lift/study.log	4861727	0579dbfa5b2955cd1e14a44a6e11e4eac5ab02eb1f9cab65d11219b6b1f9cb48
+docs/artifacts/lift-studies/demo-count-lift-cliff/study.log	4876435	88b792ebe5b278c2a04ec17c9f39f7e733c62576338ed19bffd4f8f7c50403e3
+docs/artifacts/lift-studies/demo-count-lift-cliff-rep/study-rep-b.log	6430583	1b5a1bc43469c60702f6ad3d06e8f83948f6f7c3d7e898c6aeb16054a381c69a
+docs/artifacts/lift-studies/demo-count-lift-cliff-rep/study-rep.log	6437456	4afe1fc622cd22fd379c29915ee7d80cdc289428b04b564df93c4ac1c446a9cd
+docs/artifacts/lift-studies/demo-count-lift-cliff-rep/study.log	1001723	3ddaba98169f409c847b1da2fcc70eebe70ff47ecc235fd4973b7a60e2d32354
+docs/artifacts/lift-studies/visual-dr-lift/study.log	4656653	33cc0a31dd6962b3e0c3cd79936a279ae2eb166811c6c6bd52229cd9f4df8fff
+docs/artifacts/lift-studies/visual-dr-lift-cliff/study.log	3648889	feb7e0a23a6b9c1f9ecf4c8490da3e45b2bc6ff0fb509ba2c64797658d68aa9d
+docs/artifacts/walk-c1/identified#1/train/model_7999.pt	4720565	8c10b70c1dc591576cdcd84763136037b95ce60dd66efbcb2138b1f63c144617
+docs/artifacts/walk-c1/identified#2/train/model_7999.pt	4720565	3cb1e2c585b47c2431472a4fa3814b4282c84b0a1929f4d15f5394e252d94b87
+docs/artifacts/walk-c1/identified#3/train/model_7999.pt	4720565	3ed3d236f66e5b163b152e98d7f32d3243d1d743b9f946972d202bff1a704a5a
+docs/artifacts/walk-c1/narrow/train/model_7999.pt	4720565	24c95e694255eaa15049712df375501b4f4979985e7234dfef90caa4f6b63ea2
+docs/artifacts/walk-c1/narrow#2/train/model_7999.pt	4720565	8cb7976e53b0154c7f584d0ea2dc822835fa29f30b862d1e78d6fa3989de01e0
+docs/artifacts/walk-c1/narrow#3/train/model_7999.pt	4720565	9d4d3f228c9e159c251833f85a528866161791902949046b0f27bac130d0237d
+docs/artifacts/walk-c1/point/train/model_7999.pt	4720565	3651ea29e1b5c0f7cbd0183c7008f1eb05c9f49f7898c17e64b42cd8cb73c1ad
+docs/artifacts/walk-c1/point#2/train/model_7999.pt	4720565	671874e88748ae86649cda38fc1d71951d01afb8b346cd037c6c839b634197d5
+docs/artifacts/walk-c1/point#3/train/model_7999.pt	4720565	b12edd77cf76decf6d39db444d8527871a6b090ca7230633370d05a9d1eaad37
+docs/artifacts/walk-c1/point-refit#1/train/model_7999.pt	4720565	5438c8a9e836a943f81d05b2f2f441b5f8c8e477b3a0a0811597f7a46178b801
+docs/artifacts/walk-c1/point-refit#2/train/model_7999.pt	4720565	fd5ec0fa94fdbd1b331783c8442c9a0638a34e52d9529b001e3c336d859d91c9
+docs/artifacts/walk-c1/point-refit#3/train/model_7999.pt	4720565	49ed0e3b45ee51e3b5b5f0b5a87ffa38ddb756664dca6f244da659b06cc27096
+docs/artifacts/walk-c1/wide/train/model_7999.pt	4720565	6a0bee7651fef77132604f11b36c88be0d9fa486e33629e8089275cce005ea16
+docs/artifacts/walk-c1/wide#2/train/model_7999.pt	4720565	6449295ab884c499d9e07d1b2f2c08303f5b92476b2519bf59f5baf644a7e03d
+docs/artifacts/walk-c1/wide#3/train/model_7999.pt	4720565	94bb44464fda0659aed3e75f0a71b0007b23743a23e780a4a84ac019530b0248

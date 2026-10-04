@@ -91,9 +91,9 @@ request.
   approves it; that is GitHub's guard against a stranger's code running
   with this repository's token, not a judgement of the change.
 - `main` accepts changes only through a pull request with green checks and
-  a code owner's approval (`.github/CODEOWNERS`). Before the public launch,
-  `main` is republished from the maintainers' tree; from the launch on it
-  is never force-pushed.
+  a code owner's approval (`.github/CODEOWNERS`), and it is never
+  force-pushed. This repository is where trainnr is developed; the
+  maintainers' own work arrives through pull requests like anyone's.
   Only maintainers merge, by squash or rebase.
 - Dependabot opens weekly update pull requests; they go through the same
   gates. A supply-chain job audits every locked dependency set for known

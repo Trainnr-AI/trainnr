@@ -66,6 +66,15 @@ tracked = set(
         check=True,
     ).stdout.splitlines()
 )
+# Files moved out of the repository to a release asset still exist, at
+# the address docs/artifacts/README.md gives; their manifest lists them.
+MOVED = ROOT / "docs" / "artifacts" / "MOVED.tsv"
+if MOVED.is_file():
+    tracked |= {
+        line.split("\t", 1)[0]
+        for line in MOVED.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#")
+    }
 tracked_basenames = {Path(p).name for p in tracked}
 
 source = subprocess.run(

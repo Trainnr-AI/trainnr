@@ -47,3 +47,19 @@ The Go2 checkpoints and training logs, and the raw campaign logs of the
 biped's walk-c1 arms (269 MB; their counts are in the records). Local
 project directories (`projects/…`) are untracked; where a record cites
 one and a copy exists here, the copy is named first.
+
+## Large files
+
+The model checkpoints (`*.pt`) and the study logs (`*.log`) are not in the
+repository: they would add over 100 MB to every clone and plugin install.
+They are one archive attached to the repository's
+[`artifacts-2026-10-04` release](https://github.com/Trainnr-AI/trainnr/releases/tag/artifacts-2026-10-04),
+`trainnr-artifacts-large-2026-10-04.tar.gz`, with its SHA-256 beside it.
+[`MOVED.tsv`](MOVED.tsv) lists every file in it with its path, size and
+SHA-256, so each record that cites one still names exactly what it is.
+
+```sh
+gh release download artifacts-2026-10-04 -R Trainnr-AI/trainnr
+sha256sum -c trainnr-artifacts-large-2026-10-04.tar.gz.sha256
+tar xzf trainnr-artifacts-large-2026-10-04.tar.gz   # from the repository root
+```
