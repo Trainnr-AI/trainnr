@@ -58,6 +58,7 @@ First public push, 2026-10-02: `github.com/Trainnr-AI/trainnr`.
 ### Added
 
 - `tools/agent-e2e.py`: a real agent, given only the trainnr server and a plain-language task, does the laptop half of the Quickstart; a release check.
+- `AGENTS.md` (read by Codex, Cursor and other coding agents) and a `CLAUDE.md` that imports it: what the repository is, how to set up, the gates to run before calling a change done, and the rules (sign-off, docs with code, numbers from records, the tool API, paths, words, never a `.env`).
 
 - One version everywhere (`tools/release.py`, checked in CI); a supply-chain
   job (pip-audit on every locked Python set, cargo-deny on the Studio,

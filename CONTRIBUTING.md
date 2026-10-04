@@ -1,5 +1,8 @@
 # Contributing to trainnr
 
+Coding agents: start with [`AGENTS.md`](AGENTS.md), the same rules in
+short, which Claude Code also reads through `CLAUDE.md`.
+
 Thank you for considering it. This page is short on purpose; the long
 version of every rule below is in `docs/`.
 
