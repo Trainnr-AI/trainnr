@@ -1,7 +1,7 @@
 # Recorded sessions
 
 These recordings were made by the 2025–26 rig, whose crates (`hil-host`, the
-`vision` crate, the Pico firmware) are now in a private archive; the commands
+`vision` crate, the Pico firmware) are now [rigrs](https://github.com/Trainnr-AI/rigrs); the commands
 below ran from that code and are kept as the record of how each file was
 made. The files stay here as the evidence the identification work cites
 (the drivetrain fits, the chirp and sweep studies), and the tools in

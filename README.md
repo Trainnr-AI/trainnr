@@ -528,7 +528,8 @@ Future License](LICENSE) (FSL-1.1-ALv2):
 Third-party material keeps its own licence and is listed in
 [`NOTICE`](NOTICE). The 2025–26
 hardware rig this toolchain grew up on (a camera, two motors and three
-servos on a Pico) is kept in a private archive; its recordings
+servos on a Pico) is published as [rigrs](https://github.com/Trainnr-AI/rigrs), memory-safe robot firmware in
+Rust; its recordings
 stay here under `recordings/`. "Robotiq" in
 `robots/robotiq-2f85-isaac` is Robotiq Inc.'s gripper; trainnr is not
 affiliated with Robotiq.

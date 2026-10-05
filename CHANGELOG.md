@@ -91,7 +91,7 @@ Not yet released; the repository is being prepared for its first public release.
 - The microduck's 38 meshes are no longer in the repository: Pollen Robotics licenses its 3D model files Creative Commons BY-SA-NC, which is not an Apache-2.0 grant. `robots/microduck/FETCH.json` pins each one by its git blob id, and trainnr fetches them from `pollen-robotics/microduck_rl` the first time the robot is used (about 22 MB; `TRAINNR_NO_ROBOT_FETCH=1` refuses, `python -m trainnr.bundles.fetch robots/microduck` fetches ahead). The bundle's stamp is unchanged once they are in place.
 - Conduct reports and a security fallback go to trainnrai@gmail.com.
 - The plugin, marketplace, registry entry and citation point at this repository until trainnr.ai serves a page; GOVERNANCE.md's network list defers to SECURITY.md's, which is complete.
-- The 2025–26 rig is named as a private archive; the documentation no longer links to its repository, which is not public. NOTICE credits Pollen Robotics for the microduck in the README's robots image, under its Creative Commons BY-SA-NC terms.
+- The 2025–26 rig is published as [rigrs](https://github.com/Trainnr-AI/rigrs) (MIT OR Apache-2.0), and the documentation links it. NOTICE credits Pollen Robotics for the microduck in the README's robots image, under its Creative Commons BY-SA-NC terms.
 - Projects live in `~/trainnr/projects` (`TRAINNR_PROJECTS`, `TRAINNR_HOME`); `create_project` makes the new project current and the new `use_project` tool chooses one; user caches move to `~/trainnr/cache` (existing checkout caches are kept).
 - Tool descriptions are in plain words, every tool is annotated read-only or destructive, and the server reports its version.
 - Actuator-bundle readers accept `trainnr-actuator-bundle/1` as well as the frozen `robotiq-actuator-bundle/1`.
@@ -108,7 +108,8 @@ Not yet released; the repository is being prepared for its first public release.
 
 - The draft paper (`docs/paper/`, its figures and its build tools) moved out of this repository; it will be published with its own. The README says the research is ongoing; `tools/check-numbers.py` now traces every success figure the README quotes, and the GPU quickstart's 150-iteration result has its finding record.
 - The 2025–26 rig (14 Rust crates, the Pico firmware, their tools and
-  gates) moved to a private archive with their history. `recordings/` and
+  gates) moved out of this repository; they are published as [rigrs](https://github.com/Trainnr-AI/rigrs).
+  `recordings/` and
   the drivetrain bundle stay as evidence.
 
 ### Fixed

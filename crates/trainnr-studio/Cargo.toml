@@ -2,7 +2,7 @@
 # crate in this repository, and cargo runs inside this directory. (It was
 # kept apart from the rig's root workspace over a rerun 0.35 against
 # re_ui 0.36 wasm-bindgen conflict; the rig's crates and firmware moved to
-# a private archive on 2026-10-02.)
+# Trainnr-AI/rigrs on 2026-10-02.)
 [workspace]
 
 [package]

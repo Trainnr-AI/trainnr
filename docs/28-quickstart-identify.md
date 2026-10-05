@@ -25,7 +25,7 @@ cd trainnr && uv sync --extra sim     # mujoco[sysid] and friends
 ```
 
 (Rust is only for the Studio; the Pico toolchain belongs to the original
-rig, which is kept in a private archive — you need neither to
+rig, now [rigrs](https://github.com/Trainnr-AI/rigrs) — you need neither to
 measure your robot.)
 
 ## 1. Make a bundle
@@ -135,7 +135,7 @@ what it doesn't know is a guess with confidence theater.
 ## The drivetrain shortcut
 
 For the 2025–26 rig's drivetrain (its bundle is `robots/rig-drivetrain`;
-the firmware and the recorder are in a private archive, and its
+the firmware and the recorder are in [rigrs](https://github.com/Trainnr-AI/rigrs), and its
 recordings are under `recordings/`) the whole chain is one command over
 one of those recordings:
 

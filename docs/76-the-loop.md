@@ -292,7 +292,7 @@ critical path:
 1. **replay** — a recorded fixture. This is the one that makes every
    later phase testable with no robot in the room; the repo already has
    twenty-five real recordings.
-2. **wire** — the archived rig's format (its code is in a private archive), wrapping the existing reader.
+2. **wire** — the archived rig's format (its code is [rigrs](https://github.com/Trainnr-AI/rigrs)), wrapping the existing reader.
 3. **mcap** — the ROS 2 path. Since the Iron release (2023-05-23),
    `ros2 bag record` writes MCAP by default, and an MCAP file carries the
    message schemas inside it, so an offline reader needs no ROS

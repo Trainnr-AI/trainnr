@@ -6,7 +6,7 @@
 # Ordered cheapest-first, so a broken build fails in seconds rather than
 # after the long Python suites. The firmware builds, the emulator HIL and
 # the wire replays against the rig's crates left with the rig on
-# 2026-10-02 (a private archive, with its own tools/verify.sh).
+# 2026-10-02 (Trainnr-AI/rigrs, with its own tools/verify.sh).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 source "$HOME/.cargo/env" 2>/dev/null || true

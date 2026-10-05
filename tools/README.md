@@ -121,7 +121,7 @@ with its log beside the artifact it writes.
 ## The archived rig
 
 These tools read and replay the recordings of the 2025–26 rig under
-`recordings/`. The rig's firmware and crates are in a private archive;
+`recordings/`. The rig's firmware and crates are [rigrs](https://github.com/Trainnr-AI/rigrs);
 the live paths need its `hil-host`, and the replays run from here.
 
 | Tool | What it does |
