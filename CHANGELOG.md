@@ -25,6 +25,8 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Added
 
+- A release ships everything a version is, built by CI from its tag: the Studio for three platforms, the `trainnr` and `trainnr-mjlab` packages (sdist and wheel), a CycloneDX SBOM for each (`tools/sbom.py`) and `SHA256SUMS`; every file has a build-provenance attestation and each SBOM an SBOM attestation. Publishing a release runs `release-verify` on Linux, macOS and Windows: checksums, attestations, the wheel installed clean naming the version, the Studio installed through trainnr's own installer. The workflow is `release.yml` (was `studio-release.yml`).
+- The research artifacts (the walk-c1 checkpoints and the study logs) are in the Hugging Face dataset `trainnr/trainnr-artifacts`, pinned by commit in `docs/artifacts/README.md`; they are no longer a GitHub release.
 - `describe_experiment(experiment)`: one experiment's training record, identity, manifests, checkpoints and the evaluations citing it.
 - `describe_task` describes a task declared in the project (family, version, settings, the check's verdict, reward previews); a registered task id still builds for real.
 - One-line descriptions on the arguments agents misread (`recipe`, `fit`, `task`, `checkpoint`, `evaluation`, `unevaluated`, `student`, `device`, `command`, `follow`, the USD options).

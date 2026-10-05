@@ -61,7 +61,7 @@ tracked = set(
         check=True,
     ).stdout.splitlines()
 )
-# Files moved out of the repository to a release asset still exist, at
+# Files moved out of the repository to the artifacts dataset still exist, at
 # the address docs/artifacts/README.md gives; their manifest lists them.
 MOVED = ROOT / "docs" / "artifacts" / "MOVED.tsv"
 if MOVED.is_file():

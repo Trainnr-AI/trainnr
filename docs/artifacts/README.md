@@ -52,14 +52,16 @@ one and a copy exists here, the copy is named first.
 
 The model checkpoints (`*.pt`) and the study logs (`*.log`) are not in the
 repository: they would add over 100 MB to every clone and plugin install.
-They are one archive attached to the repository's
-[`artifacts-2026-10-04` release](https://github.com/Trainnr-AI/trainnr/releases/tag/artifacts-2026-10-04),
-`trainnr-artifacts-large-2026-10-04.tar.gz`, with its SHA-256 beside it.
-[`MOVED.tsv`](MOVED.tsv) lists every file in it with its path, size and
-SHA-256, so each record that cites one still names exactly what it is.
+They are in the Hugging Face dataset
+[`trainnr/trainnr-artifacts`](https://huggingface.co/datasets/trainnr/trainnr-artifacts),
+each at the path it has here, pinned below to the dataset's commit.
+[`MOVED.tsv`](MOVED.tsv) lists every file with its path, size and SHA-256,
+so each record that cites one still names exactly what it is. From the
+repository root:
 
 ```sh
-gh release download artifacts-2026-10-04 -R Trainnr-AI/trainnr
-sha256sum -c trainnr-artifacts-large-2026-10-04.tar.gz.sha256
-tar xzf trainnr-artifacts-large-2026-10-04.tar.gz   # from the repository root
+uvx --from huggingface_hub hf download trainnr/trainnr-artifacts \
+  --repo-type dataset --revision 541ec05138492f8eebe0b6d376b1975efc1e41ba \
+  --include "docs/*" --local-dir .
+grep -v '^#' docs/artifacts/MOVED.tsv | awk -F'\t' '{print $3"  "$1}' | sha256sum -c
 ```

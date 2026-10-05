@@ -6,7 +6,7 @@ GitHub release that matches this package's version, verified and cached.
 
 A checkout that built the Studio (`cargo build --release`) never needs
 this; the plugin, a wheel or a fresh clone without Rust does. The release
-workflow (`.github/workflows/studio-release.yml`) publishes one archive
+workflow (`.github/workflows/release.yml`) publishes one archive
 per platform, `trainnr-studio-<tag>-<target>.tar.gz` (`.zip` on Windows),
 each with a `.sha256` beside it. The archive is fetched, its checksum
 checked, unpacked into the user's cache, and only then moved into place,

@@ -1,19 +1,31 @@
-# The Studio, prebuilt: one archive per platform on the GitHub release of
-# a version tag, which `trainnr.studio_install` downloads (the plugin's
-# session hook, `launch_studio`, `trainnr studio`), so a user never needs
-# Rust. Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and THIRD_PARTY_LICENSES.md
-# (every crate's licence, the embedded fonts' included) and has a
-# `.sha256` beside it; the installer refuses one that does not match.
+# A release: everything a version ships, built by CI from the version's
+# tag, never on a laptop.
+#
+#   - the Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and
+#     Windows (x86_64), which `trainnr.studio_install` downloads (the
+#     plugin's session hook, `launch_studio`, `trainnr studio`), so a user
+#     never needs Rust; each archive carries LICENSE,
+#     LICENSES/Apache-2.0.txt, NOTICE and THIRD_PARTY_LICENSES.md (every
+#     crate's licence, the embedded fonts' included) and has a `.sha256`
+#     beside it, which the installer checks;
+#   - the Python packages, trainnr and trainnr-mjlab, each as an sdist and
+#     a wheel carrying the same licence files;
+#   - a CycloneDX SBOM for each package and the Studio (tools/sbom.py);
+#   - SHA256SUMS over every file.
+#
+# Every file gets a build-provenance attestation and each SBOM an SBOM
+# attestation, signed (Sigstore) with this workflow's identity:
+# `gh attestation verify <file> -R Trainnr-AI/trainnr`.
 #
 # Runs when a maintainer pushes a tag `v*`, or by hand for an existing tag
 # (a pre-release such as v0.1.0-rc.1, pushed first). The tag must name the
 # version the tree carries (`tools/release.py show`; an -rc.N suffix
 # rehearses that version). The release is created as a draft with the
-# CHANGELOG's notes for the version, each archive with a build-provenance
-# attestation, and is published by a maintainer once every platform's
-# archive is attached; nothing is published when any platform failed, and
-# a published release is never touched again (GOVERNANCE.md, Releasing).
-name: studio-release
+# CHANGELOG's notes for the version and is published by a maintainer once
+# every file is attached; nothing is attached when any build failed, and a
+# published release is never touched again (GOVERNANCE.md, Releasing).
+# release-verify.yml then checks what was published, on all three systems.
+name: release
 
 on:
   push:
@@ -28,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: studio-release-${{ github.event.inputs.tag || github.ref_name }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -162,11 +174,67 @@ jobs:
             dist/*.sha256
           if-no-files-found: error
 
+  python:
+    # The two Python packages, from the tag on a clean runner (no cache):
+    # each sdist and wheel carries LICENSE, LICENSES/Apache-2.0.txt and
+    # NOTICE, which check-package.py proves on the same build first.
+    needs: licenses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: false
+      - name: the packages carry their licences
+        run: python3 tools/check-package.py
+      - name: build
+        run: |
+          for package in trainnr trainnr-mjlab; do
+            (cd "$package" && uv build --out-dir "$GITHUB_WORKSPACE/dist")
+          done
+          ls -la dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: python-packages
+          path: dist/*
+          if-no-files-found: error
+
+  sbom:
+    # A CycloneDX SBOM for each package (every component its lock pins)
+    # and for the Studio (every crate it compiles in): tools/sbom.py.
+    needs: licenses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_CYCLONEDX_VERSION: "0.5.9"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: cargo-cyclonedx, at its pinned version and lock
+        run: cargo install --locked cargo-cyclonedx --version "$CARGO_CYCLONEDX_VERSION"
+      - name: the SBOMs
+        run: python3 tools/sbom.py "$(python3 tools/release.py show)" --out dist/sbom
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: dist/sbom/*.cdx.json
+          if-no-files-found: error
+
   publish:
-    # Only when every platform built: a release missing one platform would
-    # leave that platform's users with a failing download.
-    needs: build
-    if: needs.build.result == 'success'
+    # Only when every part built: a release missing one would leave its
+    # users with a failing download.
+    needs: [build, python, sbom]
+    if: needs.build.result == 'success' && needs.python.result == 'success' && needs.sbom.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -187,6 +255,18 @@ jobs:
           pattern: studio-*
           merge-multiple: true
           path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python-packages
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: sbom
+          path: dist
+      - name: one checksum file over every file
+        run: |
+          echo "VERSION=$(python3 tools/release.py show)" >> "$GITHUB_ENV"
+          cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
       - name: notes from the CHANGELOG
         run: |
           python3 - <<'PY'
@@ -196,10 +276,21 @@ jobs:
           text = pathlib.Path("CHANGELOG.md").read_text()
           m = re.search(r"^## \[" + re.escape(version) + r"\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
           body = m.group(1).strip() if m else ""
-          footer = ("The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
-                    "Windows (x86_64): the plugin and `trainnr studio` download the right "
-                    "one. Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and THIRD_PARTY_LICENSES.md, "
-                    "and its SHA-256 is beside it.")
+          footer = (
+              "## What this release holds\n\n"
+              "- The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
+              "Windows (x86_64): the plugin and `trainnr studio` download the right one. "
+              "Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and "
+              "THIRD_PARTY_LICENSES.md, with its SHA-256 beside it.\n"
+              "- The Python packages `trainnr` and `trainnr-mjlab`, as an sdist and a wheel each.\n"
+              "- A CycloneDX SBOM (`*.cdx.json`) for each package and the Studio.\n"
+              "- `SHA256SUMS` over every file.\n\n"
+              "## Verify what you downloaded\n\n"
+              "```sh\nsha256sum -c SHA256SUMS\n"
+              "gh attestation verify <file> -R Trainnr-AI/trainnr\n```\n\n"
+              "Every file has a build-provenance attestation and each SBOM an SBOM "
+              "attestation, signed with this repository's release workflow."
+          )
           pathlib.Path("notes.md").write_text((body + "\n\n" if body else "") + footer + "\n")
           PY
       # Provenance: each archive's SHA-256 signed with this workflow run's
@@ -207,13 +298,40 @@ jobs:
       # Trainnr-AI/trainnr`. GitHub offers attestations to public
       # repositories (private ones need Enterprise Cloud), so a rehearsal
       # while the repository is private skips this step.
-      - name: build provenance for each archive
+      - name: build provenance for every file
         if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.whl
+            dist/*.cdx.json
+            dist/SHA256SUMS
+      - name: the Studio's SBOM, attested for its archives
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: |
+            dist/trainnr-studio-*.tar.gz
+            dist/trainnr-studio-*.zip
+          sbom-path: dist/trainnr-studio-${{ env.VERSION }}.cdx.json
+      - name: trainnr's SBOM, attested for its sdist and wheel
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: |
+            dist/trainnr-${{ env.VERSION }}.tar.gz
+            dist/trainnr-${{ env.VERSION }}-py3-none-any.whl
+          sbom-path: dist/trainnr-${{ env.VERSION }}.cdx.json
+      - name: trainnr-mjlab's SBOM, attested for its sdist and wheel
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: |
+            dist/trainnr_mjlab-${{ env.VERSION }}.tar.gz
+            dist/trainnr_mjlab-${{ env.VERSION }}-py3-none-any.whl
+          sbom-path: dist/trainnr-mjlab-${{ env.VERSION }}.cdx.json
       - name: attach to a draft release
         run: |
           ls -la dist
