@@ -13,7 +13,7 @@
 //! MCP surface; code stays on the developer's laptop or GitHub; the
 //! Studio is the window where the magic shows, not another place to
 //! talk or type. The embed
-//! follows Rerun's own `extend_viewer_ui` example (Apache-2.0, 0.36.3)
+//! follows Rerun's own `extend_viewer_ui` example (MIT OR Apache-2.0, 0.36.3)
 //! line for line where it matters: a gRPC server on the standard :9876
 //! feeds it, so every tool this repo already has that speaks the Rerun
 //! SDK (`train-watch --follow`, `rig-rerun`, `replay-errand`, a
@@ -1436,6 +1436,7 @@ impl StudioShell {
         let state = control::StudioState {
             schema: control::STATE_SCHEMA,
             pid: std::process::id(),
+            session: self.control.token().to_owned(),
             heartbeat: 0.0,
             project: self.shell.model.project_root.display().to_string(),
             project_name: self.shell.model.name(),

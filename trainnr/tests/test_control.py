@@ -438,6 +438,23 @@ class WslGpuEnvironment(unittest.TestCase):
             self.assertEqual(control.wsl_gpu_environment({"A": "b"}), {"A": "b"})
 
 
+class TheSessionToken(unittest.TestCase):
+    """The Studio applies a command only when it carries its session's
+    token (security review, 2026-10-05); the token is in its state file."""
+
+    def test_a_command_carries_the_running_studios_token(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            path = control.state_path(project)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"session": "abc123"}))
+            cid = control.send(project, "quit")
+            body = json.loads(
+                (control.commands_dir(project) / f"{cid}.json").read_text()
+            )
+            self.assertEqual(body["session"], "abc123")
+
+
 class WslDisplayEnvironment(unittest.TestCase):
     """A WSL boot without /run/user/<uid>: the Studio found no Wayland
     compositor and exited (2026-10-05)."""

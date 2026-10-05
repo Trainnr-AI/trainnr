@@ -291,11 +291,11 @@ def _present_robot(
     import mujoco  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    from trainnr.project.previews import _robot_model_file  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
     from trainnr.viz import RigMirror  # noqa: PLC0415
 
     folder = project.root / artifact.path
-    model_file = _robot_model_file(folder)
+    model_file = model_file_for_use(folder)  # showing it is using it
     if model_file is None:
         raise ValueError(f"{folder}: no MJCF to show")
     model = mujoco.MjModel.from_xml_path(str(model_file))

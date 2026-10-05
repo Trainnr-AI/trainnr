@@ -227,8 +227,11 @@ def describe_actuator(actuator: str, tier: str = "m6") -> dict[str, Any]:
     exists."""
     from dataclasses import asdict  # noqa: PLC0415 - tiny, keeps the top clean
 
+    from trainnr.project.locate import plain_name  # noqa: PLC0415
     from trainnr.robot.actuator_bundle import read_bundle, verify  # noqa: PLC0415
 
+    plain_name(actuator, "actuator")  # both become a file name below
+    plain_name(tier, "tier")
     detail: dict[str, Any] = {"actuator": actuator, "tier": tier}
     if actuator in library_actuators():
         model = load_actuator(actuator, tier)

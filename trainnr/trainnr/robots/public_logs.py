@@ -445,7 +445,13 @@ def _fetch_zip_members(entry: PublicLog, root: Path, opener: Opener) -> None:
         start = span.offset + ZIP_LOCAL_HEADER + name_len + extra_len
         raw = _range(entry.url, start, span.compressed, opener)
         if span.method == ZIP_DEFLATED:
-            data = zlib.decompress(raw, RAW_DEFLATE)
+            inflater = zlib.decompressobj(RAW_DEFLATE)
+            data = inflater.decompress(raw, piece.bytes + 1)
+            if len(data) > piece.bytes:
+                raise ValueError(
+                    f"{entry.name}: {piece.path} inflates past the registry's "
+                    f"{piece.bytes} bytes; nothing was read"
+                )
         elif span.method == ZIP_STORED:
             data = raw
         else:

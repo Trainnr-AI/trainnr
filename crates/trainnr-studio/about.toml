@@ -29,6 +29,9 @@ accepted = [
 ]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
+# The Studio crate itself (FSL-1.1-ALv2, publish = false) is this
+# repository's own code: the notices are for what it links.
+private = { ignore = true }
 
 # Clarifications: crates whose declared licence leaves out code or fonts
 # they compile into the binary, so cargo-about would print the canonical
@@ -58,6 +61,21 @@ checksum = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
 path = "zstd/LICENSE"
 license = "BSD-3-Clause"
 checksum = "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+
+# libmimalloc-sys compiles the mimalloc C library (v3, its default): MIT,
+# Microsoft Corporation and Daan Leijen (c_src/mimalloc/v3/LICENSE).
+[libmimalloc-sys.clarify]
+license = "MIT"
+
+[[libmimalloc-sys.clarify.files]]
+path = "LICENSE.txt"
+license = "MIT"
+checksum = "a08554fab028af3af047e8588d32d019662c1b1bf07959a195a2f75fe340726b"
+
+[[libmimalloc-sys.clarify.files]]
+path = "c_src/mimalloc/v3/LICENSE"
+license = "MIT"
+checksum = "82ade5d7d9b029044b5fbbc326207fc47c2d44ee4dd71e8a559c36d728217de9"
 
 # lz4-sys bundles liblz4: the library directory is BSD-2-Clause, Yann
 # Collet (liblz4/lib/LICENSE); the rest of the LZ4 tree is not compiled.

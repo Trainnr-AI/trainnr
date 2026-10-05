@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from trainnr import safe_write
 from trainnr.project.kinds import TASK_FILE
 from trainnr.project.locate import Project, plain_name
 
@@ -120,9 +121,7 @@ def write_task_reference(  # noqa: PLR0913 - one record, each field named
     if spec is not None:
         record["spec"] = spec
     out = folder / TASK_FILE
-    out.write_text(
-        json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    safe_write.write_text(out, json.dumps(record, indent=1, sort_keys=True) + "\n")
     return out
 
 

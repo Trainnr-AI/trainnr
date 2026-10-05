@@ -236,6 +236,10 @@ pub struct Live {
 pub struct StudioState {
     pub schema: &'static str,
     pub pid: u32,
+    /// This session's token: a command is applied only when it carries it,
+    /// so a command file that came with someone else's project never is
+    /// (security review, 2026-10-05: its mtime was the only guard).
+    pub session: String,
     pub heartbeat: f64,
     pub project: String,
     pub project_name: String,
@@ -444,6 +448,8 @@ pub struct Control {
     following: bool,
     /// When this session started: older command files are not applied.
     started: SystemTime,
+    /// The session's token (`StudioState::session`).
+    token: String,
 }
 
 /// Whether `id` may name a command: see [`COMMAND_ID_MAX`].
@@ -471,9 +477,15 @@ impl Control {
             observed_tip: None,
             following: false,
             started: SystemTime::now(),
+            token: session_token(),
         };
-        control.forget_answered();
+        control.forget_existing();
         control
+    }
+
+    /// The token every command of this session carries.
+    pub fn token(&self) -> &str {
+        &self.token
     }
 
     /// A project switch: the commands directory moves with it, and the
@@ -533,19 +545,22 @@ impl Control {
             }
             self.root = root;
             self.seen.clear();
-            self.forget_answered();
+            self.forget_existing();
         }
     }
 
-    /// Commands already acknowledged on disk are not applied again when
-    /// the Studio restarts on the same project.
-    fn forget_answered(&mut self) {
+    /// Commands already in a project's folder when the Studio opens it,
+    /// answered or not, are never applied: they came with the project.
+    fn forget_existing(&mut self) {
         let Ok(entries) = std::fs::read_dir(self.root.join(COMMANDS_RELATIVE)) else {
             return;
         };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if let Some(id) = name.strip_suffix(".ack.json") {
+            if let Some(id) = name
+                .strip_suffix(".ack.json")
+                .or_else(|| name.strip_suffix(".json"))
+            {
                 self.seen.insert(id.to_owned());
             }
         }
@@ -584,13 +599,17 @@ impl Control {
             })
             .collect();
         fresh.sort();
+        let token = self.token.clone();
         fresh
             .into_iter()
             .map(|(id, path)| {
                 self.seen.insert(id.clone());
                 let command = std::fs::read_to_string(&path)
                     .map_err(|e| format!("unreadable: {e}"))
-                    .and_then(|text| parse_command(&text));
+                    .and_then(|text| {
+                        from_this_session(&text, &token)?;
+                        parse_command(&text)
+                    });
                 Pending { id, command }
             })
             .collect()
@@ -751,6 +770,43 @@ impl Control {
     }
 }
 
+/// A random token for one Studio session: the standard library's hasher
+/// keys are drawn from the operating system's randomness per process.
+pub(crate) fn session_token() -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    (0..2u8)
+        .map(|salt| {
+            let mut hasher = RandomState::new().build_hasher();
+            hasher.write_u8(salt);
+            hasher.write_u128(nanos);
+            hasher.write_u32(std::process::id());
+            format!("{:016x}", hasher.finish())
+        })
+        .collect()
+}
+
+/// A command is this session's only when it carries the session's token.
+fn from_this_session(text: &str, token: &str) -> Result<(), String> {
+    let carried = serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|v| v.get("session").and_then(|s| s.as_str()).map(str::to_owned));
+    if carried.as_deref() == Some(token) {
+        Ok(())
+    } else {
+        Err(
+            "refused: the command does not carry this Studio session's token \
+             (studio-state.json `session`); a command file that came with a \
+             project is never applied"
+                .to_owned(),
+        )
+    }
+}
+
 pub fn parse_command(text: &str) -> Result<Command, String> {
     serde_json::from_str::<Command>(text).map_err(|e| format!("not a command: {e}"))
 }
@@ -851,6 +907,14 @@ pub fn write_atomic_bytes(path: &Path, body: &[u8]) -> std::io::Result<()> {
 
 /// Refuse a write whose target, or any folder from the project's
 /// `.index` down to it, is a link: such a write could land anywhere.
+/// Whether `path` exists and resolves inside `root` (links followed).
+pub fn inside(root: &Path, path: &Path) -> bool {
+    match (root.canonicalize(), path.canonicalize()) {
+        (Ok(root), Ok(path)) => path.starts_with(root),
+        _ => false,
+    }
+}
+
 pub fn refuse_links(path: &Path) -> Result<(), String> {
     let mut at = Some(path);
     while let Some(p) = at {
@@ -990,17 +1054,42 @@ mod tests {
     fn new_command_files_are_seen_once_and_acked_ones_are_never_replayed() {
         let root = temp_root("poll");
         let dir = root.join(COMMANDS_RELATIVE);
-        std::fs::write(
-            dir.join("1-open.json"),
-            r#"{"verb":"open","section":"live"}"#,
-        )
-        .unwrap();
+        // came with the project: never applied, answered or not
         std::fs::write(dir.join("0-quit.json"), r#"{"verb":"quit"}"#).unwrap();
         std::fs::write(dir.join("0-quit.ack.json"), r#"{"status":"done"}"#).unwrap();
+        std::fs::write(dir.join("0-open.json"), r#"{"verb":"open"}"#).unwrap();
         let mut control = Control::new(root.clone());
+        // written after the Studio started, as the agent does: with the
+        // session's token, and one without it
+        std::fs::write(
+            dir.join("1-open.json"),
+            format!(
+                r#"{{"verb":"open","section":"live","session":"{}"}}"#,
+                control.token()
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("2-quit.json"),
+            r#"{"verb":"quit","session":"guess"}"#,
+        )
+        .unwrap();
         let pending = control.poll();
-        assert_eq!(pending.len(), 1, "the acked quit is not replayed");
-        assert_eq!(pending[0].id, "1-open");
+        let ids: Vec<&str> = pending.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["1-open", "2-quit"],
+            "what came with the project is not applied"
+        );
+        assert!(pending[0].command.is_ok(), "{:?}", pending[0].command);
+        assert!(
+            pending[1]
+                .command
+                .as_ref()
+                .is_err_and(|e| e.contains("token")),
+            "{:?}",
+            pending[1].command
+        );
         control.ack("1-open", "done", None);
         assert!(dir.join("1-open.ack.json").is_file());
         control.last_poll = None;
@@ -1026,6 +1115,7 @@ mod tests {
         let state = StudioState {
             schema: STATE_SCHEMA,
             pid: 1,
+            session: "t".into(),
             heartbeat: 0.0,
             project: "p".into(),
             project_name: "p".into(),

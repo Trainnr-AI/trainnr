@@ -526,26 +526,40 @@ impl ViewportFeed {
         // The frame ring: created HERE (the reader's lifetime owns it),
         // sized for the largest frame the wire allows, handed to the
         // script by path. See ShmReader for the layout.
+        // A random name, created only if absent and readable by this user
+        // alone: a predictable name in the shared temp folder could be
+        // planted by another account, and 0644 let it read the frames
+        // (review, 2026-10-05).
         let shm_path = std::env::temp_dir().join(format!(
-            "trainnr-viewport-{}-{}-{}.rgb",
+            "trainnr-viewport-{}-{}-{}-{}.rgb",
             std::process::id(),
             SHM_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+            &crate::control::session_token()[..16],
             file_safe(task_name),
         ));
-        let shm = File::create(&shm_path)
-            .and_then(|file| {
-                file.set_len(
-                    SHM_HEADER_BYTES + u64::from(MAX_RENDER_SIDE) * u64::from(MAX_RENDER_SIDE) * 3,
-                )?;
-                Ok(())
-            })
-            .and_then(|()| File::open(&shm_path))
-            .map(|file| ShmReader {
-                file,
-                path: shm_path.clone(),
-                last_seq: 0,
-                rgb: Vec::new(),
-            });
+        let shm = {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(0o600);
+            }
+            options.open(&shm_path)
+        }
+        .and_then(|file| {
+            file.set_len(
+                SHM_HEADER_BYTES + u64::from(MAX_RENDER_SIDE) * u64::from(MAX_RENDER_SIDE) * 3,
+            )?;
+            Ok(())
+        })
+        .and_then(|()| File::open(&shm_path))
+        .map(|file| ShmReader {
+            file,
+            path: shm_path.clone(),
+            last_seq: 0,
+            rgb: Vec::new(),
+        });
 
         if task_name == WALK_TASK {
             // The project's own walk: its robot, its latest checkpoint.

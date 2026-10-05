@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from trainnr import safe_write
 from trainnr.bundles.hashing import AUDIT_FILE
 
 BUNDLE_FILE = "bundle.json"
@@ -74,9 +75,7 @@ def write_bundle_record(  # noqa: PLR0913 - the record's fields, each named
     if provenance:
         record["provenance"] = dict(provenance)
     out = Path(bundle_dir) / BUNDLE_FILE
-    out.write_text(
-        json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    safe_write.write_text(out, json.dumps(record, indent=1, sort_keys=True) + "\n")
     return out
 
 
@@ -89,9 +88,7 @@ def amend_bundle_record(bundle_dir: Path, key: str, value: Any) -> Path:
     if not record:
         raise FileNotFoundError(f"no {BUNDLE_FILE} under {bundle_dir}")
     record[key] = value
-    out.write_text(
-        json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    safe_write.write_text(out, json.dumps(record, indent=1, sort_keys=True) + "\n")
     return out
 
 
@@ -99,9 +96,7 @@ def write_audit(bundle_dir: Path, audit: Mapping[str, Any]) -> Path:
     """The importer audit, in its own file beside the record: a record
     about the bundle, so writing it never moves the bundle's stamp."""
     out = Path(bundle_dir) / AUDIT_FILE
-    out.write_text(
-        json.dumps(dict(audit), indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    safe_write.write_text(out, json.dumps(dict(audit), indent=1, sort_keys=True) + "\n")
     return out
 
 
@@ -149,14 +144,10 @@ def read_bundle_record(bundle_dir: Path) -> dict[str, Any]:
 def model_file_of(bundle_dir: Path) -> Path | None:
     """The MJCF a bundle names: `bundle.json` first, then the rig
     profile's `model_file`, else the largest XML at the root; None for a
-    bundle with no XML at all. Every caller compiles what this returns,
-    so the files the bundle does not carry (`bundles.fetch`) are fetched
-    first."""
-    from trainnr.bundles.fetch import ensure_fetched  # noqa: PLC0415
-
+    bundle with no XML at all. It names the file and fetches nothing: a
+    caller about to compile the model to use it takes
+    `model_file_for_use`."""
     bundle_dir = Path(bundle_dir)
-    if bundle_dir.is_dir():
-        ensure_fetched(bundle_dir)
     named = read_bundle_record(bundle_dir).get("model_file")
     if not named:
         profile = bundle_dir / "profile.json"
@@ -175,3 +166,15 @@ def model_file_of(bundle_dir: Path) -> Path | None:
         bundle_dir.glob("*.xml"), key=lambda p: p.stat().st_size, reverse=True
     )
     return candidates[0] if candidates else None
+
+
+def model_file_for_use(bundle_dir: Path) -> Path | None:
+    """`model_file_of`, with the files the bundle does not carry fetched
+    first (`bundles.fetch`): for a caller about to build, train, identify
+    or show the robot, never for one that only lists or describes it (a
+    describe call downloaded 21 MB, review of 2026-10-05)."""
+    from trainnr.bundles.fetch import ensure_fetched  # noqa: PLC0415
+
+    if Path(bundle_dir).is_dir():
+        ensure_fetched(Path(bundle_dir))
+    return model_file_of(bundle_dir)

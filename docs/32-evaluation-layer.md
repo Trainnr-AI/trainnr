@@ -200,7 +200,7 @@ collapse to one each.
 | Fail loudly | `info["is_success"]` computed, never defaulted; unseeded or unequal trial sets refused by the fold |
 | Every decision written down; `check-docs` gates it | this document |
 | Both viewers for every rig session | `train-watch` keeps its viewers, loses its loop |
-| Apache-2.0 tree | gymnasium MIT, LeRobot Apache-2.0 |
+| permissively licensed dependencies | gymnasium MIT, LeRobot Apache-2.0 |
 
 ## 8. Order of work, with the test that proves each step
 
@@ -347,9 +347,9 @@ for step 3's checkpoint.
 ## 10. The review pass (2026-08-26, night) — standards applied
 
 The standard, stated after the build: modular and
-cross-platform, nothing hardcoded unless necessary, open-source-ready,
+cross-platform, nothing hardcoded unless necessary, ready for public release,
 strings and constants handled cleanly, DRY. Three reviewers read the
-day's code against it (hardcoding/portability/OSS hygiene; DRY and
+day's code against it (hardcoding/portability/public-release hygiene; DRY and
 constants; modularity and layering), and their findings were folded
 into two batches the same night. What changed:
 

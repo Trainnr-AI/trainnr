@@ -821,7 +821,17 @@ impl Shell {
                 }
             }
             RowAction::Viewer => {
-                self.viewer_request = Some(std::path::PathBuf::from(&job.viewer));
+                // A record names the stream file; only one inside the
+                // project is opened (review, 2026-10-05).
+                let path = std::path::PathBuf::from(&job.viewer);
+                if crate::control::inside(&self.model.project_root, &path) {
+                    self.viewer_request = Some(path);
+                } else {
+                    eprintln!(
+                        "studio: {} is outside the project; not opened",
+                        path.display()
+                    );
+                }
             }
             RowAction::Viewport => self.scene_request = Some(job.viewport.clone()),
             RowAction::ArmStop => self.stop_armed = Some(job.id.clone()),

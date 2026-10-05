@@ -21,6 +21,7 @@ available the indexer says so once and writes the index without pictures.
 
 from __future__ import annotations
 
+import io
 import re
 from collections.abc import Callable
 from contextvars import ContextVar
@@ -30,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from trainnr import safe_write
 from trainnr.collect.provenance import PROVENANCE_FILE
 from trainnr.deploy.manifest import MANIFEST_FILE as DEPLOY_FILE
 from trainnr.envs.lerobot_train_log import CHAIN_LOG_FILE
@@ -224,9 +226,8 @@ def _drop_set_if_palette_changed(
     if stamp.is_file() and stamp.read_text(encoding="utf-8") == want:
         return
     for old in folder.glob("*.png"):
-        old.unlink(missing_ok=True)
-    folder.mkdir(parents=True, exist_ok=True)
-    stamp.write_text(want, encoding="utf-8")
+        safe_write.remove(old)
+    safe_write.write_text(stamp, want)
 
 
 # -- per kind -------------------------------------------------------------
@@ -241,7 +242,7 @@ def _render_robot(
     except ImportError:
         return False
     model_file = _robot_model_file(source)
-    if model_file is None:
+    if model_file is None or awaiting_fetch(source):
         return False
     return _render_model(
         mujoco.MjModel.from_xml_path(str(model_file)), out, ROBOT_CAMERA
@@ -318,6 +319,14 @@ def _robot_model_file(source: Path) -> Path | None:
     from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
 
     return model_file_of(source)
+
+
+def awaiting_fetch(source: Path) -> list[str]:
+    """The files a bundle fetches on first use and does not hold yet; a
+    preview or a detail page never fetches them (`bundles.fetch`)."""
+    from trainnr.bundles.fetch import missing_files  # noqa: PLC0415
+
+    return missing_files(source) if Path(source).is_dir() else []
 
 
 def _render_batch(
@@ -937,10 +946,9 @@ def _save(pixels: np.ndarray, out: Path) -> bool:
 
 
 def _save_pil(image: PilImage, out: Path) -> bool:
-    out.parent.mkdir(parents=True, exist_ok=True)
-    staging = out.with_suffix(".png.tmp")
-    image.save(staging, format="PNG", optimize=True)
-    staging.replace(out)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    safe_write.write_bytes(out, buffer.getvalue())
     return True
 
 

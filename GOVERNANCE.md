@@ -137,7 +137,7 @@ maintainer checks the draft and publishes it. Step by step:
    - the archives: one per platform
      (`trainnr-studio-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`,
      `-aarch64-apple-darwin.tar.gz`, `-x86_64-pc-windows-msvc.zip`), each
-     holding the binary, LICENSE, NOTICE and THIRD_PARTY_LICENSES.md;
+     holding the binary, LICENSE, LICENSES/Apache-2.0.txt, NOTICE and THIRD_PARTY_LICENSES.md;
    - the notes: the CHANGELOG's `[X.Y.Z]` section;
    - the checksums: `gh release download vX.Y.Z -R Trainnr-AI/trainnr -D rel`,
      then `sha256sum -c *.sha256` inside `rel`;

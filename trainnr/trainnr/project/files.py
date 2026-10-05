@@ -15,8 +15,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-ENCODING = "utf-8"
-STAGING_SUFFIX = ".tmp"
+from trainnr import safe_write
+
+ENCODING = safe_write.ENCODING
+STAGING_SUFFIX = safe_write.STAGING_SUFFIX
 
 
 def read_json(path: Path, *, missing_ok: bool = False) -> dict[str, Any]:
@@ -43,19 +45,13 @@ def read_text(path: Path, *, errors: str = "strict") -> str:
 
 def write_json(path: Path, record: Any, *, default: Any = None) -> Path:
     """Write `record` as indented JSON with a trailing newline, through a
-    staging file replaced in one step, so a reader never sees half of it."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    staging = path.with_name(path.name + STAGING_SUFFIX)
-    staging.write_text(
-        json.dumps(record, indent=1, default=default) + "\n", encoding=ENCODING
+    staging file replaced in one step, so a reader never sees half of it,
+    and never through a link the project carries (`trainnr.safe_write`)."""
+    return safe_write.write_text(
+        path, json.dumps(record, indent=1, default=default) + "\n"
     )
-    staging.replace(path)
-    return path
 
 
 def write_text(path: Path, text: str) -> Path:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding=ENCODING)
-    return path
+    """The text, UTF-8, written the same way."""
+    return safe_write.write_text(path, text)

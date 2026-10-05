@@ -35,7 +35,7 @@ bootstrap()
 
 from trainnr.bundles.bundle import (  # noqa: E402
     migrate_audit,
-    model_file_of,
+    model_file_for_use,
     write_audit,
 )
 from trainnr.bundles.hashing import stamp  # noqa: E402
@@ -84,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.source is None:
         parser.error("the description the bundle came from is required to audit")
-    model_file = model_file_of(args.bundle)
+    model_file = model_file_for_use(args.bundle)
     if model_file is None:
         print(f"no MJCF under {args.bundle}", file=sys.stderr)
         return 2

@@ -108,8 +108,11 @@ pub struct Job {
     pub viewport: String,
     #[serde(default)]
     pub viewer: String,
+    /// When the job's process started, by the OS clock, as the runner read
+    /// it at spawn (`mcp_jobs.process_create_time`): Stop signals a pid
+    /// only when its process started then (`stop`).
     #[serde(default)]
-    pub log: String,
+    pub create_time: f64,
     #[serde(skip)]
     pub exit: Option<i32>,
     #[serde(skip)]
@@ -212,6 +215,20 @@ const LINUX_TICKS_PER_S: f64 = 100.0;
 /// When process `pid` started, in seconds since the epoch: Linux reads
 /// it from `/proc`; elsewhere `None` (only the pid guard applies).
 pub fn process_started_epoch(pid: u32) -> Option<f64> {
+    #[cfg(target_os = "macos")]
+    {
+        // macOS has no /proc: `ps` reports the elapsed time since start.
+        let out = std::process::Command::new("ps")
+            .args(["-o", "etime=", "-p", &pid.to_string()])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let elapsed = parse_etime(String::from_utf8_lossy(&out.stdout).trim())?;
+        return Some(crate::model::now_epoch() - elapsed);
+    }
+    #[allow(unreachable_code)]
     if !cfg!(target_os = "linux") {
         return None;
     }
@@ -227,6 +244,23 @@ pub fn process_started_epoch(pid: u32) -> Option<f64> {
         .parse()
         .ok()?;
     Some(boot + ticks / LINUX_TICKS_PER_S)
+}
+
+/// `ps -o etime` as seconds: `[[dd-]hh:]mm:ss` (macOS's start time).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn parse_etime(text: &str) -> Option<f64> {
+    let (days, clock) = match text.split_once('-') {
+        Some((d, rest)) => (d.parse::<f64>().ok()?, rest),
+        None => (0.0, text),
+    };
+    let mut seconds = 0.0;
+    for part in clock.split(':') {
+        seconds = seconds * 60.0 + part.parse::<f64>().ok()?;
+    }
+    if clock.split(':').count() > 3 {
+        return None;
+    }
+    Some(days * 86_400.0 + seconds)
 }
 
 /// Whether a process id is alive. Linux answers through `/proc`; any
@@ -264,12 +298,20 @@ pub fn stop(job: &Job) -> std::io::Result<()> {
     // pid 1 as a group is `kill -TERM -- -1`: every process the user
     // owns. A job record comes from the project folder, which may have
     // come from someone else (2026-10-04 security review).
-    if job.pid <= 1 {
+    if job.pid <= 1 || job.pid > i32::MAX as u32 {
         return Err(std::io::Error::other("no usable pid recorded"));
     }
-    if process_started_epoch(job.pid).is_some_and(|t| t > job.started + PID_REUSE_SLACK_S) {
+    // The process must be the one the runner spawned: started when the
+    // record says, both ways (a record's own `started` was trusted alone
+    // until 2026-10-05: a far-future one made any live pid stoppable).
+    let Some(started) = process_started_epoch(job.pid) else {
         return Err(std::io::Error::other(
-            "that pid now belongs to a process started after the job; not signalled",
+            "this system cannot say when that process started; stop the job with cancel_job",
+        ));
+    };
+    if job.create_time <= 0.0 || (started - job.create_time).abs() > PID_REUSE_SLACK_S {
+        return Err(std::io::Error::other(
+            "that pid is not the job's process (it started at another time); not signalled",
         ));
     }
     #[cfg(unix)]
@@ -418,13 +460,11 @@ pub fn read_snapshot(jobs_dir: &Path, watched: Option<&str>) -> Snapshot {
         })
         .collect();
     jobs.sort_by(|a, b| b.started.total_cmp(&a.started));
+    // The log beside the record, never the path a record names: a record
+    // naming a key file showed its tail in the window (review, 2026-10-05).
     let log_tail = watched.and_then(|id| {
-        let job = jobs.iter().find(|j| j.id == id)?;
-        let path = if job.log.is_empty() {
-            jobs_dir.join(format!("{id}.log"))
-        } else {
-            PathBuf::from(&job.log)
-        };
+        jobs.iter().find(|j| j.id == id)?;
+        let path = jobs_dir.join(format!("{id}.log"));
         Some((id.to_owned(), tail_lines(&path, LOG_TAIL_LINES)))
     });
     Snapshot { jobs, log_tail }
@@ -882,8 +922,26 @@ mod tests {
             assert!(mine <= now + 1.0 && mine > now - 86_400.0 * 365.0, "{mine}");
             let mut reused = job("reused", mine - 3600.0);
             reused.pid = std::process::id();
+            reused.create_time = mine - 3600.0;
             assert!(stop(&reused).is_err(), "a pid that started after its job");
+            let mut future = job("future", now + 1e9);
+            future.pid = std::process::id();
+            assert!(
+                stop(&future).is_err(),
+                "no create_time, or one in the future"
+            );
         }
+        let mut huge = job("huge", 1.0);
+        huge.pid = u32::MAX;
+        assert!(stop(&huge).is_err(), "kill(-1) by wrap-around");
+    }
+
+    #[test]
+    fn ps_elapsed_times_read_as_seconds() {
+        assert_eq!(parse_etime("05:07"), Some(307.0));
+        assert_eq!(parse_etime("01:05:07"), Some(3907.0));
+        assert_eq!(parse_etime("2-01:05:07"), Some(2.0 * 86_400.0 + 3907.0));
+        assert_eq!(parse_etime("nonsense"), None);
     }
 
     fn job(id: &str, started: f64) -> Job {

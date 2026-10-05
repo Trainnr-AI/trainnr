@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 
-from trainnr.bundles.bundle import model_file_of
+from trainnr.bundles.bundle import model_file_for_use
 from trainnr.bundles.hashing import stamp
 from trainnr.robot.fit_record import write_fit_record
 from trainnr.robot.identify import IdentificationResult
@@ -456,7 +456,7 @@ class LeggedJoints:
         import mujoco  # noqa: PLC0415
 
         bundle_dir, recording_dir = Path(bundle_dir), Path(recording_dir)
-        model_file = model_file_of(bundle_dir)
+        model_file = model_file_for_use(bundle_dir)
         if model_file is None:
             return "the bundle has no MJCF"
         try:
@@ -483,7 +483,7 @@ class LeggedJoints:
     def fit_balance(self, bundle_dir: Path, recording: Recording | Path) -> LeggedFit:
         import mujoco  # noqa: PLC0415
 
-        model_file = model_file_of(Path(bundle_dir))
+        model_file = model_file_for_use(Path(bundle_dir))
         if model_file is None:
             raise ValueError("the bundle has no MJCF")
         model = mujoco.MjModel.from_xml_path(str(model_file))

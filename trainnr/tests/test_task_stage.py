@@ -58,6 +58,15 @@ class GridOnAStage(unittest.TestCase):
         # press's chase camera renders training and judging frames of
         # the vision student off this grid (2026-09-13).
         import importlib.util  # noqa: PLC0415
+        from pathlib import Path  # noqa: PLC0415
+
+        from trainnr.bundles.fetch import unavailable  # noqa: PLC0415
+
+        reason = unavailable(
+            Path(__file__).resolve().parents[2] / "robots" / "microduck"
+        )
+        if reason:
+            self.skipTest(reason)
         import sys  # noqa: PLC0415
         from pathlib import Path  # noqa: PLC0415
 

@@ -22,7 +22,19 @@ class MicroduckBundle(unittest.TestCase):
     def _model(self):
         import mujoco  # noqa: PLC0415
 
+        from trainnr.bundles.fetch import unavailable  # noqa: PLC0415
+
+        reason = unavailable(BUNDLE)  # the meshes are fetched on first use
+        if reason:
+            self.skipTest(reason)
         return mujoco.MjModel.from_xml_path(str(XML))
+
+    def test_the_stamp_is_pinned_fetched_or_not(self) -> None:
+        """Every record citing the microduck names this stamp; a fresh
+        clone without the meshes reports it too (FETCH.json records it)."""
+        from trainnr.bundles.hashing import stamp  # noqa: PLC0415
+
+        self.assertEqual(stamp("microduck", BUNDLE), "microduck@ad90736153cc")
 
     def test_census_matches_their_walk_model(self) -> None:
         model = self._model()

@@ -110,6 +110,10 @@ class _NoTokenAcrossHosts(urllib.request.HTTPRedirectHandler):
     an API asset download redirects to a storage CDN."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]  # noqa: PLR0913, PLR0917
+        if urllib.parse.urlsplit(newurl).scheme != "https":
+            raise urllib.error.HTTPError(
+                newurl, code, "refusing a redirect away from https", headers, fp
+            )
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is not None:
             old_host = urllib.parse.urlsplit(req.full_url).hostname

@@ -43,6 +43,7 @@ TIER = {
 MODULE_TIER = {
     "trainnr.robot.model_checks": 1,
     "trainnr.robot.asset_fetch": 1,  # stdlib only; bundles fetch what they lack
+    "trainnr.safe_write": 0,  # stdlib only; every layer writes through it
     "trainnr.robot.legged_fit": 4,
     "trainnr.robot.quadruped_synth": 4,
 }
