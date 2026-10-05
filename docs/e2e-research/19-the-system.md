@@ -3,7 +3,7 @@
 > **Archived.** Historical (written 2026-08-08, for a three-robot pilot plan). This was
 > the system map of the 2025–26 microcontroller rig: four tiers, a latency
 > budget, a failover design. The rig's crates, firmware and emulator tools
-> are kept with their history in a private archive; `trainnr` in the text below means that
+> are published as [rigrs](https://github.com/Trainnr-AI/rigrs); `trainnr` in the text below means that
 > 2026-08 rig codebase, not the platform this repository now is. Superseded
 > by [docs/76](../76-the-loop.md) (the loop) and
 > [docs/22](../22-pipeline-architecture.md) (the architecture); kept as the

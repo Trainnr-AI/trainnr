@@ -3,7 +3,7 @@
 > **Archived.** Historical (written 2026-08-08, second pass 2026-08-15, last touched
 > 2026-08-28). The open questions of the 2026-08 research pass, in their
 > state at that date; several were answered since. The rig they refer to
-> is kept in a private archive; `trainnr` in the text means that rig codebase. §5
+> is now [rigrs](https://github.com/Trainnr-AI/rigrs); `trainnr` in the text means that rig codebase. §5
 > (actuator identifiability) was answered by [53](53-bam-actuator-identification.md),
 > [docs/26](../26-sts3215-synthetic-identifiability.md) and the findings
 > ledger ([docs/68](../68-findings.md)); Warp under WSL by [49](49-gpu-path-mjxwarp.md).

@@ -25,7 +25,7 @@ gate() {
 
 echo "pre-commit:"
 # the Studio is the one Rust crate left (the rig's crates and firmware
-# moved to a private archive on 2026-10-02). It is its own workspace — own Cargo.lock, the rerun 0.36
+# moved to Trainnr-AI/rigrs on 2026-10-02). It is its own workspace — own Cargo.lock, the rerun 0.36
 # pins — so every cargo gate runs inside it. Before the move it was
 # `exclude`d from the root workspace and a review found drift the root's
 # "formatting ok" stamps had been vacuously blessing: a workspace needs its

@@ -88,7 +88,7 @@ split would take.*
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
 | **`mjsim`** (public, planned; docs/84) | the MuJoCo simulator window: the egui widget (Rust) and the simulation stream (Python), one version; the Studio and `trainnr` depend on it | its own cadence and its own users (any egui app, any MuJoCo user); the name is free on PyPI and crates.io |
 | a paper repository | planned: the paper moved out of this repository on 2026-10-05 and will be published in its own | A paper freezes at submission and is cited by DOI; the product repository says only that the research is ongoing. |
-| **`rig`** (private archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
+| **`rig`** (published as [rigrs](https://github.com/Trainnr-AI/rigrs) on 2026-10-06) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
 | **`.github`** (public) | the organisation profile README | GitHub's convention. |
 
 Not repositories: a docs repo (docs live beside the code and a checker ties

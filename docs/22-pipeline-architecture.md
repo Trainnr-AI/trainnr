@@ -49,7 +49,7 @@ in italics where it changed.
 | ⑥ expand | planned `trainnr/expand` | green-screen style augmentation + the renderer-agnostic sensor-degradation stage. *2026-10: not built as a package; randomization lives in the generators and in `trainnr-mjlab`'s events* |
 | ⑦ train | a second environment, `.venv-train` | **running** (2026-08-26, docs/31) — LeRobot 0.6.1 trains against this repo's exports: T0 ACT smoke (300 steps, 2.1 GB), T6 PPO on MuJoCo Warp (36k env-steps/s, 2048 worlds). Thin wrappers stay a non-goal until a second trainer forces an abstraction — today the dataset contract IS the interface. *2026-10: the second trainer came: `trainnr-mjlab/` (reinforcement learning on mjlab) beside LeRobot (imitation), both behind the `train_walk` and `run_chain` tools* |
 | ③/⑧ evaluate | `trainnr/trainnr/evaluate/` | **built end to end** — the certificate artifact (bundle-stamped, gated on the Fisher lower bound, per-policy intervals, exact permutation p whenever n ≤ 8) **and the harness that feeds it** (`harness.py`): census-gated closed-loop episodes, paired trials across policies, sensors-only observations, exact-join to real outcomes by name. The whole go/no-go chain runs in one test: four policies → sim ranking → join → honest FAIL at n=4 with exact p = 1/24. **The real side has real data**: `evaluate/armnetbench.py` loads the committed third-party aggregate (`data/armnetbench-v01-so101-counts.json` — 2,099 SO-101 rollouts, 7 policies × 8 tasks, Apache-2.0, provenance in-file) into `join_with_real`'s shape, strict-by-default on the `suboptimal` label. **Pixels too** (`evaluate/vision.py`, 2026-08-25): the same paired-trial skeleton over rendered cameras (ArmnetBench's three-camera rig as data), camera-count census-gated, with a LeRobot checkpoint adapter that runs released policies through their own pre/post-processors |
-| ⑨ envelope | stays with the rig's firmware (the rig archive) | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
+| ⑨ envelope | stays with the rig's firmware ([rigrs](https://github.com/Trainnr-AI/rigrs)) | the Tier 0 boundary is hardware's job; the pipeline only *verifies* it exists |
 
 ## 2.1 The two entry maps: where the ML enters, where the physics enters
 
@@ -139,7 +139,7 @@ per stage ② of the research design: MJCF triage → interface capability censu
 `mujoco.sysid` fit → **a robot-bundle whose parameters carry intervals and
 whose validity scope is written down**. Every later stage consumes that bundle
 blind to what the robot is. The 2025–26 rig (camera, two motors, three
-servos on a Pico; its code is now in a private archive) was
+servos on a Pico; its code is now [rigrs](https://github.com/Trainnr-AI/rigrs)) was
 deliberately the first stranger: if the pipeline's abstractions could not
 swallow the hardware twenty centimetres away, they could not swallow
 anyone's arm either. The second stranger was the Unitree Go2 (docs/77).

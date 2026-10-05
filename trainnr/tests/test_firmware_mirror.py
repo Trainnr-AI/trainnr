@@ -31,8 +31,9 @@ from trainnr.tasks.yellow import (
 )
 
 REPO = Path(__file__).resolve().parents[2]
-# The firmware moved with the rig to a private archive on 2026-10-02. The
-# firmware halves of these mirrors run when a checkout of it is named;
+# The firmware moved with the rig to Trainnr-AI/rigrs on 2026-10-02. The
+# firmware halves of these mirrors run when a checkout of it is named
+# (TRAINNR_RIG_DIR);
 # without one they skip by name, so the Python-only halves still hold on
 # every machine.
 RIG = Path(os.environ.get("TRAINNR_RIG_DIR", REPO))

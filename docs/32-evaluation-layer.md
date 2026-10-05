@@ -455,12 +455,12 @@ waits (status as of 2026-08-27 unless dated):
 | `grid_scene` / `grid_model_from_xml` (show-many, rl-watch) into `_rig3d` | Same family; both tools work, both restate a ground plane and a pitch. |
 | `show-rig`'s sixteen tuned thresholds (`.ruff.toml` exempts the file, with the reason) | A hand-tuned demo controller; naming them is honest only with the desk to re-measure. |
 | `RatioParams`/`RigNames` in `robot/drivetrain_fit.py` | The car rig's identification code, off the training path; its fit records are test-pinned. |
-| `sim-errand.py`'s thirteen constants mirrored from the Pico firmware's `main.rs` (in the rig archive) without a test that reads them | The right test is a regex over `const X: T = v;` in that file; queued with the firmware's next change. |
+| `sim-errand.py`'s thirteen constants mirrored from the Pico firmware's `main.rs` (in [rigrs](https://github.com/Trainnr-AI/rigrs)) without a test that reads them | The right test is a regex over `const X: T = v;` in that file; queued with the firmware's next change. |
 | `cli_flags` spelling its four field names as literals rather than `dataclasses.fields` | The test pins every flag; a field rename fails loudly. |
 | The GPU model in the MJX stamp (today: device class) | The architecture finding suggests it; measured on one GPU so far. |
 | `physics.__all__` listing the lazy `MJXWarpBackend` | A star import needs the extra; nobody star-imports. |
 | The tools' `qpos[15]` / `CUBE_QPOS` cube index by body lookup | Display-only; `show-many` and `show-yellow` show the pattern. |
-| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate could not run on the development machine (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading build-robot.sh's identical fix (now in the rig archive). |
+| The six `sim-*.sh` scripts, fixed but unrun | The Rust half of the gate could not run on the development machine (rustc 1.93 vs the crates' 1.95 floor); they are verified by reading build-robot.sh's identical fix (now in [rigrs](https://github.com/Trainnr-AI/rigrs)). |
 | From §10, still open: `EpisodeDesign` structs (kitting's is `KittingSpec` since 2026-08-27; the SO-101 tasks' step tables are next), typed `MilestoneEvent`/`ProtocolFields`, bundles as package data, the ALOHA joint-name lists derived once, the env's own `import mujoco` | Reasons unchanged. |
 
 ## 11. Open questions (carried from 45 §4 and 46 §5; as of 2026-08-27, not revisited since)
