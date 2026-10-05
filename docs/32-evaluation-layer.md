@@ -392,7 +392,7 @@ into two batches the same night. What changed:
   `.DS_Store` or a Windows CRLF checkout cannot change a stamp; bundles
   are located through `TRAINNR_ROBOTS_DIR` with a loud error; launch lines
   are labelled WSL vs macOS.
-- **Open-source hygiene.** `LICENSE` (Apache-2.0) and `NOTICE` at the
+- **Release hygiene.** `LICENSE` (Apache-2.0 then; FSL-1.1-ALv2 since 2026-10-05) and `NOTICE` at the
   root, `license` on the Cargo workspace; `.env` and per-user Claude
   settings ignored; provenance records a batch's name, not its absolute
   path; `mujoco-warp` marked non-Darwin.

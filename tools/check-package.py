@@ -3,10 +3,12 @@
 
     python3 tools/check-package.py
 
-Apache-2.0 4(a) and 4(d): a redistribution carries the licence and the
-NOTICE. Each package's pyproject lists `LICENSE` and `NOTICE` as licence
-files; trainnr-mjlab's NOTICE is a copy of the root one (trainnr's is a
-short pointer to it) and both packages' LICENSE are copies of the root's.
+A redistribution carries the licence (FSL-1.1-ALv2's Redistribution
+clause), and the third-party code under Apache-2.0 carries that licence's
+text and the NOTICE (its 4(a) and 4(d)). Each package's pyproject lists
+`LICENSE`, `LICENSE-APACHE` and `NOTICE` as licence files; trainnr-mjlab's
+NOTICE is a copy of the root one (trainnr's is a short pointer to it) and
+both packages' LICENSE and LICENSE-APACHE are copies of the root's.
 This checks the copies are identical, then builds both wheels with
 `uv build` into a scratch directory and refuses one without LICENSE or
 NOTICE under its `.dist-info/licenses/`. CI runs it as the required
@@ -29,8 +31,10 @@ COPIES = (
     ("trainnr-mjlab/NOTICE", "NOTICE"),
     ("trainnr/LICENSE", "LICENSE"),
     ("trainnr-mjlab/LICENSE", "LICENSE"),
+    ("trainnr/LICENSE-APACHE", "LICENSE-APACHE"),
+    ("trainnr-mjlab/LICENSE-APACHE", "LICENSE-APACHE"),
 )
-LICENCE_FILES = ("LICENSE", "NOTICE")
+LICENCE_FILES = ("LICENSE", "LICENSE-APACHE", "NOTICE")
 
 
 def main() -> int:
@@ -63,7 +67,7 @@ def main() -> int:
                 print(f"{wheel.name}: no {' or '.join(missing)}")
                 failed = 1
             else:
-                print(f"{wheel.name}: LICENSE and NOTICE present")
+                print(f"{wheel.name}: {', '.join(LICENCE_FILES)} present")
         if len(wheels) != len(PACKAGES):
             print(f"expected {len(PACKAGES)} wheels, built {len(wheels)}")
             failed = 1

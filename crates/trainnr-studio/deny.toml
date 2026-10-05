@@ -55,6 +55,11 @@ allow = [
   "Ubuntu-font-1.0",
 ]
 
+# The Studio crate itself (FSL-1.1-ALv2, publish = false) is this
+# repository's own code: the allow-list is for what it depends on.
+[licenses.private]
+ignore = true
+
 [bans]
 multiple-versions = "allow"
 wildcards = "deny"

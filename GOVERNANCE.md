@@ -1,7 +1,8 @@
 # Governance
 
-trainnr is developed in the open by Trainnr AI under
-the Functional Source License (FSL-1.1-ALv2).
+trainnr is developed in the open by Trainnr AI under the Functional Source
+License (FSL-1.1-ALv2): any use other than a competing product or service,
+and each version under the Apache License 2.0 two years after its release.
 
 ## Roles
 
@@ -33,19 +34,21 @@ the Functional Source License (FSL-1.1-ALv2).
 - Disagreements are settled by the maintainers after discussion in the
   issue or pull request; the reasoning is recorded with the decision.
 
-## Open source and the hosted service
+## The licence and the hosted service
 
-Everything in this repository (the Python packages, the Studio, the
-CLI, the agent plugin, the robot bundles, the docs and the findings
-records) is FSL-1.1-ALv2, and each version becomes Apache-2.0 two years
-after it is made available. A hosted service may be
+Everything in this repository (the Python packages, the Studio, the CLI,
+the agent plugin, the robot bundles, the docs and the findings records) is
+FSL-1.1-ALv2, apart from the third-party material `NOTICE` lists under its
+own licence. Each version becomes Apache-2.0 on the second anniversary of
+its release, irrevocably; that clock is the licence's, not a promise that
+can be withdrawn. A hosted service may be
 built on top of it; if it is, it extends these packages through the same
 public entry points any other package can use (`trainnr.mcp_tools`, the
 task and robot registries), which are part of the public API below.
 Nothing in this repository depends on a hosted service, and nothing here
 requires an account.
 
-The open packages send no telemetry and never phone home. Every network
+The packages send no telemetry and never phone home. Every network
 connection they make, when it happens and how to turn it off, is listed
 in [SECURITY.md](SECURITY.md#network).
 

@@ -1,7 +1,7 @@
 # The Studio, prebuilt: one archive per platform on the GitHub release of
 # a version tag, which `trainnr.studio_install` downloads (the plugin's
 # session hook, `launch_studio`, `trainnr studio`), so a user never needs
-# Rust. Each archive carries LICENSE, NOTICE and THIRD_PARTY_LICENSES.md
+# Rust. Each archive carries LICENSE, LICENSE-APACHE, NOTICE and THIRD_PARTY_LICENSES.md
 # (every crate's licence, the embedded fonts' included) and has a
 # `.sha256` beside it; the installer refuses one that does not match.
 #
@@ -134,7 +134,7 @@ jobs:
           name="trainnr-studio-${TAG}-${{ matrix.target }}"
           bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
           mkdir -p "dist/$name"
-          cp LICENSE NOTICE notices/THIRD_PARTY_LICENSES.md "dist/$name/"
+          cp LICENSE LICENSE-APACHE NOTICE notices/THIRD_PARTY_LICENSES.md "dist/$name/"
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp "$bin.exe" "dist/$name/"
             (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
@@ -197,7 +197,7 @@ jobs:
           body = m.group(1).strip() if m else ""
           footer = ("The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
                     "Windows (x86_64): the plugin and `trainnr studio` download the right "
-                    "one. Each archive carries LICENSE, NOTICE and THIRD_PARTY_LICENSES.md, "
+                    "one. Each archive carries LICENSE, LICENSE-APACHE, NOTICE and THIRD_PARTY_LICENSES.md, "
                     "and its SHA-256 is beside it.")
           pathlib.Path("notes.md").write_text((body + "\n\n" if body else "") + footer + "\n")
           PY

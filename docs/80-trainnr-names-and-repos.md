@@ -182,6 +182,13 @@ may stay in code: press, referee, presenter, rail, twin (as
 
 ## 7. Licence and governance
 
+*Changed 2026-10-05, before the first public release: the licence is
+FSL-1.1-ALv2 (the Functional Source License with an Apache-2.0 future
+licence), not Apache-2.0. Any use but a competing product or service, and
+each version Apache-2.0 two years after its release; contributions come in
+under Apache-2.0 (CONTRIBUTING.md). Still one licence for the whole
+repository, one NOTICE. The paragraph below is the 2026-10-02 decision.*
+
 Apache-2.0 for everything (the 2026-09-07 AGPL-for-the-Studio idea is
 dropped: one licence, one NOTICE; Rerun and goose both ship one licence).
 DCO sign-off on every commit (goose is a foundation project without one

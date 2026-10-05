@@ -35,7 +35,7 @@
 
 <img alt="The Studio's Overview of a Go2 project: the stages of the loop, and the best policy under each test condition with its exact interval" src="docs/figures/readme/studio-overview.png">
 
-trainnr is an open-source platform for **physical AI**: robot learning
+trainnr is a platform for **physical AI**: robot learning
 from the robot's own data, end to end. It identifies a robot's dynamics
 from its telemetry into a **simulation** model (real-to-sim), creates
 training data on that model, trains policies with **reinforcement learning
@@ -512,7 +512,21 @@ Tool names and arguments changed before 0.1.0; [`CHANGELOG.md`](CHANGELOG.md) li
 
 ## Licence
 
-[FSL-1.1-ALv2](LICENSE): any use other than a competing product or service, and each version under Apache-2.0 two years after it is made available. Third-party material is listed in [`NOTICE`](NOTICE). The 2025–26
+trainnr is licensed under the [Functional Source License, Version 1.1, ALv2
+Future License](LICENSE) (FSL-1.1-ALv2):
+
+- **You may** use it for anything other than a competing product: train
+  and deploy your own robots with it, commercially or not; change it,
+  self-host it, build on it, and use it in research, teaching and
+  consulting.
+- **You may not** make it available to others in a commercial product or
+  service that substitutes for trainnr or offers substantially similar
+  functionality.
+- **Two years after each version is made available**, that version is also
+  licensed under the [Apache License 2.0](LICENSE-APACHE), with no limit.
+
+Third-party material keeps its own licence and is listed in
+[`NOTICE`](NOTICE). The 2025–26
 hardware rig this toolchain grew up on (a camera, two motors and three
 servos on a Pico) is kept in a private archive; its recordings
 stay here under `recordings/`. "Robotiq" in
