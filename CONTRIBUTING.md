@@ -151,7 +151,7 @@ request.
 ## Licence
 
 trainnr is distributed under FSL-1.1-ALv2 (`LICENSE`). Contributions come
-in under the Apache License 2.0 (`LICENSE-APACHE`): by contributing you
+in under the Apache License 2.0 (`LICENSES/Apache-2.0.txt`): by contributing you
 license your contribution to Trainnr AI under Apache-2.0, which lets
 Trainnr AI distribute it as part of trainnr under FSL-1.1-ALv2 and, as the
 licence grants, under Apache-2.0 two years after each release. Third-party

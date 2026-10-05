@@ -9,7 +9,7 @@ description = "The physical AI platform for robot learning, run from your coding
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = "FSL-1.1-ALv2"
-license-files = ["LICENSE", "LICENSE-APACHE", "NOTICE"]
+license-files = ["LICENSE", "LICENSES/Apache-2.0.txt", "NOTICE"]
 authors = [{ name = "Prakhar Aggarwal" }]
 keywords = [
     "physical-ai", "robotics", "robot-learning", "reinforcement-learning",

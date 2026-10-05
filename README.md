@@ -523,7 +523,7 @@ Future License](LICENSE) (FSL-1.1-ALv2):
   service that substitutes for trainnr or offers substantially similar
   functionality.
 - **Two years after each version is made available**, that version is also
-  licensed under the [Apache License 2.0](LICENSE-APACHE), with no limit.
+  licensed under the [Apache License 2.0](LICENSES/Apache-2.0.txt), with no limit.
 
 Third-party material keeps its own licence and is listed in
 [`NOTICE`](NOTICE). The 2025–26
