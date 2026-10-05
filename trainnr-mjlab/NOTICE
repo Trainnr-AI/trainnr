@@ -6,7 +6,8 @@ ALv2 Future License (FSL-1.1-ALv2; see LICENSE): any use other than a
 competing product or service is allowed, and each version is also licensed
 under the Apache License, Version 2.0 from the second anniversary of the
 day it is made available. The third-party material below keeps its own
-licence; the text of the Apache License, Version 2.0 is in LICENSE-APACHE.
+licence; the text of the Apache License, Version 2.0 is in
+LICENSES/Apache-2.0.txt.
 
 It includes or builds on the third-party material below. Each vendored
 directory carries the upstream licence text and a README naming the
