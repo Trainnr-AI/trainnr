@@ -513,24 +513,15 @@ Tool names and arguments changed before 0.1.0; [`CHANGELOG.md`](CHANGELOG.md) li
 ## Licence
 
 trainnr is licensed under the [Functional Source License, Version 1.1, ALv2
-Future License](LICENSE) (FSL-1.1-ALv2):
-
-- **You may** use it for anything other than a competing product: train
-  and deploy your own robots with it, commercially or not; change it,
-  self-host it, build on it, and use it in research, teaching and
-  consulting.
-- **You may not** make it available to others in a commercial product or
-  service that substitutes for trainnr or offers substantially similar
-  functionality.
-- **Two years after each version is made available**, that version is also
-  licensed under the [Apache License 2.0](LICENSES/Apache-2.0.txt), with no limit.
+Future License](LICENSE) (FSL-1.1-ALv2). Two years after each version is
+made available, that version is also licensed under the
+[Apache License 2.0](LICENSES/Apache-2.0.txt).
 
 Third-party material keeps its own licence and is listed in
-[`NOTICE`](NOTICE). The 2025–26
-hardware rig this toolchain grew up on (a camera, two motors and three
-servos on a Pico) is published as [rigrs](https://github.com/Trainnr-AI/rigrs), memory-safe robot firmware in
-Rust; its recordings
-stay here under `recordings/`. "Robotiq" in
+[`NOTICE`](NOTICE). The code of the 2025–26 hardware rig this
+toolchain grew up on (a camera, two motors and three servos)
+is now [rigrs](https://github.com/Trainnr-AI/rigrs), robot firmware in Rust;
+the rig's recordings stay here under `recordings/`. "Robotiq" in
 `robots/robotiq-2f85-isaac` is Robotiq Inc.'s gripper; trainnr is not
 affiliated with Robotiq.
 
