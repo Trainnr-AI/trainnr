@@ -2,7 +2,7 @@
  "id": "walk-cadence-controls-2026-09-02",
  "claim": "The walk teacher with its own actions zero-order-held: every tick 40/40 survive 500 ticks; held 2 ticks 38/40 (falls at ticks 283, 488); held 5 ticks 0/40, first falls at ticks 20-23 \u2014 a 10 Hz dataset (frames every 5 of 50 Hz ticks) is below the hop's control bandwidth, and no student trained on it could stand however well it learned (campaign 1's 0/40 student had normalized action error 0.136 on its own frames).",
  "date": "2026-09-02",
- "repo_commit": "e9be93f",
+ "repo_commit": "de772af",
  "argv": [
   "rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 with the teacher's action held 1 / 2 / 5 ticks (the hold probe of 2026-09-02, run on the pod)"
  ],

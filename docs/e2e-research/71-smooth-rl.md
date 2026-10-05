@@ -225,9 +225,9 @@ at 50 Hz). Under a budget the jerk rises 9 % as the duck goes down.
 Smoothness is now a column on every certificate row, three engines.
 
 *The teacher's 32/40 here against 33/40 in the walk-verdict record
-(2026-09-04, commit e62b706), and the student's 25/40 against 24/40
+(2026-09-04, commit c7d3c26), and the student's 25/40 against 24/40
 there: same policies, same seed, two harnesses one commit apart (the
-latency certificate, commit 6825ab1, drives the policy through the
+latency certificate, commit 911fd78, drives the policy through the
 scheduler's timed loop at budget 0; the walk verdict steps it
 directly); one trial in forty moved, inside both intervals.*
 

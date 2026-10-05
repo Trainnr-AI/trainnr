@@ -2,7 +2,7 @@
  "id": "dds-gate-go2-c2-2026-09-13",
  "claim": "A sim-to-sim gate through the vendor's own stack catches handover faults a gate through our own runtime cannot: on the Go2 policy go2-c2-model_1499, our plain-MuJoCo gate passed 20/20 while Unitree's own simulator and controller, driven from a virtual gamepad over DDS, passed 0/20 with the robot never moving. The three causes were all ours and all invisible to the MuJoCo gate: two virtual gamepad nodes (their simulator read one, our runtime moved the other), an observation their manager empties when deploy.yaml declares history_length 0, and a base orientation read off a SportModeState message their bridge fills with position and velocity only. Fixed, the same policy passes 20/20 through their stack too, tracking less tightly than through ours (error ratio 0.11-0.41 against the 0.5 bound, versus 0.08 median and 0.15 max in plain MuJoCo).",
  "date": "2026-09-13",
- "repo_commit": "baf18d9",
+ "repo_commit": "efbf801",
  "argv": [
   "gate_deployment(name='go2-c2-deploy', trials=20, seed=1000) [MCP door, runtime mujoco]",
   "gate_deployment(name='go2-c2-deploy', trials=20, seed=1000, runtime='dds') [MCP door, the stack launched by tools/gate-deployment.py --runtime dds]"

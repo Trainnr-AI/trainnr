@@ -43,7 +43,7 @@
   "created_utc": "2026-08-24T18:57:46.532618+00:00",
   "profile": "profile.json@70facc4843ef",
   "model": "model.xml@1f7519e08be8",
-  "code": "e35c4e8",
+  "code": "278de31",
   "units": {
     "scale_ref_damping": "N*m*s/rad \u2014 FIXED anchor, not estimated",
     "left_gear_per_damp": "actuator gear (N*m per duty%) per unit damping ratio",

@@ -112,7 +112,7 @@ design; where a copy ships it is named first.
 
 **The delay margin a measured joints fit buys the Go2 holds across seeds, and it is specific to the world each policy trained in: with the action 2 control ticks (40 ms) late in the fitted world (fit@0ad6202797c5, a public log's Go2), the three fit-trained seeds track 18, 16 and 13 of 40 (47/120 pooled) against the three declared-trained seeds' 0, 4 and 0 of 40 (4/120); in the declared world the picture flips, weaker: declared-trained 5, 9, 8 of 40 against fit-trained 1, 2, 0. With no delay every seed walks 38-40/40 in either world; at 3 ticks late every policy collapses (0-3/40). Training under a random 0-40 ms command lag (go2-c4-fit-lag, 1,500 iterations) did NOT widen the margin: it ended with twice the speed error (0.93 against 0.49), tracked 22/40 in its own world with no delay, 13/40 at 2 ticks and 5/40 at 3 - not converged at this length, not a refutation of the idea.**
 
-- date: 2026-09-26 · commit: `542df6b`
+- date: 2026-09-26 · commit: `3eda3b8`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL machine; trainings 34-48 min each; 40 paired trials per cell`
 - command: `scratchpad batch.py through the doors: train_walk(agent='g3', robot='go2', iterations=1500, envs=4096, seed=1001|1002[, fit=FIT][, lag_dr_ms=40]); evaluate_walk(<run>/model_1499.pt, trials=40, seed=1000, device='cuda:0'[, judge_in_fit=<other world>][, delay=2|3])` (a session script, not reproducible from the tree)
 - protocol: the cross-and-cliffs protocol of go2-fit-cross-and-cliffs-2026-09-25 repeated for two more training seeds per recipe; run 2026-09-26 (the maintainers' log, not public)
@@ -358,7 +358,7 @@ design; where a copy ships it is named first.
 
 **With the height scans fixed to see the ground (they had looked in an empty geometry group), a Go2 trained on the captured Mip-NeRF garden survives but does not yet track: go2-garden-c1 (4,096 worlds, 3,000 iterations, no camera, commands starting at 0.5 m/s and widening to ±1 m/s by iteration 1,000) judged on the garden at ±1 m/s: model_2999 survived 36/40 and tracked 3/40, success 3/40 [0.016, 0.204]; model_2000 survived 33/40, tracked 7/40, success 3/40 [0.016, 0.204]. It moves the commanded way but too loosely: median error ratio 0.69 (the pass needs under 0.5), mean error 0.45 m/s against 0.66 m/s commanded; slow commands fail too (2/10 under 0.5 m/s). Up from the blind hurdle walker's 0/40, not a walker.**
 
-- date: 2026-09-25 · commit: `eca6bcb`
+- date: 2026-09-25 · commit: `d45d67d`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL machine; about 50,000 env-steps/s, 2.0-2.2 s per iteration`
 - command: `train_walk(agent='g3', robot='go2', name='go2-garden-c1', scene='mipnerf-garden', cameras=False, iterations=3000, envs=4096) (the MCP door) evaluate_walk('runs/go2-garden-c1/model_2999.pt', trials=40, seed=1000, device='cuda:0', scene='mipnerf-garden')`
 - protocol: docs/78-the-scene-loop.md (the scene loop's protocol); run 2026-09-25 (the maintainers' log, not public)
@@ -454,7 +454,7 @@ design; where a copy ships it is named first.
 
 **Training the Go2 walk on a measured joints fit (fit@0ad6202797c5, a public log's Go2) buys a delay margin in the fitted world and nothing measurable at the easy rung: judged in the fitted world with every action 2 control ticks (40 ms) late, the fit-trained go2-c3-fit tracks 18/40 [0.2926, 0.6151] against the declared-trained go2-c2's 0/40 [0.0, 0.0881] (intervals disjoint); with no delay each policy walks 39/40 [0.8684, 0.9994] in the other's world (38/40 and 40/40 in its own); with kp pinned at 0.8x the fitted world gives 33/40 against 26/40 (overlapping); on the declared constants neither holds 2 ticks (1/40 and 5/40).**
 
-- date: 2026-09-25 · commit: `56feaa0`
+- date: 2026-09-25 · commit: `81eb9fc`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti, the WSL machine; 40 paired trials per cell (the same seeded draws per trial across cells)`
 - command: `rq_mjlab.walk_verdict <run>/model_1499.pt --trials 40 --seed 1000 --device cuda:0 --robot go2 --project projects/go2-walk [--judge-in-fit fit@0ad6202797c5|declared] [--judge-at-scale 0.8 --judge-param kp] [--delay 2] (through the MCP door evaluate_walk)`
 - protocol: each policy judged in both worlds (the fitted joints and the declared constants) at delays of 0 and 2 control ticks and at 0.8x kp, 40 paired trials per cell, by walk_verdict; run 2026-09-25 (the maintainers' log, not public)
@@ -546,7 +546,7 @@ design; where a copy ships it is named first.
 
 **The fit-trained Go2 policy through the deployment stage: exported with its manifest, go2-c3-fit-deploy passes the plain-MuJoCo gate 18/20 [0.683, 0.988] against its 40/40 certificate (floor 0.90 under the gate's 0.10 tolerance), passes pre-flight 7/7, and its attribution under the gate's own cliff rule ranks kp 0.8x first (16/20) and kd 2x second (17/20); latency falls at 2 ticks (2/20, 1 tick 19/20), payload holds to 2 kg (17/20), added joint friction falls at 0.25 N*m (17/20), tilt holds to 8 deg (14/20): the same rungs go2-c2 falls at, at a harness that reads the fit-trained policy's 2-tick margin as 2/20 where the certificate harness reads 18/40.**
 
-- date: 2026-09-25 · commit: `56feaa0`
+- date: 2026-09-25 · commit: `81eb9fc`
 - instrument: `plain MuJoCo 3.11.0 + onnxruntime, driven by the manifest alone; the paired per-trial draw (per-trial/2)`
 - command: `export_deployment(run='go2-c3-fit', checkpoint='model_1499.pt', name='go2-c3-fit-deploy') gate_deployment('go2-c3-fit-deploy', trials=20, seed=1000) preflight_deployment('go2-c3-fit-deploy') attribute_deployment('go2-c3-fit-deploy')`
 - protocol: docs/77-the-unitree-loop.md §9-§10 (the gate, the attribution ladder, pre-flight)
@@ -612,7 +612,7 @@ design; where a copy ships it is named first.
 
 **go2-c2's recipe trained on a measured joints fit instead of the declared constants: go2-c3-fit (fit@0ad6202797c5, a public log's Go2 identified from IIT's in-air chirp, 31/36 terms randomized over their bootstrap intervals and the 5 unpinned over ±0.5 of the estimate; gains at the declared ±10 %) trains 1,500 PPO iterations in 35 min to a final mean reward of 84.2 and certifies in the fitted world 40/40 [0.912, 1.000], median tracking-error ratio 0.26, against go2-c2's 38/40 [0.831, 0.994] on the declared constants: at the easy rung the fit costs nothing and buys nothing measurable.**
 
-- date: 2026-09-25 · commit: `56feaa0`
+- date: 2026-09-25 · commit: `81eb9fc`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL machine)`
 - command: `train_walk(agent='g3', robot='go2', name='go2-c3-fit', iterations=1500, envs=4096, fit='fit@0ad6202797c5') evaluate_walk('runs/go2-c3-fit/model_1499.pt', trials=40, seed=1000, robot='go2')`
 - protocol: the fit chain of docs/76-the-loop.md: identify_system on the public chirp, train_walk(fit=...), evaluate_walk at the fit; run 2026-09-25 (the maintainers' log, not public)
@@ -656,9 +656,9 @@ design; where a copy ships it is named first.
 
 **Under the gate's own rule and the paired draw, go2-c2 (trained on the Go2's DECLARED joints: armature 0.01/0.02, no joint damping or friction) still passes with a real Go2's MEASURED joints set in: at the IIT chirp fit's armature, damping and Coulomb friction together it tracks 17/20 [0.621, 0.968], exactly at the gate's floor of 0.85 (certificate 38/40 minus 0.10), so it holds - by no margin. Alone, the fit's friction costs one trial (17/20), damping none (18/20), armature none (19/20). The ladders say where the margin runs out: added joint friction falls at 1 N*m (15/20), inside the fit's own 0.10-1.33 N*m span; armature survives 4x and damping 0.5 N*m*s/rad. First by the rung they fall at: kp 0.8x (15/20) and kd 2x (16/20), then latency 2 ticks (0/20, the only collapse), payload 6 kg, tilt 8 deg, push 2 m/s; friction scaled to 0.2x and encoder noise survive.**
 
-- date: 2026-09-25 · commit: `a3f734d`
+- date: 2026-09-25 · commit: `69ce4b2`
 - instrument: `plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL machine (Ubuntu under WSL2, x86_64); every rung 20 paired held twists at the gate's own seed 1000 (per-trial draw)`
-- command: `tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --fit projects/go2-sysid/robots/go2/fits/iit-go2-chirp@645b846a7d38.json (24 spawned workers); run twice (859b5e9, a3f734d), identical counts`
+- command: `tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --fit projects/go2-sysid/robots/go2/fits/iit-go2-chirp@645b846a7d38.json (24 spawned workers); run twice (58f1abb, 69ce4b2), identical counts`
 - protocol: docs/77-the-unitree-loop.md §9
 - inputs:
   - deployment: go2 policy model_1499 (policy go2-c2-model_1499@99b1655e2cec)
@@ -764,7 +764,7 @@ design; where a copy ships it is named first.
 
 **Newton's USD importer, written to MJCF by SolverMuJoCo, carries the Isaac Robotiq 2F-85 across with every joint limit and every mass equal to a pxr read of the USD: 8/8 hinge limits equal (radians, 1e-5) and 11/11 link masses equal (1e-4 relative); the loop closures hold within 7.5 mm at the closed target.**
 
-- date: 2026-09-24 · commit: `c0dbd6c`
+- date: 2026-09-24 · commit: `400d251`
 - instrument: `Newton add_usd + SolverMuJoCo(save_to_mjcf), mujoco 3.11.0 (the project venv), the WSL machine`
 - command: `pipeline tests/test_usd_import.py (HINGES = 8, BODIES = 12: the world and 11 links); the recipe in docs/e2e-research/77-usd-import-2026-09.md §4`
 - protocol: docs/e2e-research/77-usd-import-2026-09.md §4-§5
@@ -787,7 +787,7 @@ design; where a copy ships it is named first.
 
 **The legged-joints method recovers what it is given: on the Go2 model with a per-joint truth table of armature, damping and Coulomb friction, a 20 s chirp under a motor-side PD law at 250 Hz through a 2^14-count encoder and 0.05 N*m torque noise, the torque-balance fit returns every one of the 36 terms within 3 % of the truth with the base fixed in the air (36/36) and 33/36 with the base floating and shaken by an external wrench through the recorded base state; the estimator choices that made it so are measured on the way: a centred difference at the tick reads armature 10 % high (forward difference over the tick with mid-tick states: within 1 %), an unsmoothed encoder velocity reads armature 20 % low (40 ms Savitzky-Golay: within 1 %), a hard sign column under a low-pass reads friction 16-23 % low (tanh(dq/0.45): within 1 %), a 6 Hz balance bandwidth reads armature 9 % high (15 Hz: within 3 %), and a 0.1 rad/s velocity gate reads friction 13 % high (1 rad/s: within 3 %).**
 
-- date: 2026-09-24 · commit: `7e79574-dirty`
+- date: 2026-09-24 · commit: `3890c11-dirty`
 - instrument: `mujoco-3.11.0+numpy-2.2.6+scipy-1.18.0+x86_64 (WSL2, the box), Python 3.12`
 - command: `python -m unittest tests.test_torque_balance (SyntheticRecovery, both postures) scratch synth_scan.py over cutoff {0, 15, 6} Hz x window {40, 80} ms x gate {0.1, 1.0} rad/s` (a session script, not reproducible from the tree)
 - protocol: docs/e2e-research/26 (the synthetic identifiability rule), pipeline/rq_pipeline/robot/quadruped_synth.py
@@ -834,7 +834,7 @@ design; where a copy ships it is named first.
 
 **The first identification of a real Go2's joints in this repository, from public logs and not our robot: on IIT's in-air chirp (200 Hz, 23.9 s, PD command as the torque) the torque balance explains 91-99 % of every joint's torque and pins 31/36 terms (armature 0.019-0.039 kg*m^2, damping 0.15-0.26 N*m*s/rad, Coulomb 0.10-1.33 N*m, calves the highest); on DFKI's 40 s field bag (1 kHz, their MPC/WBC controller, measured effort, swing legs only under the IMU's base state) it explains 0-51 % per joint and pins 13/36, with 17 terms on their zero bound: a walking log on rocky ground under someone else's controller does not identify the joints the way a chirp does, and the record says so per joint.**
 
-- date: 2026-09-24 · commit: `7e79574-dirty`
+- date: 2026-09-24 · commit: `3890c11-dirty`
 - instrument: `mujoco-3.11.0+numpy-2.2.6+scipy-1.18.0+x86_64 (WSL2, the box), Python 3.12`
 - command: `identify_system(robot='go2@5003bf617b5f', recording='iit-go2-chirp@645b846a7d38') [MCP door, project go2-sysid] identify_system(robot='go2@d4ede9ec594d', recording='dfki-go2-field201@bccbb0801f6c') python tools/show-legged-fit.py <bundle> <recording> --stills docs/figures/go2-sysid/<log>`
 - protocol: docs/77-the-unitree-loop.md §8; pipeline/rq_pipeline/robot/legged_fit.py
@@ -1380,7 +1380,7 @@ design; where a copy ships it is named first.
 
 **Paired by trial index, go2-c2's plane gate reads 18/20 [0.683, 0.9877] where the count-dependent draw read 20/20 [0.8316, 1.0]: it still passes the gate's own tolerance rule (0.90 against the certificate's 0.95 minus 0.10), but the strict cliff rule can no longer attribute it, because at 20 trials only 20/20 clears the certificate's exact lower bound of 0.8308. The earlier ranking (latency 2 ticks, then kd x4) stands as a reading of the old draw only.**
 
-- date: 2026-09-24 · commit: `65fdcfa`
+- date: 2026-09-24 · commit: `38f60a4`
 - instrument: `plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL machine (Ubuntu under WSL2, x86_64); 20 held twists at seed 1000, each trial drawn from its own (seed, trial) stream (deploy.gate.DRAW_NOW = per-trial/2)`
 - command: `tools/gate-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --no-still tools/preflight-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited`
 - protocol: docs/77-the-unitree-loop.md §9
@@ -1435,7 +1435,7 @@ design; where a copy ships it is named first.
 
 **A passing sim-to-sim gate can say which parameter would break the policy first: go2-c2-model_1499's plane gate (20/20 in plain MuJoCo, certificate 38/40, lower bound 0.8308) re-run with one dynamics knob turned at a time up a ladder of the field's deployment deviations falls at 2 control ticks of action latency (40 ms: 20/20 at 1 tick, 0/20 at 2), at servo damping x4 (20/20 at x2, 0/20 at x4) and at servo stiffness x0.6 (20/20 at x0.8, 2/20 at x0.6), while friction down to x0.3, 4 kg of payload, 0.05 rad of joint-position noise, a 5 deg slope and 1.5 m/s pushes leave it at 20/20; ranked, the answer to 'it walked in simulation and fell on the robot' for this policy is latency, then the servo gains, and the whole sweep took three minutes on eight cores.**
 
-- date: 2026-09-24 · commit: `54016a1`
+- date: 2026-09-24 · commit: `311ec33`
 - instrument: `plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL machine (Ubuntu under WSL2, x86_64); every rung 20 seeded held twists at seed 1000, the gate's own protocol`
 - command: `tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --workers 8 (the MCP door attribute_deployment spawns the same tool)`
 - protocol: docs/77-the-unitree-loop.md §9
@@ -1590,7 +1590,7 @@ design; where a copy ships it is named first.
 
 **E2 met on the WSL machine: the Go2 walk trains on a captured scene - Neverwhere's hurdle course as the scene's heightfield grid, an mjlab sub-terrain at the scene's own coordinates with every world spawned at the course's start - with the stage's head camera on the base rendered for every world by mujoco_warp 3.13's ray tracer over the scene's 393,684 visible gaussians and its picture in the actor's observations. Three 20-iteration smokes at 256 worlds: the scene without the camera runs at 4,054 env-steps/s (the trained plane: about 4,500), the scene with a 64x64 rgb head camera at 393 - the terrain costs nothing measurable, the camera costs 283 s per 122,880 frames, 2.3 ms a frame, 434 frames/s on the RTX 3090 Ti, the field's missing number at the smallest picture a policy could plausibly use. Found and fixed on the way: mujoco_warp caps the heightfield prisms one geom collides with at MuJoCo's mjMAXCONPAIR (50), drops the rest and prints a line per world per step - 778,000 lines and 2.3 GB of log at the stage's 2 cm grid, 74,000 at the 5 cm training grid where only a fallen trunk exceeds the cap, so the print is off and the truncation recorded; a derived cache in the scene folder moved the scene's stamp, so the cache is hidden.**
 
-- date: 2026-09-23 · commit: `169f142`
+- date: 2026-09-23 · commit: `fd99302`
 - instrument: `mjlab 1.6.0 + mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cuda, NVIDIA GeForce RTX 3090 Ti, WSL2 6.18.33.2, Python 3.12; rsl_rl through mjlab's runner, 256 worlds x 24 steps x 20 iterations`
 - command: `train_walk(agent='smoke', task='go2-flat', scene='hurdle-blue-carpet') [MCP door -> python -m rq_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 --task-stamp go2-walk@0e7e123a7de7 --scene projects/go2-walk/scenes/hurdle-blue-carpet], three times: the first at the 2 cm grid (job train-walk-7898aac6), the second at 5 cm (train-walk-eadf419f), the third at 5 cm with cameras=False (train-walk-35394cd3) rq_pipeline.scenes.terrain.ensure_grid(projects/go2-walk/scenes/hurdle-blue-carpet) [the pipeline environment, Open3D]: the 301x600 grid at 0.02 m, 31.7 % holes filled the plane's number: E0's smoke train, docs/findings/e0-instrument-step-2026-09-22.json (29 s; 27 s by the job's own clock)`
 - protocol: docs/78-the-scene-loop.md §8.5; rq_mjlab/scene_stage.py (TRAIN_CELL_M 0.05, CAMERA_WIDTH x CAMERA_HEIGHT 64x64, the head camera's pose from rq_pipeline/scenes/stage.py, VISIBLE_OPACITY 0.5); the rate as the trainer prints it: env-steps over the runner's learn() wall time
@@ -1651,7 +1651,7 @@ design; where a copy ships it is named first.
 
 **A plane-trained Go2 policy walks a captured real space under full physics: go2-c2 (38/40 on the trained plane), staged on the Mip-NeRF 360 garden captured through the chain (185 stills, COLMAP poses, a 6,674,386-gaussian splat, a declared scale of 0.56 m per unit, the ground as a heightfield and the overhangs as convex parts), completes the operator's six-waypoint course around the table 6/6 [0.541, 1.000] at 0.60-0.80 m/s with no fall, reaching every waypoint within 0.3 m inside the budget; the contact-site gap between the surface the splat shows and the proxy the feet touch is 0.7 cm chamfer, 2.5 cm at the 95th percentile.**
 
-- date: 2026-09-23 · commit: `6e29b33`
+- date: 2026-09-23 · commit: `1375fc1`
 - instrument: `plain MuJoCo 3.11.0 + onnxruntime, driven by the manifest alone; the course gate (deploy/course.py)`
 - command: `stage_deployment('go2-c2-deploy', scene='mipnerf-garden', name='go2-c2-garden-loop') gate_deployment('go2-c2-garden-loop', trials=6, seed=1000)  # the course gate: a staged scene is judged along its course`
 - protocol: docs/78-the-scene-loop.md §8.9
@@ -1694,7 +1694,7 @@ design; where a copy ships it is named first.
 
 **The capture chain (ffmpeg, COLMAP 4.2.0 CPU, Brush 0.3.0 on Metal, the floor-plane alignment, the top-surface proxy) measured against a scene whose truth is known: a synthetic phone walk rendered from Neverwhere's hurdle_226_blue_carpet_v3 splat by mujoco_warp 3.13's ray tracer, then captured back. A loose walk (72 frames at 640x480, an ellipse 10 x 6.4 m across the course at 1.5 m) carried the camera through the capture's fringe, where frames hold 0-3 features; COLMAP registered 19 of 72 frames in two models (19 and 20 frames), and 4,000 Brush steps gave 12,937 gaussians (3,216 visible) - yet the poses were already right: camera centres 0.18 cm mean, 0.59 cm max from the truth after a similarity fit, the fitted floor 0.58 deg from level, the scale 0.435 m per COLMAP unit. A tight walk (96 frames, an ellipse 6.8 x 4.4 m at 1.3 m, looking at the course) registered 93 of 96 frames in one model with 16,477 points; 30,000 Brush steps (26.4 min for the whole chain on an M1 Pro) gave 209,571 gaussians, 34,785 visible; the poses within 5 mm (camera centres 0.51 cm mean, 1.35 cm max; floor 0.12 deg; scale 0.770 m per unit); the captured visible centres inside the course footprint (32,641 against the original's 357,903) a median 1.72 cm from the original's (95th percentile 7.98 cm), the original's a median 3.56 cm from the captured (13.07 cm), chamfer 3.95 cm; the first hurdle's top 30.1 cm against the collision mesh's 29.1 cm and the floor at x=0 -1.5 cm against -1.0. Coverage is what the chain did not give: a tenth of the original's density, so the top-surface proxy (25,017 cells seen, 40,199 filled from neighbours, 65,216 kept) has holes - along the course line only 4 of 29 samples meet a captured surface; where both surfaces exist the height error is a median 0.78 cm, 95th percentile 20 cm; against the original collision mesh the captured proxy's samples sit a median 6.9 cm away (95th percentile 35 cm) and the original's a median 4.75 cm (68 cm). The record's own gap on the tight capture, needing no truth, says the same: chamfer 7.8 cm, 95th percentile 23.7 cm, 24 % of the visible surface beyond 2 cm of the proxy, 93 % of the proxy unseen.**
 
-- date: 2026-09-23 · commit: `c113e05`
+- date: 2026-09-23 · commit: `16a9672`
 - instrument: `macOS 25.5.0 Apple M1 Pro; COLMAP 4.2.0 (Homebrew, no GPU), Brush brush-cli 0.3.0 (Apache, Metal), Open3D 0.20.0, mujoco 3.11.0 (pipeline venv), mujoco_warp 3.13.0 + warp 1.17.0 CPU (scratch venv, the renderer), Python 3.12`
 - command: `scratch orbit_render.py / orbit2_render.py: one camera (fovy 70) on an ellipse around the course, looking at a point ahead on the course, frames by rq_pipeline.scenes.cameras over the scene's splat.ply (mujoco_warp 3.13.0, warp 1.17.0 CPU; 13 s a frame at 640x480); the true poses saved as poses.json tools/capture-scene.py --project projects/go2-walk --source <frames> --name orbit-synthetic --brush <Brush 0.3.0 aarch64> --steps 4000 --floor-friction 1.25 0.3 0.3 (the loose walk; run on the chain before it converted every mapper model) tools/capture-scene.py --project projects/go2-walk --source <frames> --name synthetic-walk --brush <Brush 0.3.0 aarch64> --steps 30000 --floor-friction 1.25 0.3 0.3 (the tight walk): colmap feature_extractor (one OPENCV camera, FeatureExtraction.use_gpu 0), exhaustive_matcher (a folder of stills), mapper, model_converter TXT per model; brush_app <dataset> --total-steps 30000 --export-every 30000 --max-resolution 1920 --eval-every 30001 --rerun-enabled scratch truth_compare.py <scene> <poses.json>: COLMAP camera centres through the record's alignment against the true positions by Umeyama similarity; visible centres (opacity >= 0.5) inside the course footprint [-2.5..10.5, -3.5..3.5, -0.5..3.0] m each way by k-d tree (100,000 samples); proxies sampled (50,000) each way by Open3D ray casting; heights along the course line y=0, x in [-1, 6] m by rays from above` (a session script, not reproducible from the tree)
 - protocol: docs/78-the-scene-loop.md §3 and §8.6
@@ -1786,7 +1786,7 @@ design; where a copy ships it is named first.
 
 **mujoco_warp 3.13.0's Gaussian-splat ray tracer runs on a CPU-only Warp on Apple Silicon and composites correctly: a MuJoCo box hides the splat wall behind it and a splat pillar hides the floor in front of it, with splat depth in the depth buffer. It is slow there: 26 ms per frame for 2 worlds at 160x120 with 2,000 splats, and 1,407 ms (median of ten) for 4 worlds at 320x240 with 4,800 splats, about 3 frames a second, after a 0.8 s first-call kernel compile. The field publishes no frame rate for this renderer; this is the CPU one, the GPU one is still unmeasured.**
 
-- date: 2026-09-22 · commit: `61857b3`
+- date: 2026-09-22 · commit: `505d464`
 - instrument: `mujoco 3.13.0, mujoco-warp 3.13.0, warp-lang 1.17.0 built without CUDA (device 'cpu' on arm64), Python 3.12, macOS 25.5.0, Apple M1 Pro`
 - command: `uv venv -p 3.12 && uv pip install mujoco-warp==3.13.0 'mujoco>=3.12' 'warp-lang>=1.15' numpy pillow  (a scratch venv beside the repo; the walk package stays on its 3.11 pins) python probe: mjw.create_render_context(mjm, nworld=4, cam_res=(320, 240), render_rgb=True, render_depth=True, splat_position=(N,3), splat_rotation=(N,4) wxyz, splat_scale=(N,3), splat_rgba=(N,4)); mjw.render(m, d, ctx) x10; the scene: a plane, a red box on a free joint, a camera at (0,-2.2,1.0); the splats: a green wall of 4,000 at y=+1.2, a blue pillar of 800 at (-0.55,-0.8)` (a session script, not reproducible from the tree)
 - protocol: docs/78-the-scene-loop.md §4 E0/E2; docs/e2e-research/75 §4
@@ -1815,7 +1815,7 @@ design; where a copy ships it is named first.
 
 **The collision proxy of a captured scene, as MuJoCo can touch it, two ways on Neverwhere's hurdle_226_blue_carpet_v3 (145,241 faces): as convex parts (CoACD, threshold 0.05, 64 hulls max) the course becomes 59 hulls in 16 s whose surface sits a mean 9.4 cm (95th percentile 21.7 cm) from the proxy - the hulls roof the 29 cm hurdles into a 36 cm plateau, so a walk would stand on a box; tightening to 230 hulls (26 s) still leaves a 12.3 cm 95th percentile, 512 hulls (218 s) 21.5 cm. As a heightfield of the proxy's top surface on a 2 cm grid the terrain matches the top surface to a median of 0.09 mm (mean 2.6 cm, 95th percentile 15.6 cm, both carried by samples within a cell of a hurdle edge, where the grid is a cliff), with 38.5 % of the proxy's surface (vertical faces, undersides) carried only as cliffs and 31.7 % of the grid's cells filled with the lowest height because nothing lies under them. The heightfield is the stage's default terrain; both gaps are recorded on every staged deployment.**
 
-- date: 2026-09-22 · commit: `4e7f103`
+- date: 2026-09-22 · commit: `971fc55`
 - instrument: `rq_pipeline.scenes (numpy), CoACD 1.0.14, Open3D 0.20.0, mujoco 3.11.0, Python 3.12, macOS 25.5.0 Apple M1 Pro`
 - command: `rq_pipeline.scenes.proxy.decompose(proxy.obj, params=DecompositionParams()) [CoACD 1.0.14: threshold 0.05, max_convex_hull 64, resolution 2000, mcts 20/150/3, merge, seed 0]; decomposition_gap by Open3D ray casting, 50,000 samples each way the same with threshold 0.02 / 256 hulls / resolution 4000, and 0.01 / 512 / 6000 / preprocess off (scratch run, not recorded on the scene) rq_pipeline.scenes.terrain.heightfield: sample_grid(cell 0.02 m) over the proxy's footprint, heightfield_gap over 50,000 proxy surface samples (topmost at their (x, y) by a ray from above, 1 mm tolerance) against the grid's bilinear height stage_deployment('review-check', 'hurdle-blue-carpet') [MCP door, project go2-walk on the M1 Mac]: the Go2 deployment's plane floor replaced by the terrain, the robot started 1 m before waypoint-0 heading along the course` (a session script, not reproducible from the tree)
 - protocol: docs/78-the-scene-loop.md §4 E2 and §4.1
@@ -1888,7 +1888,7 @@ design; where a copy ships it is named first.
 
 **The first audit of a published splat scene's visible surface against its own collision proxy: on Neverwhere's hurdle_226_blue_carpet_v3 (MIT; 753,226 gaussians in the web splat, 145,241 collision faces, not watertight), the splat and the proxy are well aligned at the floor (the splats over the course sit at a median height of -0.002 m, median distance to the proxy 0.014 m) yet the gap is large away from it: inside the proxy's footprint the chamfer is 0.046 m, the 95th-percentile visible-to-proxy distance 0.185 m, 44.8 % of the visible surface lies more than 0.02 m from any collider, and 73.6 % of the proxy's surface lies more than 0.02 m from any visible gaussian (32 % beyond 0.05 m, 7 % beyond 0.10 m; the unseen samples sit at a median height of 0.17 m: hurdle faces and low walls). 91.0 % of the scene's visible surface lies inside the proxy's footprint at all; the rest is the corridor the course never covers. A first pass that audited the whole capture instead of the footprint reported a 3.2 m 95th percentile on this well-aligned scene, which is why the audit is scoped.**
 
-- date: 2026-09-22 · commit: `92cc624`
+- date: 2026-09-22 · commit: `9544d5c`
 - instrument: `rq_pipeline.scenes (numpy), Open3D 0.20.0, Python 3.12, macOS 25.5.0 Apple M1 Pro; the scene's own collision_tf.json (scale 0.4313, euler radians (2.592, 1.268, 2.114), translation (1.662, 0.054, 0.661)) applied as MuJoCo's intrinsic x-y-z euler, verified against mujoco 3.11 xmat to 1e-9`
 - command: `import_scene(source=<scratch>/neverwhere (hurdle_226_blue_carpet_v3.zip unpacked; sha256 b36604d74cf4b733...), name='hurdle-blue-carpet')  [MCP door, project scenes-mac on the M1 Mac] rq_pipeline.scenes.gap.measure(splats, proxy.obj, tolerance_m=0.02, seed=0): visible = opacity >= 0.5; footprint = the proxy's extent grown by 0.5 m; 200,000 visible centres sampled inside it against the proxy by Open3D ray casting; 100,000 proxy surface samples against the nearest visible centre anywhere by k-d tree diagnostic (scratch venv): the hidden fraction at 0.02 / 0.05 / 0.10 m tolerances and the unseen samples' height; the checkpoint's centres against the web file's (nearest 0.0000 m: the same frame); the author's visual mesh under collision_tf.json against the collision mesh (median 0.000 m)` (a session script, not reproducible from the tree)
 - protocol: docs/78-the-scene-loop.md §3 (the gap) and §4 E1
@@ -1958,7 +1958,7 @@ design; where a copy ships it is named first.
 
 **E2 smoked on the M1 Mac: the Go2 deployment staged on Neverwhere's hurdle course (heightfield terrain), gated through its manifest by plain MuJoCo with the contact sites kept, the scene's gap measured at them, the two stage cameras rendered from the scene's 393,684 visible gaussians by mujoco_warp 3.13.0's ray tracer on CPU Warp (the scratch instrument; the walk package stays pinned at 3.11 until E0), and the perturbation assay run over nine stages. The pictures: both cameras at 160x120 for one world take 1.47 s a frame at the full splat and 0.26 s at 60,000 gaussians (the context builds in 0.3 s); 320x240 takes 6.5 s; a one-trial gate (20 s of simulation) with pictures at 2 Hz took 1 min 54 s wall, its recording carrying 50 chunks per camera. Checked by eye: the head camera sees the first hurdle ahead across the blue carpet, the course camera sees the hurdle row with the robot in it, the robot's meshes occluding the splat. The gap where the robot touched (13,720 contact points, a 10 cm ball around each): chamfer 2.3 cm, 95th percentile 7.3 cm, 55 % of the visible surface beyond 2 cm from the proxy, 37 % of the proxy unseen - tighter than the course-wide 4.6 / 18.5 cm because the feet stayed on the carpet. The assay: nine stages (nominal, ±20 mm per axis, ±5° yaw), every gate 0/2 with the smoke policy that scores 0/4 on a plane, so the cliff is recorded as unmeasurable; the assay's plumbing is proven, its number waits for a policy that walks (go2-c2, on the WSL machine).**
 
-- date: 2026-09-22 · commit: `4e7f103`
+- date: 2026-09-22 · commit: `971fc55`
 - instrument: `macOS 25.5.0 Apple M1 Pro; pinned: mujoco 3.11.0 + onnxruntime; scratch: mujoco 3.13.0 + mujoco_warp 3.13.0 + warp 1.17.0 on cpu (arm)`
 - command: `stage_deployment('review-check', 'hurdle-blue-carpet') and stage_deployment('review-check', 'hurdle-blue-carpet', name='review-check-on-hurdle-cams') [MCP doors, project go2-walk] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv: mujoco 3.11.0, no renderer, the mirror notes why] tools/gate-deployment.py --project projects/go2-walk --name review-check-on-hurdle-cams --trials 1 --seed 1000 [scratch venv mjw313: mujoco 3.13.0, mujoco_warp 3.13.0, warp 1.17.0 CPU, onnxruntime 1.30.0, rerun 0.36.2; cameras head+course at 160x120, 2 Hz] scratch: rq_pipeline.scenes.cameras.open_cameras(...).render at 160x120 (60,000 and 393,684 gaussians, three renders each) and 320x240 (full) tools/assay-deployment.py --project projects/go2-walk --name review-check --scene hurdle-blue-carpet --trials 2 --seed 1000 [pinned venv]` (a session script, not reproducible from the tree)
 - protocol: docs/78-the-scene-loop.md §4 E2
@@ -2020,7 +2020,7 @@ design; where a copy ships it is named first.
 
 **The instrument step costs nothing measurable for the Go2 walk: go2-c2's final checkpoint (1500 iterations, deployable actor), judged on mjlab 1.6.0 with mujoco and mujoco_warp overridden from 3.11.0 to 3.13.0 (warp 1.17.0, CUDA), certifies 38/40 with Clopper-Pearson 95 % [0.831, 0.994] and a median tracking-error ratio of 0.2727 - the 3.11 certificate's numbers to the last digit - and all 40 seeded trials have the same outcome and the same length on both instruments, the same two (12 and 23) failing on both. Two costs were found on the way and removed: mujoco_warp 3.13 turns every overflow warning on and printed the line-search one about 149,000 times in a 20-iteration smoke train (25 MB of log; 16 KB with the line-search warning off, physics untouched), and the certificate's identity did not include the instrument, so the 3.13 judgment would have taken the 3.11 certificate's name.**
 
-- date: 2026-09-22 · commit: `6fa26ba`
+- date: 2026-09-22 · commit: `8da1366`
 - instrument: `mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda (against mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda), NVIDIA GeForce RTX 3090 Ti driver 591.86, WSL2 6.18.33.2, Python 3.12`
 - command: `rq_mjlab/pyproject.toml [tool.uv] override-dependencies = ['mujoco==3.13.0', 'mujoco-warp==3.13.0']; uv lock; uv sync --locked --extra viz evaluate_walk(checkpoint='projects/go2-walk/runs/go2-c2/model_1499.pt', trials=40, seed=1000) [MCP door -> python -m rq_mjlab.walk_verdict, project go2-walk] the per-trial comparison: runs/go2-c2/verdict/records-cuda.jsonl, 40 rows per instrument, success and steps by trial python -m rq_mjlab.walk_train --agent smoke --robot go2 --project projects/go2-walk --dr-span 0.1 (256 worlds, 20 iterations), before and after rq_mjlab.sim_options`
 - protocol: docs/78-the-scene-loop.md §4 E0
@@ -2071,7 +2071,7 @@ design; where a copy ships it is named first.
 
 **A deployment staged on a captured scene is now judged along the scene's course instead of holding random twists: forward at a seeded speed in the upper half of the trained range, steered to the next waypoint by mjlab's heading-pursuit law at the gain the policy trained under (forward scaled by the cosine of the heading error, so the walker stands to turn), the budget the path's length at that speed twice over, success = upright and every waypoint reached within 0.3 m. go2-c2 (1500 iterations, 38/40 on the plane) on Neverwhere's hurdle course by this protocol: 0/4 at nominal and 0/4 on each of the eight perturbed stages (36 trials, 0.60-0.80 m/s), reached 0 of 4 waypoints every time, never falling, tracking 4-5 % of what it was told. The record says where: the course's first waypoint sits on top of the first hurdle (x 0.9-1.1 m, 29 cm tall by the heightfield along the course line; two more at 2.4-2.7 and 4.0-4.3 m, 30 cm), and every one of the 5,327 contact points above 15 cm is at x = 0.84 m - the front feet on the hurdle's face for the whole budget. A plane-trained walker does not climb a 29 cm hurdle, and the course is a hurdle course: the protocol measures the policy, not a collision, and the cliff is recorded as unmeasurable at nominal 0 - the honest first number, which waits for a policy trained on the scene (E2) or on Neverwhere's own terrain (E4).**
 
-- date: 2026-09-22 · commit: `b53b0d8`
+- date: 2026-09-22 · commit: `5f22c7d`
 - instrument: `mujoco-3.11.0 + onnxruntime (the pipeline environment), the box: WSL2 6.18.33.2, Python 3.11`
 - command: `stage_deployment('go2-c2-deploy-cited', 'hurdle-blue-carpet') [MCP door, project go2-walk; the stage now writes the scene's course into the manifest] gate_deployment('go2-c2-deploy-cited-on-hurdle-blue-carpet', trials=4) [MCP door -> tools/gate-deployment.py --trials 4 --seed 1000, narrated into the Studio] assay_deployment('go2-c2-deploy-cited', 'hurdle-blue-carpet', trials=4) [MCP door -> tools/assay-deployment.py --trials 4 --seed 1000 --narrate; nine stages] the terrain profile: mujoco.mj_ray down from z=10 along y=0, x from -0.5 to 6 m in 0.1 m steps, on the staged model; the contacts: contacts-mujoco.npy, points above z=0.15 m`
 - protocol: docs/78-the-scene-loop.md §8.4; rq_pipeline/deploy/course.py (COURSE_SPEED_FRACTION 0.5, COURSE_REACH_M 0.3, COURSE_SLACK 2.0, steer gain 0.5 = mjlab's heading_control_stiffness for the Go2, the protocol's own because this manifest predates the export recording it)
@@ -2133,7 +2133,7 @@ design; where a copy ships it is named first.
 
 **A sim-to-sim gate through the vendor's own stack catches handover faults a gate through our own runtime cannot: on the Go2 policy go2-c2-model_1499, our plain-MuJoCo gate passed 20/20 while Unitree's own simulator and controller, driven from a virtual gamepad over DDS, passed 0/20 with the robot never moving. The three causes were all ours and all invisible to the MuJoCo gate: two virtual gamepad nodes (their simulator read one, our runtime moved the other), an observation their manager empties when deploy.yaml declares history_length 0, and a base orientation read off a SportModeState message their bridge fills with position and velocity only. Fixed, the same policy passes 20/20 through their stack too, tracking less tightly than through ours (error ratio 0.11-0.41 against the 0.5 bound, versus 0.08 median and 0.15 max in plain MuJoCo).**
 
-- date: 2026-09-13 · commit: `baf18d9`
+- date: 2026-09-13 · commit: `efbf801`
 - instrument: `plain MuJoCo + onnxruntime driven by the manifest alone; and unitree_mujoco + go2_ctrl over DDS (unitree_rl_mjlab, built from the cached checkout) on the WSL machine (RTX 3090 Ti, Ubuntu under WSL2). The exact simulator build strings are in each gate record's protocol.instrument on the WSL machine; not transcribed here.`
 - command: `gate_deployment(name='go2-c2-deploy', trials=20, seed=1000) [MCP door, runtime mujoco] gate_deployment(name='go2-c2-deploy', trials=20, seed=1000, runtime='dds') [MCP door, the stack launched by tools/gate-deployment.py --runtime dds]`
 - protocol: docs/77-the-unitree-loop.md §7
@@ -2189,7 +2189,7 @@ design; where a copy ships it is named first.
 
 **The first certified Go2 walker: go2-c1, mjlab's velocity task on Unitree's go2.xml with the declared actuator constants, 8,000 PPO iterations over 4,096 worlds, certified at its trained command envelope on 40 seed-matched trials at two checkpoints: model_1400 walks 40/40 [0.912, 1.000] and model_7999 walks 40/40 [0.912, 1.000], median tracking-error ratios 0.25 and 0.20 against the 0.5 bound, no falls.**
 
-- date: 2026-09-11 · commit: `06dc3c0`
+- date: 2026-09-11 · commit: `fee6abc`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda, RTX 3090 Ti (the WSL machine)`
 - command: `train_walk(agent='g3', task='go2-flat', name='go2-c1', seed=42) evaluate_walk('runs/go2-c1/model_1400.pt', trials=40, seed=1000, robot='go2') evaluate_walk('runs/go2-c1/model_7999.pt', trials=40, seed=1000, robot='go2')`
 - protocol: docs/77-the-unitree-loop.md §3 (the loop's protocol; the run's own notes of 2026-09-10 and 2026-09-11 are in the maintainers' log, not public)
@@ -2230,7 +2230,7 @@ design; where a copy ships it is named first.
 
 **Splitting the Studio's MuJoCo stream into a physics process and a render process joined by a shared-memory state ring, with shadows judged by measured frame time, raises the kitting scene from 32.6 fps at the pipe and ~33 on screen to 53.7 fps at the pipe (p50 18.4 ms, p90 21.4 ms) and 60-70 fps on screen; the physics paces itself at real time regardless of render. The 20-duck flock stays at 4.6-9 fps because its render alone is 109 ms/frame on this M1 Mac (Apple M1 Pro, GL 2.1 over Metal, CGL offscreen). With the physics paced against a drift-free deadline and the narration on a 25 % budget, kitting runs at RTF 1.00 (50 ticks/s) with 66.7 fps on screen; the flock's physics is cheap (0.73 ms/step for 20 ducks) but its narration cost the whole budget (RTF 0.06 with, 1.00 without) and its render is asset weight (431,750 faces per microduck), so the preview flock is four ducks: 37 fps on screen, RTF 0.82-0.90.**
 
-- date: 2026-09-09 · commit: `3e81b3f`
+- date: 2026-09-09 · commit: `bd2c172`
 - instrument: `mujoco-3.11.0 (python, MUJOCO_GL=cgl), macOS 25.5.0 Apple M1 Pro, Python 3.12, rerun narration on; Studio release build`
 - command: `tools/studio-render-stream.py kitting --shm=<ring> | token-rate reader (15 s) simulate_in_studio('kitting'); describe_studio()['viewport_fps'] sampled 12 x 1 s simulate_in_studio('duck'); same`
 - protocol: as studio-viewport-pipe-2026-09-09, plus the on-screen rate read from the Studio's state file (frames drawn in the last second, viewport_fps) through describe_studio
@@ -2313,7 +2313,7 @@ design; where a copy ships it is named first.
 
 **The Studio's MuJoCo viewport pipe delivers 32.6 fps (p50 30.6 ms, p90 34.0 ms between frames) on the kitting scene on this M1 Mac, against a native window's display rate; the render is 26.1 ms/frame at 1024x576 and the same at 1920x1080, of which the shadow pass is 17 ms and reflection 3.5 ms (6.2 ms with both off); with shadows off the pipe delivers 41.0 fps, bounded next by the render running inline with physics on macOS; a CGL context renders from a background thread at 12.2 ms/frame, so that coupling is removable.**
 
-- date: 2026-09-09 · commit: `d435967`
+- date: 2026-09-09 · commit: `d753127`
 - instrument: `mujoco-3.11.0 (python, CGL offscreen), macOS 25.5.0 Apple Silicon, Python 3.12, rerun narration on unless stated`
 - command: `tools/studio-render-stream.py kitting --shm=<ring> | token-rate reader (14 s) mujoco.Renderer(model, 576, 1024).render() x40 with scene.flags toggled MUJOCO_GL=cgl; mujoco.Renderer in a threading.Thread x60`
 - protocol: delivered rate = 0xF7 tokens per second on the stream's stdout under --shm, measured by a reader over 14 s after the first frame; render cost = wall time of update_scene+render over 40 frames after one warm-up; thread test = the same Renderer built and run inside threading.Thread with MUJOCO_GL=cgl
@@ -2369,7 +2369,7 @@ design; where a copy ships it is named first.
 
 **The mismatch matrix on the walk: the C1 policies point-refit, identified (replicates pooled) judged pinned at the fit scaled by s (every law parameter moved) and under drawn spans, 40 matched trials per run — point-refit (trained none (refit bundle)): x0.7 0/120, x0.8 1/120, x0.9 33/120, fit 52/120, x1.1 64/120, x1.2 63/120, x1.3 53/120, pm0.1 53/120, pm0.3 42/120; identified (trained identified set (refit bundle)): x0.7 0/120, x0.8 12/120, x0.9 39/120, fit 46/120, x1.1 58/120, x1.2 54/120, x1.3 46/120, pm0.1 53/120, pm0.3 33/120.**
 
-- date: 2026-09-06 · commit: `eb9baf0-dirty`
+- date: 2026-09-06 · commit: `bb111bf-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-matrix-fold.py docs/artifacts/walk-c1 --arms point-refit,identified --span 0.30 --date 2026-09-06 --id walk-mismatch-matrix-refit`
 - protocol: the mismatch matrix: tools/walk-mismatch-matrix.sh judges every C1 policy pinned at fit x s and under drawn spans, 40 paired trials per cell (docs/paper/manuscript.md §5.5)
@@ -2615,7 +2615,7 @@ design; where a copy ships it is named first.
 
 **C1 on the walk, arms point-refit, identified on actuator xl330-m6@e57c25635c89 — same G3 recipe, trained under [point-refit: none: the bundle's point fit exactly (no law DR); identified: identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)] — each certified AT THE FIT of that bundle (no law DR, pushes on) on 120 matched trials; a second certificate per run judges under ±0.10 law DR.**
 
-- date: 2026-09-06 · commit: `eb9baf0-dirty`
+- date: 2026-09-06 · commit: `bb111bf-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-c1-fold.py docs/artifacts/walk-c1 --arms point-refit,identified --id walk-c1-refit --date 2026-09-06`
 - protocol: C1 on the walk: tools/walk-c1-arm.sh trains one policy per randomization arm around the identified servo and judges each at the fit on 40 paired trials (docs/paper/manuscript.md §5.4, §5.6)
@@ -2742,7 +2742,7 @@ design; where a copy ships it is named first.
 - caveats:
   - The identified arm draws from the bundle's bootstrap interval (docs/e2e-research/72): log-sampling variability on one unit and one bench, not unit-to-unit spread; its point arm is the same bundle with no draw, so the comparison is at one point.
   - Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.
-  - The second certificate per run (`under_span_0.10`) was first judged under the bundle's marginal interval boxes (the DR event preferred a bundle's interval over a declared span; fixed in commit 0232fe1) and re-judged 2026-09-07 under ±0.10 around the point on the owned RTX 3090 Ti; the at-fit column is the pods' originals.
+  - The second certificate per run (`under_span_0.10`) was first judged under the bundle's marginal interval boxes (the DR event preferred a bundle's interval over a declared span; fixed in commit 6b5322e) and re-judged 2026-09-07 under ±0.10 around the point on the owned RTX 3090 Ti; the at-fit column is the pods' originals.
 
 ![walk-c1-refit-2026-09-06](figures/walk-c1-refit-2026-09-06.png)
 
@@ -2750,7 +2750,7 @@ design; where a copy ships it is named first.
 
 **A block bootstrap over Rhoban's 358 public XL330 bench logs (100 replicate refits of BAM's M6, 5000 trials each) identifies the motor constant to ±3.5 % (kt [0.3416, 0.3662]), the resistance to ±9 % (R [2.545, 3.036]), the armature to ±7 % and viscous friction to ±23 %, while the friction split between motor and external sides, the Stribeck knee and the alpha exponent span most of BAM's declared search ranges (bam/model.py: alpha [0.5, 10], dtheta_stribeck [0.01, 5], the quadratic terms [0, 0.01]) — unidentified by this bench. The shipped fit's kt (0.3660) sits at the interval's upper edge. The interval and all 100 replicate vectors ride on bundle xl330-m6@e57c25635c89 (robots/actuator-bundles/xl330-refit.m6.bundle.json).**
 
-- date: 2026-09-06 · commit: `8918da6-dirty`
+- date: 2026-09-06 · commit: `fbfd171-dirty`
 - instrument: `Rhoban/bam v1.0.2 (aa17d1c), optuna 4.9.0 CmaEsSampler bipop, Apple M1 Pro CPU (8 workers), ~75 min`
 - command: `python3 tools/bam-bootstrap.py --bam <Rhoban/bam @ aa17d1cd5a84938b79143239de09ae33e175b402> --processed <bam.process --raw data_raw_2 --logdir processed --dt 0.005> --raw-zip xl330_raw.zip --actuator xl330 --model m6 --out boot-100 --replicates 100 --trials 5000 --workers 8 --seed 7 --emit-uncertainty robots/actuators/xl330-refit/m6.uncertainty.json`
 - protocol: docs/e2e-research/72 §4 and §6 (block bootstrap; the identified arm draws whole replicate vectors, not marginal boxes)
@@ -4237,7 +4237,7 @@ design; where a copy ships it is named first.
 
 **The campaign 3 vision student certified under an inference budget of n control ticks (SmoothRL's timed loop, emulated in the scheduler), 40 matched trials on the shared seed - teacher 32/40 [0.644, 0.909]; teacher-delay-1 0/40 [0.000, 0.088]; teacher-delay-2 0/40 [0.000, 0.088]; teacher-delay-4 0/40 [0.000, 0.088]; latency-0 25/40 [0.458, 0.773]; latency-1 0/40 [0.000, 0.088]; latency-2 0/40 [0.000, 0.088]; latency-4 0/40 [0.000, 0.088]; latency-8 0/40 [0.000, 0.088]; horizon-3-latency-0 13/40 [0.186, 0.491]; horizon-1-latency-1 0/40 [0.000, 0.088].**
 
-- date: 2026-09-05 · commit: `6825ab1`
+- date: 2026-09-05 · commit: `911fd78`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/walk-latency-fold.py runs/microduck-walk/20260901-163412/verdict --date 2026-09-05`
 - protocol: docs/e2e-research/71 §4 E1 (walk_verdict --latency n; the scheduler's timed loop)
@@ -4983,7 +4983,7 @@ design; where a copy ships it is named first.
 
 **RL teacher -> vision student on the microduck walk, certified on 40 matched pushed trials (seed 1000): teacher 33/40 cuda (37/40 cpu); students campaign 1 (10 Hz data) 0/40, campaign 2 (120 ep at 50 Hz, 30k) 18/40, campaign 3 (240 ep, 60k) 24/40, campaign 4 (same recipe re-pressed) 27/40, campaign 4b (campaign 4's dataset retrained from scratch) 22/40; campaign 4's student with the camera blanked 0/40 and with the state blanked 0/40.**
 
-- date: 2026-09-04 · commit: `e62b706`
+- date: 2026-09-04 · commit: `c7d3c26`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 [--student <pretrained_model>] [--blank-camera | --blank-state]`
 - protocol: docs/e2e-research/63-the-flagship.md §2 (the certificate); the four campaigns' notes are in the maintainers' log (not public)
@@ -5093,7 +5093,7 @@ design; where a copy ships it is named first.
 
 **DAgger round 1 on the walk: the base student drove 120 episodes, the teacher labeled every state, the referee kept the passes; a new student trained on the union of the base dataset and the relabeled batch, certified on the same 40 matched trials as the base — base 22/40 vs round-1 26/40.**
 
-- date: 2026-09-04 · commit: `660b564-dirty`
+- date: 2026-09-04 · commit: `6a3cf03-dirty`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `tools/dagger-fold.py docs/artifacts/walk-verdicts student-last@6b6cef16e54f student-last@c9020b1b1ce3 --round-dir docs/artifacts/dagger/round-1 --date 2026-09-04`
 - protocol: DAgger on the walk: tools/walk-dagger-round.sh drives the student, labels every visited state with the teacher, keeps the referee-passed episodes and retrains on the union (docs/paper/manuscript.md §5.6)
@@ -5158,7 +5158,7 @@ design; where a copy ships it is named first.
 
 **C1 on the walk: the microduck teacher trained under NO law DR (the bundle's point fit), the declared ±0.10 span, and the folklore ±0.30 span — same G3 recipe — each certified AT THE FIT (no law DR, pushes on) on 120 matched trials; a second certificate per run judges the policy under law DR drawn from ±0.10 around the fit (the module constant LAW_DR_SPAN, the same span for every arm — not each arm's own span).**
 
-- date: 2026-09-04 · commit: `eaa497f-archive`
+- date: 2026-09-04 · commit: `024727e-archive`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `../tools/walk-c1-fold.py /workspace/robotiq/runs/studies/walk-c1`
 - protocol: C1 on the walk: tools/walk-c1-arm.sh trains one policy per randomization arm around the identified servo and judges each at the fit on 40 paired trials (docs/paper/manuscript.md §5.4)
@@ -5357,7 +5357,7 @@ design; where a copy ships it is named first.
 
 **Pressing 128 lift episodes at gain 0.4: the folklore ±0.30 span (whose draws never reach the judged gain) needed 128 attempts; the arms that draw near it needed more — identified 151, wide 143, point 160 — the referee discarding 10-20 % of attempts exactly where the scripted expert struggles.**
 
-- date: 2026-09-04 · commit: `e62b706`
+- date: 2026-09-04 · commit: `c7d3c26`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `tools/study.py generate docs/studies/c1-competent-lift-cliff.json <out> --frame-every 5`
 - protocol: docs/e2e-research/60 §3 (the press records each kept episode's attempt number; the bound is kept/max_attempt)
@@ -5394,7 +5394,7 @@ design; where a copy ships it is named first.
 
 **The LeRobot evaluation harness played every action chunk for one control tick against datasets pressed at frame_every 5: the same lift checkpoint scored 0/3 at hold 1 and 3/3 at hold 5 on three seeds, and the visual-DR study's arms went from 0/80 and 3/80 to 80/80 and 80/80 when re-judged with the hold — the walk's cadence bug in a second costume.**
 
-- date: 2026-09-04 · commit: `6dfbbc2`
+- date: 2026-09-04 · commit: `97a25f0`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `rq_pipeline.envs.policy_bridge + envs.robotiq.make_env probe: hold 1 vs 5 on seeds 0,1,2 (pod, 2026-09-04) tools/study.py evaluate docs/studies/visual-dr-lift.json <out>  # before and after envs/hold.py`
 - protocol: docs/paper/manuscript.md §5.2
@@ -5434,7 +5434,7 @@ design; where a copy ships it is named first.
 
 **The SO-101 lift's scripted expert is insensitive to joint damping (identical success from 1x to 5x) and fails on servo gain alone: 4/4 at gain 1.0 and 0.75, 3/4 at 0.5, 1/4 at 0.35, 0/4 at 0.25 and 0.15 on the 4-trial grid; at 12 trials, 9/12 at 0.5, 12/12 at 0.45, 10/12 at 0.4 — the cliff is below 0.4 and the 4-trial grid was too coarse to place it — the folklore ±30% span never reaches the cliff, which is why every lift study at gain 0.75-0.85 scored 80/80.**
 
-- date: 2026-09-04 · commit: `7252eb5`
+- date: 2026-09-04 · commit: `2093f5e`
 - instrument: `mujoco-3.11.0+arm64`
 - command: `uv run --extra sim python ../tools/lift-envelope-cell.py <damping> <gain> [trials]  # one process per cell`
 - protocol: docs/e2e-research/62 §1 (the expert's competence ceiling, mapped before choosing a truth)
@@ -5467,7 +5467,7 @@ design; where a copy ships it is named first.
 
 **The demo-count curve on the SO-101 lift NEAR THE EXPERT'S EDGE (gain 0.4, where the scripted expert scores 10/12; the id says 'cliff'), with THREE replicates per demo count — three independent presses and training runs each for 8/16/32/64/128 episodes — so the between-run variance that made the single-run curve non-monotone (n8 77/80 vs n16 56/80, 2026-09-03) is measured rather than assumed; comparisons pool the replicates (240 matched trials per count).**
 
-- date: 2026-09-04 · commit: `4103e48-dirty`
+- date: 2026-09-04 · commit: `39c6a89-dirty`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `tools/study.py finding docs/studies/demo-count-lift-cliff-rep.json docs/artifacts/lift-studies/demo-count-lift-cliff-rep`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -5716,7 +5716,7 @@ design; where a copy ships it is named first.
 
 **Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 79 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the refit study (2026-09-06), on the order of ~$170.**
 
-- date: 2026-09-04 · commit: `51d5312`
+- date: 2026-09-04 · commit: `9e4a914`
 - instrument: `RunPod API (pods, costPerHr) + the maintainers' progress log (private)`
 - command: `assembled from the maintainers' progress log (private) dated entries and the RunPod pod list (`cloud-gpu.py machines`; the API exposes per-pod current-session uptime only)`
 - protocol: docs/34-cloud-gpu.md
@@ -5783,7 +5783,7 @@ design; where a copy ships it is named first.
 
 **On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
-- date: 2026-09-03 · commit: `8c98b7a-archive`
+- date: 2026-09-03 · commit: `84add73-archive`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `../tools/study.py finding ../docs/studies/visual-dr-lift-cliff.json /workspace/robotiq/runs/studies/visual-dr-lift-cliff --frame-every 5`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -5850,7 +5850,7 @@ design; where a copy ships it is named first.
 
 **On the SO-101 lift task, a policy pressed WITH per-episode visual randomization (headlight 0.5-1.5, front camera ±1 cm) vs WITHOUT, same 64 episodes, same dynamics DR, same trainer, judged on 80 matched trials under the SAME visual sweep at a pinned truth.**
 
-- date: 2026-09-03 · commit: `6dfbbc2-archive`
+- date: 2026-09-03 · commit: `97a25f0-archive`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `../tools/study.py finding ../docs/studies/visual-dr-lift.json /workspace/robotiq/runs/studies/visual-dr-lift`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -5916,7 +5916,7 @@ design; where a copy ships it is named first.
 
 **On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
-- date: 2026-09-03 · commit: `8c98b7a-archive`
+- date: 2026-09-03 · commit: `84add73-archive`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `../tools/study.py finding ../docs/studies/demo-count-lift-cliff.json /workspace/robotiq/runs/studies/demo-count-lift-cliff --frame-every 5`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -6040,7 +6040,7 @@ design; where a copy ships it is named first.
 
 **On the SO-101 lift task, policy success (ACT, one trainer config) as a function of pressed demonstrations: 8, 16, 32, 64, 128 referee-gated episodes under the same declared DR, judged at one pinned truth on 80 matched trials per arm.**
 
-- date: 2026-09-03 · commit: `8efe0d5-archive`
+- date: 2026-09-03 · commit: `39cd7df-archive`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `../tools/study.py finding ../docs/studies/demo-count-lift.json /workspace/robotiq/runs/studies/demo-count-lift --frame-every 5`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -6163,7 +6163,7 @@ design; where a copy ships it is named first.
 
 **C1 at a competent recipe: the arm named 'identified' (a DECLARED ±5 % relative span; no fitted interval existed on 2026-09-03) (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good — judged NEAR THE EXPERT'S EDGE (the record id says 'cliff'; the 12-trial cells later put the expert at 10/12 there, so it is the edge, not the cliff) (gain 0.4, where the scripted expert succeeds 10/12 and the folklore span's centre is 2.5x too stiff; docs/findings lift-expert-envelope-2026-09-04).**
 
-- date: 2026-09-03 · commit: `1a787ce-archive`
+- date: 2026-09-03 · commit: `7882099-archive`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `../tools/study.py finding ../docs/studies/c1-competent-lift-cliff.json /workspace/robotiq/runs/studies/c1-competent-lift-cliff --frame-every 5`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -6270,7 +6270,7 @@ design; where a copy ships it is named first.
 
 **C1 at a competent recipe: the arm named 'identified' (a DECLARED ±5 % relative span; no fitted interval existed on 2026-09-03) (±5 % relative around the study truth) vs the folklore ±0.30 span vs the POINT estimate (no DR at the truth), 128 episodes and 20k steps per arm, judged at a truth OUTSIDE the folklore span's centre on 80 matched trials — the retest of the two nulls (docs/e2e-research/62) once the recipe can express a difference, with the point arm that Rizvi & Tomar (2026) and PACE (2025) say wins once identification is good.**
 
-- date: 2026-09-03 · commit: `41b20e2-archive`
+- date: 2026-09-03 · commit: `f750823-archive`
 - instrument: `mujoco-3.11.0+x86_64`
 - command: `../tools/study.py finding ../docs/studies/c1-competent-lift.json /workspace/robotiq/runs/studies/c1-competent-lift --frame-every 5`
 - protocol: docs/e2e-research/62-paired-study.md (arms generalised: tools/study.py)
@@ -6360,7 +6360,7 @@ design; where a copy ships it is named first.
 
 **The walk teacher with its own actions zero-order-held: every tick 40/40 survive 500 ticks; held 2 ticks 38/40 (falls at ticks 283, 488); held 5 ticks 0/40, first falls at ticks 20-23 — a 10 Hz dataset (frames every 5 of 50 Hz ticks) is below the hop's control bandwidth, and no student trained on it could stand however well it learned (campaign 1's 0/40 student had normalized action error 0.136 on its own frames).**
 
-- date: 2026-09-02 · commit: `e9be93f`
+- date: 2026-09-02 · commit: `de772af`
 - instrument: `mjlab-1.6.0+mujoco-3.11.0+warp-1.17.0+cuda`
 - command: `rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 with the teacher's action held 1 / 2 / 5 ticks (the hold probe of 2026-09-02, run on the pod)`
 - protocol: docs/e2e-research/63 §2 (the certificate) with the action held N ticks
@@ -6423,7 +6423,7 @@ design; where a copy ships it is named first.
 
 **Unitree's official mjlab stack: two task families behind 22 IDs; fall detection in deploy stubbed to return false; no action clip between policy and motors; two different G1 definitions across families; zero provenance; DR limited to friction/encoder bias/CoM/pushes with gains derived from rotor inertia.**
 
-- date: 2026-09-02 · commit: `eaf9474`
+- date: 2026-09-02 · commit: `7d53112`
 - instrument: `code read, no execution`
 - command: `two Explore agents over the repo dump (docs/e2e-research/65)`
 - protocol: docs/e2e-research/65
@@ -6444,7 +6444,7 @@ design; where a copy ships it is named first.
 
 **Silent no-op domain-randomization knobs: five DR entries in Pollen's microduck_rl that measurably do nothing — two overwritten by the BAM actuator at construction (frictionloss, damping), one IMU field never read, one mass randomizer that is a no-op under mjlab 1.3, and config-dict writes the framework ignores (docs/e2e-research/57 §5) — plus one in our own scene (lights.diffuse_scale on a model with nlight == 0); a construction-time linter now refuses the overwritten class.**
 
-- date: 2026-09-02 · commit: `19ef78b`
+- date: 2026-09-02 · commit: `881aa8a`
 - instrument: `mujoco-3.11.0+arm64 (pixel check); mjlab-1.6.0 (linter)`
 - command: `read at source (docs/e2e-research/57 §5) tools/verify (rq_mjlab.linter tests) uv run --extra sim python -  # pixel check, the maintainers' progress log (private) 2026-09-02`
 - protocol: the prior-art audit of randomization knobs that silently no-op in open stacks (the issues named under sources, each read at its tracker); the audit itself is not public, its primary sources are in docs/paper/references.md

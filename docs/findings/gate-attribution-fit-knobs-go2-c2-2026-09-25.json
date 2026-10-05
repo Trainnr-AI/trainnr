@@ -5,9 +5,9 @@
  "instrument": "plain MuJoCo 3.11.0 + onnxruntime driven by the manifest alone, CPU, the WSL machine (Ubuntu under WSL2, x86_64); every rung 20 paired held twists at the gate's own seed 1000 (per-trial draw)",
  "protocol": "docs/77-the-unitree-loop.md §9",
  "argv": [
-  "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --fit projects/go2-sysid/robots/go2/fits/iit-go2-chirp@645b846a7d38.json (24 spawned workers); run twice (859b5e9, a3f734d), identical counts"
+  "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --fit projects/go2-sysid/robots/go2/fits/iit-go2-chirp@645b846a7d38.json (24 spawned workers); run twice (58f1abb, 69ce4b2), identical counts"
  ],
- "repo_commit": "a3f734d",
+ "repo_commit": "69ce4b2",
  "inputs": {
   "deployment": "go2 policy model_1499 (policy go2-c2-model_1499@99b1655e2cec)",
   "certificate": "go2-c2-model_1499-cuda-seed1000-n40-pa29326@d2868e8db12f, 38/40 [0.8308, 0.9939]",

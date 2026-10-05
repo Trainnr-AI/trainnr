@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-judge the refit arms' withdrawn certificates with the fixed DR seam
-# (2026-09-06, commit 0232fe1: pins and declared spans are built
+# (2026-09-06, commit 6b5322e: pins and declared spans are built
 # from the bundle's params; before it the DR event took the refit
 # bundle's INTERVAL bounds, so every pinned, drawn-±0.30 and ±0.10
 # certificate of the six refit runs was judged in the wrong world —
@@ -8,7 +8,7 @@
 # column of walk-c1-refit-2026-09-06 flagged). Runs where the GPU is
 # free (a local GPU workstation, 2026-09-07). The at-fit certificates stand and are
 # kept. Every other certificate of the six runs is moved aside (to
-# <aside>: evidence, not tracked; the originals are in git at d75ef8f)
+# <aside>: evidence, not tracked; the originals are in git at 333855f)
 # so the idempotent matrix script re-runs them; then the six ±0.10
 # seconds (walk-c1-arm.sh's second certificate); then both folds
 # rewrite their records in place — same id and study date, a `revised`

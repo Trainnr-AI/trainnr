@@ -2,7 +2,7 @@
  "id": "scene-stage-heightfield-vs-hulls-2026-09-22",
  "claim": "The collision proxy of a captured scene, as MuJoCo can touch it, two ways on Neverwhere's hurdle_226_blue_carpet_v3 (145,241 faces): as convex parts (CoACD, threshold 0.05, 64 hulls max) the course becomes 59 hulls in 16 s whose surface sits a mean 9.4 cm (95th percentile 21.7 cm) from the proxy - the hulls roof the 29 cm hurdles into a 36 cm plateau, so a walk would stand on a box; tightening to 230 hulls (26 s) still leaves a 12.3 cm 95th percentile, 512 hulls (218 s) 21.5 cm. As a heightfield of the proxy's top surface on a 2 cm grid the terrain matches the top surface to a median of 0.09 mm (mean 2.6 cm, 95th percentile 15.6 cm, both carried by samples within a cell of a hurdle edge, where the grid is a cliff), with 38.5 % of the proxy's surface (vertical faces, undersides) carried only as cliffs and 31.7 % of the grid's cells filled with the lowest height because nothing lies under them. The heightfield is the stage's default terrain; both gaps are recorded on every staged deployment.",
  "date": "2026-09-22",
- "repo_commit": "4e7f103",
+ "repo_commit": "971fc55",
  "argv": [
   "rq_pipeline.scenes.proxy.decompose(proxy.obj, params=DecompositionParams()) [CoACD 1.0.14: threshold 0.05, max_convex_hull 64, resolution 2000, mcts 20/150/3, merge, seed 0]; decomposition_gap by Open3D ray casting, 50,000 samples each way",
   "the same with threshold 0.02 / 256 hulls / resolution 4000, and 0.01 / 512 / 6000 / preprocess off (scratch run, not recorded on the scene)",

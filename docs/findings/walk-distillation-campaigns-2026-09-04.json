@@ -2,7 +2,7 @@
  "id": "walk-distillation-campaigns-2026-09-04",
  "claim": "RL teacher -> vision student on the microduck walk, certified on 40 matched pushed trials (seed 1000): teacher 33/40 cuda (37/40 cpu); students campaign 1 (10 Hz data) 0/40, campaign 2 (120 ep at 50 Hz, 30k) 18/40, campaign 3 (240 ep, 60k) 24/40, campaign 4 (same recipe re-pressed) 27/40, campaign 4b (campaign 4's dataset retrained from scratch) 22/40; campaign 4's student with the camera blanked 0/40 and with the state blanked 0/40.",
  "date": "2026-09-04",
- "repo_commit": "e62b706",
+ "repo_commit": "c7d3c26",
  "argv": [
   "rq_mjlab.walk_verdict <teacher> --trials 40 --seed 1000 --device cuda:0 [--student <pretrained_model>] [--blank-camera | --blank-state]"
  ],

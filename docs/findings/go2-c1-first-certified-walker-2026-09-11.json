@@ -2,7 +2,7 @@
  "id": "go2-c1-first-certified-walker-2026-09-11",
  "claim": "The first certified Go2 walker: go2-c1, mjlab's velocity task on Unitree's go2.xml with the declared actuator constants, 8,000 PPO iterations over 4,096 worlds, certified at its trained command envelope on 40 seed-matched trials at two checkpoints: model_1400 walks 40/40 [0.912, 1.000] and model_7999 walks 40/40 [0.912, 1.000], median tracking-error ratios 0.25 and 0.20 against the 0.5 bound, no falls.",
  "date": "2026-09-11",
- "repo_commit": "06dc3c0",
+ "repo_commit": "fee6abc",
  "argv": [
   "train_walk(agent='g3', task='go2-flat', name='go2-c1', seed=42)",
   "evaluate_walk('runs/go2-c1/model_1400.pt', trials=40, seed=1000, robot='go2')",

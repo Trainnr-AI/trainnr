@@ -2,7 +2,7 @@
  "id": "compute-ledger-2026-09-04",
  "claim": "Every measured result was produced on rented RTX PRO 6000 Blackwell Server Edition cards (RunPod secure tier, US-NC-2, $2.09/h, one card per pod), one abandoned B200 attempt ($6.79/h, 94 minutes on 2026-08-27, of which 52 were provider initialization, ~$10.6), an owned RTX 3090 Ti (24 GB, WSL2) for re-measurement and short runs, and an Apple M1 Pro (16 GB) for the CPU-side presses, the expert-envelope grid and everything MuJoCo-CPU; about 79 pod-hours in total from the abandoned B200 attempt (2026-08-27) to the refit study (2026-09-06), on the order of ~$170.",
  "date": "2026-09-04",
- "repo_commit": "51d5312",
+ "repo_commit": "9e4a914",
  "argv": [
   "assembled from the maintainers' progress log (private) dated entries and the RunPod pod list (`cloud-gpu.py machines`; the API exposes per-pod current-session uptime only)"
  ],

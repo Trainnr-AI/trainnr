@@ -2,7 +2,7 @@
  "id": "gate-attribution-go2-c2-2026-09-24",
  "claim": "A passing sim-to-sim gate can say which parameter would break the policy first: go2-c2-model_1499's plane gate (20/20 in plain MuJoCo, certificate 38/40, lower bound 0.8308) re-run with one dynamics knob turned at a time up a ladder of the field's deployment deviations falls at 2 control ticks of action latency (40 ms: 20/20 at 1 tick, 0/20 at 2), at servo damping x4 (20/20 at x2, 0/20 at x4) and at servo stiffness x0.6 (20/20 at x0.8, 2/20 at x0.6), while friction down to x0.3, 4 kg of payload, 0.05 rad of joint-position noise, a 5 deg slope and 1.5 m/s pushes leave it at 20/20; ranked, the answer to 'it walked in simulation and fell on the robot' for this policy is latency, then the servo gains, and the whole sweep took three minutes on eight cores.",
  "date": "2026-09-24",
- "repo_commit": "54016a1",
+ "repo_commit": "311ec33",
  "argv": [
   "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --workers 8 (the MCP door attribute_deployment spawns the same tool)"
  ],

@@ -2,7 +2,7 @@
  "id": "walk-latency-budget-2026-09-05",
  "claim": "The campaign 3 vision student certified under an inference budget of n control ticks (SmoothRL's timed loop, emulated in the scheduler), 40 matched trials on the shared seed - teacher 32/40 [0.644, 0.909]; teacher-delay-1 0/40 [0.000, 0.088]; teacher-delay-2 0/40 [0.000, 0.088]; teacher-delay-4 0/40 [0.000, 0.088]; latency-0 25/40 [0.458, 0.773]; latency-1 0/40 [0.000, 0.088]; latency-2 0/40 [0.000, 0.088]; latency-4 0/40 [0.000, 0.088]; latency-8 0/40 [0.000, 0.088]; horizon-3-latency-0 13/40 [0.186, 0.491]; horizon-1-latency-1 0/40 [0.000, 0.088].",
  "date": "2026-09-05",
- "repo_commit": "6825ab1",
+ "repo_commit": "911fd78",
  "argv": [
   "tools/walk-latency-fold.py",
   "runs/microduck-walk/20260901-163412/verdict",

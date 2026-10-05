@@ -2,7 +2,7 @@
  "id": "go2-c3-fit-deployment-2026-09-25",
  "claim": "The fit-trained Go2 policy through the deployment stage: exported with its manifest, go2-c3-fit-deploy passes the plain-MuJoCo gate 18/20 [0.683, 0.988] against its 40/40 certificate (floor 0.90 under the gate's 0.10 tolerance), passes pre-flight 7/7, and its attribution under the gate's own cliff rule ranks kp 0.8x first (16/20) and kd 2x second (17/20); latency falls at 2 ticks (2/20, 1 tick 19/20), payload holds to 2 kg (17/20), added joint friction falls at 0.25 N*m (17/20), tilt holds to 8 deg (14/20): the same rungs go2-c2 falls at, at a harness that reads the fit-trained policy's 2-tick margin as 2/20 where the certificate harness reads 18/40.",
  "date": "2026-09-25",
- "repo_commit": "56feaa0",
+ "repo_commit": "81eb9fc",
  "argv": [
   "export_deployment(run='go2-c3-fit', checkpoint='model_1499.pt', name='go2-c3-fit-deploy')",
   "gate_deployment('go2-c3-fit-deploy', trials=20, seed=1000)",

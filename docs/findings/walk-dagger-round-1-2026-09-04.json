@@ -2,7 +2,7 @@
  "id": "walk-dagger-round-1-2026-09-04",
  "claim": "DAgger round 1 on the walk: the base student drove 120 episodes, the teacher labeled every state, the referee kept the passes; a new student trained on the union of the base dataset and the relabeled batch, certified on the same 40 matched trials as the base \u2014 base 22/40 vs round-1 26/40.",
  "date": "2026-09-04",
- "repo_commit": "660b564-dirty",
+ "repo_commit": "6a3cf03-dirty",
  "argv": [
   "tools/dagger-fold.py",
   "docs/artifacts/walk-verdicts",

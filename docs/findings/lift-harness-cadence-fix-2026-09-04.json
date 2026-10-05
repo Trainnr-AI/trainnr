@@ -2,7 +2,7 @@
  "id": "lift-harness-cadence-fix-2026-09-04",
  "claim": "The LeRobot evaluation harness played every action chunk for one control tick against datasets pressed at frame_every 5: the same lift checkpoint scored 0/3 at hold 1 and 3/3 at hold 5 on three seeds, and the visual-DR study's arms went from 0/80 and 3/80 to 80/80 and 80/80 when re-judged with the hold \u2014 the walk's cadence bug in a second costume.",
  "date": "2026-09-04",
- "repo_commit": "6dfbbc2",
+ "repo_commit": "97a25f0",
  "argv": [
   "rq_pipeline.envs.policy_bridge + envs.robotiq.make_env probe: hold 1 vs 5 on seeds 0,1,2 (pod, 2026-09-04)",
   "tools/study.py evaluate docs/studies/visual-dr-lift.json <out>  # before and after envs/hold.py"
