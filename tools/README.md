@@ -25,12 +25,13 @@ page says what each one is for.
 | `check-numbers.py` | Every success figure the README quotes (k/n or "k of n") exists in a finding record under `docs/findings/`. |
 | `check-unsafe-gates.py` | `unsafe` stays forbidden in the crate's manifest. |
 | `third-party-notices.py` | Completes the Studio's THIRD_PARTY_LICENSES.md after cargo-about: `append` adds the NOTICE files of Apache-2.0 crates and each embedded font's copyright, `check` refuses a missing attribution or an HTML-escaped licence text (the release workflow). |
-| `check-package.py` | Both wheels build and carry LICENSE and NOTICE; the packages' copies of the root LICENSE and NOTICE are identical (the required `package` job). |
+| `check-package.py` | Both wheels build and carry LICENSE, LICENSES/Apache-2.0.txt and NOTICE; the packages' copies of them are identical to the root's (the required `package` job). |
 | `findings.py` | Renders `docs/findings/*.json` into `docs/68-findings.md`; `--check` fails when the page is stale. The ledger is generated, never hand-edited. |
 | `coverage.sh` | Rust line coverage for the Studio crate. |
 | `coverage-badge.py` | Turns coverage.py's JSON report into the README's coverage badge (CI, after the tests). |
 | `plugin-prefetch.sh` | The plugin's session-start hook (`hooks/hooks.json`): downloads the prebuilt Studio in the background, once per version, silently. |
 | `agent-e2e.py` | A real Claude Code agent, given only the trainnr server and a plain-language task, does the laptop half of the Quickstart; prints its tool calls, errors, turns, time, cost and PASS/FAIL. A release check (CONTRIBUTING). |
+| `sbom.py` | A CycloneDX SBOM for each Python package (every component its lock pins, each conflicting extra in turn) and for the Studio (`cargo cyclonedx`); the release workflow attaches and attests them. |
 | `release.py` | One version for the whole product: `check` (CI; it prints the count, 14 copies in 12 files on 2026-10-04, the uv and Cargo lockfiles' own entries among them), `bump X.Y.Z` writes every copy and, for a release, dates the CHANGELOG and the citation's `date-released`; `show`. |
 | `supply-chain.py` | `--policy`: the Studio's crates against deny.toml (licences, bans, sources; required in CI). `--advisories`: known vulnerabilities in every locked Python set (pip-audit, markers stripped so no pin is skipped) and in the crates (not required: the databases move without a commit). `--licences`: the installed Python packages against the licence allow-list. Documented exceptions only. |
 | `github-setup.sh` | Applies the repository's GitHub settings: merges, Actions, labels and, once public, the ruleset on `main` and the security features; lists who can merge. Idempotent. |

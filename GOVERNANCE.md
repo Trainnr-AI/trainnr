@@ -88,12 +88,26 @@ the first release, had no aliases; the CHANGELOG lists them.
 
 ## Releasing
 
-A release is a signed tag `vX.Y.Z` that a maintainer pushes on a commit
-of `main`. The release workflow (`.github/workflows/studio-release.yml`)
-checks that the tag names the tree's version, builds the Studio for
-Linux, macOS and Windows, and attaches the archives, each with its
-SHA-256 and a build-provenance attestation, to a draft release; a
-maintainer checks the draft and publishes it. Step by step:
+A release is a signed tag `vX.Y.Z` (semantic versioning; the public API
+is defined above) that a maintainer pushes on a commit of `main`.
+Everything it ships is built by CI from that tag, never on a laptop. The
+release workflow (`.github/workflows/release.yml`) checks that the tag
+names the tree's version, then builds:
+
+- the Studio for Linux (x86_64), macOS (Apple Silicon) and Windows
+  (x86_64), each archive with its licences and its SHA-256;
+- the Python packages `trainnr` and `trainnr-mjlab`, an sdist and a wheel
+  each, with their licences (`tools/check-package.py`);
+- a CycloneDX SBOM for each package and the Studio (`tools/sbom.py`);
+- `SHA256SUMS` over every file.
+
+Every file gets a build-provenance attestation and each SBOM an SBOM
+attestation (Sigstore, signed with the workflow's identity), and all of
+it goes to a draft release, with the CHANGELOG's section as the notes. A
+maintainer checks the draft and publishes it; publishing starts
+`.github/workflows/release-verify.yml`, which checks what was published
+on all three systems as a user gets it. The Python packages are not
+uploaded to PyPI yet: they are on the release. Step by step:
 
 1. **The release pull request.** On a branch from an up-to-date `main`:
 
@@ -112,8 +126,9 @@ maintainer checks the draft and publishes it. Step by step:
 2. **Rehearse with a release candidate** (for a first release, or after a
    change to the release workflow or the installer). Tag the merged
    commit `vX.Y.Z-rc.N` exactly as in step 3; the workflow builds a draft
-   pre-release of the same version. Check it as in step 5, publish it,
-   and install it from a fresh clone as a user would:
+   pre-release of the same version. Check it as in step 5 and publish it;
+   release-verify must pass on all three systems before the version
+   itself is tagged. Then install it from a fresh clone as a user would:
 
    ```sh
    TRAINNR_STUDIO_RELEASE=vX.Y.Z-rc.N uv run --directory trainnr trainnr studio --install
@@ -131,24 +146,34 @@ maintainer checks the draft and publishes it. Step by step:
    admins can create a `v*` tag (the tag ruleset), and the workflow's
    first job refuses a tag that does not name the version in the tree.
 4. **Wait for the draft.** The draft release appears only if all three
-   platforms build; when one fails, there is no release. Re-running the
+   platforms, both packages and the SBOMs build; when one fails, there is
+   no release. Re-running the
    failed job replaces the draft's own uploads; a published release is
    never touched again.
 5. **Check the draft** before publishing:
-   - the archives: one per platform
+   - the Studio archives: one per platform
      (`trainnr-studio-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`,
      `-aarch64-apple-darwin.tar.gz`, `-x86_64-pc-windows-msvc.zip`), each
-     holding the binary, LICENSE, LICENSES/Apache-2.0.txt, NOTICE and THIRD_PARTY_LICENSES.md;
-   - the notes: the CHANGELOG's `[X.Y.Z]` section;
+     holding the binary, LICENSE, LICENSES/Apache-2.0.txt, NOTICE and
+     THIRD_PARTY_LICENSES.md;
+   - the Python packages: `trainnr-X.Y.Z.tar.gz`,
+     `trainnr-X.Y.Z-py3-none-any.whl`, `trainnr_mjlab-X.Y.Z.tar.gz`,
+     `trainnr_mjlab-X.Y.Z-py3-none-any.whl`;
+   - the SBOMs: `trainnr-X.Y.Z.cdx.json`, `trainnr-mjlab-X.Y.Z.cdx.json`,
+     `trainnr-studio-X.Y.Z.cdx.json`;
+   - the notes: the CHANGELOG's `[X.Y.Z]` section, then what the release
+     holds and how to verify it;
    - the checksums: `gh release download vX.Y.Z -R Trainnr-AI/trainnr -D rel`,
-     then `sha256sum -c *.sha256` inside `rel`;
-   - the attestation, for each archive:
-     `gh attestation verify <archive> -R Trainnr-AI/trainnr`.
+     then `sha256sum -c SHA256SUMS` inside `rel`;
+   - the attestations, for each file:
+     `gh attestation verify <file> -R Trainnr-AI/trainnr`.
 6. **Publish** the draft (the release page, or
    `gh release edit vX.Y.Z --draft=false -R Trainnr-AI/trainnr`). A
    published release is final: immutable releases lock its tag and
    assets, and a mistake is fixed by a new patch version, never by
-   replacing an archive.
+   replacing an archive. release-verify then runs on all three systems:
+   checksums, attestations, the wheel installed clean naming the version,
+   the Studio installed through trainnr's own installer.
 7. **Install as a user** from a fresh clone: `uv run --directory trainnr
    trainnr studio --install` downloads the new archive and checks its
    SHA-256; then, in Claude Code, `claude plugin marketplace add

@@ -1,0 +1,82 @@
+# What a release published, checked as a user would get it, on all three
+# systems: every file matches SHA256SUMS; every file was built by this
+# repository's release workflow (its build-provenance attestation) and
+# each SBOM's attestation holds; the trainnr wheel installs in a clean
+# environment and names the release's version; the Studio installs
+# through trainnr's own installer, which checks its archive's SHA-256.
+#
+# Runs when a release is published (a release candidate first, then the
+# version: GOVERNANCE.md, Releasing), or by hand for a published tag.
+name: release-verify
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "A published release to verify (e.g. v0.1.0-rc.1)"
+        required: true
+
+permissions:
+  contents: read      # download the release's files
+  attestations: read  # read their attestations
+
+concurrency:
+  group: release-verify-${{ github.event.inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: download what was published
+        run: gh release download "$TAG" --dir rel && ls -la rel
+      - name: every file matches SHA256SUMS
+        working-directory: rel
+        run: |
+          if command -v sha256sum >/dev/null; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi
+      - name: every file was built by this repository's release workflow
+        run: |
+          for file in rel/*; do
+            case "$file" in *.sha256) continue ;; esac
+            gh attestation verify "$file" --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/release.yml"
+          done
+      - name: each SBOM's attestation holds for what it describes
+        run: |
+          for file in rel/*.whl rel/trainnr-studio-*; do
+            case "$file" in *.sha256|*.cdx.json) continue ;; esac
+            gh attestation verify "$file" --repo "$GH_REPO" \
+              --predicate-type https://cyclonedx.org/bom
+          done
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: false
+      - name: the trainnr wheel installs clean and names this version
+        run: |
+          uv venv --python 3.12 clean
+          if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; else bin=clean/bin; fi
+          uv pip install --python "$bin/python" rel/trainnr-*-py3-none-any.whl
+          got=$("$bin/trainnr" version)
+          want="${TAG#v}"; want="${want%-rc.*}"
+          echo "trainnr version: $got (release $TAG)"
+          test "$got" = "$want"
+      - name: the Studio installs through trainnr's installer
+        env:
+          TRAINNR_STUDIO_RELEASE: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; else bin=clean/bin; fi
+          "$bin/python" -m trainnr.studio_install

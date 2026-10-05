@@ -1,4 +1,4 @@
-# Files moved out of the repository to the release asset named in
+# Files moved out of the repository to the Hugging Face dataset named in
 # docs/artifacts/README.md ("Large files"): path, bytes, SHA-256.
 # tools/check-docs.py treats a path listed here as present.
 docs/artifacts/dagger/round-1/press.log	22390	7cc2fb7e0f1a13a3897f83c241b267794a3ad0431d92691b05a239692d39c617

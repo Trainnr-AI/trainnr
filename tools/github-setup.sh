@@ -135,12 +135,11 @@ else
  ]}
 JSON
 )
-  # Release tags (v*) and the artifacts-* tags the large-file archives
-  # hang from: only the organisation's admins create, move or delete
-  # them.
+  # Release tags (v*): only the organisation's admins create, move or
+  # delete them.
   TAGS=$(cat <<'JSON'
 {"name": "release tags", "target": "tag", "enforcement": "active",
- "conditions": {"ref_name": {"include": ["refs/tags/v*", "refs/tags/artifacts-*"], "exclude": []}},
+ "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
  "bypass_actors": [{"actor_id": 1, "actor_type": "OrganizationAdmin", "bypass_mode": "always"}],
  "rules": [{"type": "creation"}, {"type": "update"}, {"type": "deletion"}]}
 JSON

@@ -20,7 +20,7 @@ graph (`cargo metadata --locked`, normal dependencies of the Studio):
 `check` refuses a file that lacks an attribution a past review found
 missing, or that carries HTML escapes (a template printing `{{text}}`
 instead of `{{{text}}}` turns every quote in a licence into `&quot;`).
-The release workflow (studio-release.yml) runs both after cargo-about.
+The release workflow (release.yml) runs both after cargo-about.
 """
 
 from __future__ import annotations
