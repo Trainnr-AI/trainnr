@@ -48,7 +48,7 @@ __all__ = [
 # threads per camera, no extra processes. Without it every frame is
 # encoded and written on the export's one thread — campaign 3
 # (2026-09-03) spent 12 minutes writing 240,000 frames the press had
-# rendered in 4.5 (the log); the writer is the export's wall, not the
+# rendered in 4.5; the writer is the export's wall, not the
 # reads.
 IMAGE_WRITER_THREADS_PER_CAMERA = 4
 
@@ -70,7 +70,7 @@ def guard_constant_dims(root: Path, *, floor: float = 1e-6) -> list[str]:
     `(x - mean) / (std + 1e-8)` then turns the mean's own float32
     rounding error into a hundreds-of-sigma training target — measured
     2026-08-31: the wrist normalized to ±453 and ACT's L1 pinned at
-    ~73 for a whole run (the log). With std = 1 a constant dimension
+    ~73 for a whole run. With std = 1 a constant dimension
     normalizes to ~0 and unnormalizes to its constant, which is the
     only honest reading of "no variance". Returns the patched keys."""
     import json  # noqa: PLC0415

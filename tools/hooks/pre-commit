@@ -25,8 +25,7 @@ gate() {
 
 echo "pre-commit:"
 # the Studio is the one Rust crate left (the rig's crates and firmware
-# moved to their own repository, https://github.com/Trainnr-AI/rig, on
-# 2026-10-02). It is its own workspace — own Cargo.lock, the rerun 0.36
+# moved to a private archive on 2026-10-02). It is its own workspace — own Cargo.lock, the rerun 0.36
 # pins — so every cargo gate runs inside it. Before the move it was
 # `exclude`d from the root workspace and a review found drift the root's
 # "formatting ok" stamps had been vacuously blessing: a workspace needs its
@@ -46,12 +45,9 @@ gate "tests (trainnr-studio)"      "cd crates/trainnr-studio && cargo test -q"
 gate "unsafe still forbidden"    "python3 tools/check-unsafe-gates.py"
 gate "docs describe real code" "python3 tools/check-docs.py"
 gate "package layers (docs/80)" "python3 tools/check-layers.py"
-# Every k/n in the paper drafts and ledgers has a finding record behind
-# it — the 2026-09-04 audit found five quoted numbers with none.
+# Every k/n the README quotes has a finding record behind it — the
+# 2026-09-04 audit found five quoted numbers with none.
 gate "numbers trace to records"  "python3 tools/check-numbers.py"
-# The assembled manuscript is generated from the section drafts; a
-# stale copy is a lie about what the drafts say.
-gate "manuscript current"        "python3 tools/paper.py --check"
 
 # Python gets the same treatment as Rust — ruff is its clippy+rustfmt and
 # the unit suite is fast enough to run on every commit. Gated on uv being
@@ -60,10 +56,11 @@ gate "manuscript current"        "python3 tools/paper.py --check"
 # `pipeline` from the rename until 2026-10-02 and skipped every Python
 # gate without a word.)
 if [ -d trainnr ] && command -v uv >/dev/null 2>&1; then
-  gate "ruff format (trainnr)"  "cd trainnr && uvx ruff format --check ."
-  gate "ruff lint (trainnr)"    "cd trainnr && uvx ruff check ."
-  gate "ruff format (tools)"    "cd trainnr && uvx ruff format --check ../tools"
-  gate "ruff lint (tools)"      "cd trainnr && uvx ruff check ../tools"
+  RUFF="ruff@0.16.10"  # as CI and tools/verify.sh: the ruff-pre-commit rev in .pre-commit-config.yaml
+  gate "ruff format (trainnr)"  "cd trainnr && uvx $RUFF format --check ."
+  gate "ruff lint (trainnr)"    "cd trainnr && uvx $RUFF check ."
+  gate "ruff format (tools)"    "cd trainnr && uvx $RUFF format --check ../tools"
+  gate "ruff lint (tools)"      "cd trainnr && uvx $RUFF check ../tools"
   gate "python tests (trainnr)" "cd trainnr && uv run python -m unittest discover -s tests"
 fi
 

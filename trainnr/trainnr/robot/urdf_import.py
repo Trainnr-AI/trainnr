@@ -8,7 +8,7 @@ AUDIT READER that parses the URDF as authored — with the standard
 library, not through MuJoCo — so the audit compares what the file says
 against what the loader made of it.
 
-What MuJoCo's loader does to a URDF, measured on this box (docs/e2e-research/78 §1):
+What MuJoCo's loader does to a URDF:
 the root link becomes the world body and its inertial is dropped
 (3.11.0 and 3.13.0); a `<mimic>` was dropped silently until 3.13.0
 (google-deepmind/mujoco PR #3530, merged 2026-09-08); an inertial
@@ -21,7 +21,6 @@ UNEXPLAINED — which is the point.
 
 from __future__ import annotations
 
-import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -250,7 +249,9 @@ def onboard_urdf(
     del options  # a URDF source takes none; `onboard` refused any
     spec = mujoco.MjSpec.from_file(str(source_path))
     spec.modelname = name
-    shutil.copytree(source_path.parent, destination)
+    from trainnr.robot.onboarding import copy_model_folder  # noqa: PLC0415
+
+    copy_model_folder(source_path.parent, destination)
     model_file = f"{name}.xml"
     (destination / model_file).write_text(spec.to_xml(), encoding="utf-8")
     model = mujoco.MjModel.from_xml_path(str(destination / model_file))

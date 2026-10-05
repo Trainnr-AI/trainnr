@@ -1,4 +1,4 @@
-"""The planner expert (docs/66 §3 source 2, D3): beats written from
+"""The planner expert: beats written from
 poses, executed by chained IK, judged by each task's own referee -
 measured against the scripted experts' ceiling, per instrument."""
 

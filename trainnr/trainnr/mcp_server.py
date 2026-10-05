@@ -33,13 +33,14 @@ from __future__ import annotations
 import contextlib
 import functools
 import json
+import os
 import re
 import sys
 import time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 # pydantic reads WalkConditions' schema; on Python < 3.12 it accepts only
 # typing_extensions' TypedDict (as mcp_jobs does).
@@ -75,6 +76,25 @@ from trainnr.robot.actuator_library import (
 from trainnr.scenes.splatters import DEFAULT_SPLATTER
 from trainnr.scenes.terrain import DEFAULT_TERRAIN
 from trainnr.tasks.registry import resolve, tasks
+
+
+def arg(text: str) -> Any:
+    """An argument's description in the tool's schema: what an agent reads
+    to fill it (199 of 200 arguments had none: tool review, 2026-10-04).
+    pydantic comes with the mcp extra; without it nothing reads these."""
+    try:
+        from pydantic import Field  # noqa: PLC0415
+    except ImportError:
+        return text
+    return Field(description=text)
+
+
+# The longest a capture listens: an hour. A listener on the network with
+# no end once took any window (security review, 2026-10-04).
+MAX_CAPTURE_WINDOW_S = 3600.0
+# Where Brush (the splat trainer) is, when not on PATH as brush_app: the
+# user's setting, never a tool argument (capture_scene).
+BRUSH_ENV = "TRAINNR_BRUSH"
 
 # robots/actuators is the actuator LIBRARY (per-servo friction models,
 # grown by tools/sync-bam-actuators.py), not a robot bundle — it has its
@@ -118,9 +138,12 @@ def describe_robot(robot: str) -> dict[str, Any]:
     """One robot in full: identity, profile, every fit record, and how
     repeated fits agree."""
     _use_project_if_any()
-    root = find_bundle(robot)
+    names = bundle_names()
+    # a name the library or project holds, never a path: a path listed and
+    # hashed any folder (security review, 2026-10-04)
+    root = find_bundle(robot) if robot in names else None
     if root is None or robot in NOT_A_BUNDLE:
-        raise KeyError(f"no robot {robot!r}; one of {bundle_names()}")
+        raise KeyError(f"no robot {robot!r}; one of {names}")
     detail: dict[str, Any] = {
         "stamp": stamp(robot, root),
         "files": sorted(p.name for p in root.iterdir()),
@@ -231,8 +254,10 @@ def describe_dataset(dataset: str) -> dict[str, Any]:
     from dataclasses import asdict  # noqa: PLC0415
 
     from trainnr.collect.datasheet import summarize  # noqa: PLC0415
+    from trainnr.mcp_actions import inside_project  # noqa: PLC0415
 
-    summary = summarize(Path(dataset))
+    folder = inside_project(dataset, default=dataset, what="dataset")
+    summary = summarize(Path(folder))
     return {
         **asdict(summary),
         # None across shards: each shard restarts its attempt counter,
@@ -298,11 +323,16 @@ def create_task(
 
 
 def onboard_robot(
-    model_path: str,
+    model_path: Annotated[str, arg("an MJCF, URDF or USD file")],
     name: str,
-    variants: dict[str, str] | None = None,
-    root: str | None = None,
-    accept_changes: bool = False,
+    variants: Annotated[
+        dict[str, str] | None,
+        arg('USD variant sets, e.g. {"Physics": "Newton_compliant"}'),
+    ] = None,
+    root: Annotated[str | None, arg('USD only: "fixed" (default) or "free"')] = None,
+    accept_changes: Annotated[
+        bool, arg("keep the robot although the import changed what the file says")
+    ] = False,
 ) -> dict[str, Any] | Refusal:
     """A robot enters as a hash-stamped bundle, by its file's format: an
     MJCF's directory copied whole (meshes and includes ride along) and
@@ -355,6 +385,15 @@ def onboard_robot(
     return {"status": DONE, **out}
 
 
+def _project_if_any() -> Any | None:
+    """The current project, or None when there is none."""
+    from trainnr.project import current_project  # noqa: PLC0415
+
+    with contextlib.suppress(FileNotFoundError):
+        return current_project()
+    return None
+
+
 def _project_root_if_any() -> Path | None:
     from trainnr.project import current_project  # noqa: PLC0415
 
@@ -363,41 +402,69 @@ def _project_root_if_any() -> Path | None:
     return None
 
 
-def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
-    agent: str = "smoke",
+def _unknown_fit(robot: str | None, fit: str | None) -> str:
+    """Why `fit` names no fit of the open project's `robot`, or "" when it
+    does or there is nothing here to check (no fit, no project robot of
+    that name: the trainer then resolves it). Checked before the job, so
+    a wrong stamp is a refusal now, not a failed job a minute later (an
+    agent passed fit@<the recording's hash>, 2026-10-04)."""
+    from trainnr.robot.fit_record import find_fit  # noqa: PLC0415
+
+    if not fit or not robot:
+        return ""
+    try:
+        project, bundle = _project_artifact(robot, "robot")
+    except (FileNotFoundError, KeyError, ValueError):
+        return ""
+    try:
+        find_fit(project.root / bundle.path, fit)
+    except KeyError as refused:
+        return f"{_reason(refused)}; describe_identification lists each fit's stamp"
+    return ""
+
+
+def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each refusal named
+    recipe: Annotated[str, arg("smoke (minutes, saves nothing) or full")] = "smoke",
     envs: int | None = None,
     iterations: int | None = None,
     robot: str | None = None,
     name: str | None = None,
     seed: int | None = None,
-    task: str | None = None,
+    task: Annotated[str | None, arg("a walk declared in the project")] = None,
     scene: str | None = None,
     cameras: bool = True,
-    fit: str | None = None,
+    fit: Annotated[str | None, arg("fit@<stamp> from describe_identification")] = None,
     lag_dr_ms: float = 0.0,
-) -> JobHandle | Refusal:
-    """Train a walk policy through trainnr_mjlab. `task` names a declared walk
-    in the project: its robot and randomization span are used and its
-    version cited by the run; `robot` alone names a registered walk
-    family's robot (`list_task_families`). With neither, the project's
-    one declared walk is taken; several or none is a refusal by name.
-    With a project open the trainer searches its robots first, and `name`
-    — the experiment's folder under the project's `runs/` — makes the run
-    an artifact the index sees (`agent="g3"` only; a smoke archives
-    nothing). `scene` names a captured scene in the project: the walk
-    trains on its heightfield from the course's start with the head
-    camera seeing its splat (docs/78 E2; the Go2); `cameras=False` trains
-    on the scene without the camera (the rate without pictures). `fit`
-    names a joint fit in the robot's bundle (its own stamp `fit@...`, or
-    its recording's; a declared walk's task.json may carry one): the
-    joints train at the fit's estimates, randomized over its intervals,
-    and the run names it (2026-09-25; the Go2). `lag_dr_ms` trains under a
-    random command lag of 0..that many milliseconds, redrawn every second
-    per world (trainnr_mjlab.lag_dr; any walk), recorded in the identity.
-    Minutes to hours; returns a job handle."""
+) -> dict[str, Any] | Refusal:
+    """Train a walk policy through trainnr_mjlab. `recipe` is `smoke` (a
+    check of the stack in minutes that saves nothing) or `full` (the walk
+    recipe: PPO, 8000 iterations unless `iterations` says, hours on a
+    GPU; it saves the experiment). `task` names a declared walk in the
+    project: its robot and randomization span are used and its version
+    cited by the run; `robot` alone names a registered walk family's
+    robot (`list_task_families`). With neither, the project's one
+    declared walk is taken; several or none is a refusal by name. With a
+    project open the trainer searches its robots first, and the run is
+    an experiment in the project's `runs/`: `name` is its folder, by
+    default `<robot>-walk-<date-time>`; an existing experiment is
+    refused, never overwritten (full recipe only: a smoke saves nothing,
+    so a name with it is refused). `scene` names a captured scene in the
+    project: the walk trains on its heightfield from the course's start
+    with the head camera seeing its splat (the Go2); `cameras=False`
+    trains on the scene without the camera. `fit` names a joint fit in
+    the robot's bundle (its own stamp `fit@...`, or its recording's; a
+    declared walk's task.json may carry one): the joints train at the
+    fit's estimates, randomized over its intervals, and the run names it.
+    `lag_dr_ms` trains under a random command lag of 0..that many
+    milliseconds, redrawn every second per world, recorded in the
+    identity. The reply names the experiment and the next call."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
 
+    wrong = _training_arguments_refusal(recipe, envs, iterations, name)
+    if wrong:
+        return refusal(wrong)
+    agent = RECIPES[recipe]
     root = _project_root_if_any()
     dr_span: float | None = None
     task_stamp: str | None = None
@@ -411,13 +478,22 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
             return refusal(declared)
         robot, dr_span, task_stamp = declared.robot, declared.dr_span, declared.stamp
         fit = fit if fit is not None else declared.fit
+    if name is None and root is not None and agent == ARCHIVED_AGENT:
+        name = _dated_run_name(robot)
     try:
         log_dir = _run_dir(root, name)
         scene_dir = _scene_dir(root, scene)
     except ValueError as why:
         return refusal(str(why))
+    if log_dir is not None and Path(log_dir).exists():
+        # the trainer writes into an existing folder: checkpoints and the
+        # identity that evaluations and deployments cite (tool review)
+        return refusal(f"experiment {name!r} already exists; choose another name")
+    unknown_fit = _unknown_fit(robot, fit)
+    if unknown_fit:
+        return refusal(unknown_fit)
     try:
-        return Actions(JobManager(_jobs_root)).train_walk(
+        handle = Actions(JobManager(_jobs_root)).train_walk(
             agent,
             envs,
             iterations,
@@ -434,6 +510,54 @@ def train_walk(  # noqa: PLR0913, PLR0917 - the trainer's own knobs, each named
         )
     except ValueError as why:
         return refusal(str(why))
+    if name is None:
+        return {
+            **handle,
+            "status": "started",
+            "experiment": None,
+            "next": "describe_job(job_id, wait_s=300); a smoke saves nothing",
+        }
+    return {
+        **handle,
+        "status": "started",
+        "experiment": name,
+        "next": f"describe_job(job_id, wait_s=300), then "
+        f"evaluate_walk(checkpoint={name!r})",
+    }
+
+
+def _training_arguments_refusal(
+    recipe: str, envs: int | None, iterations: int | None, name: str | None
+) -> str:
+    """Why train_walk's arguments cannot start a job, or "": checked here
+    rather than by a trainer that fails minutes later (tool review)."""
+    if recipe not in RECIPES:
+        return f"recipe is one of {sorted(RECIPES)}, got {recipe!r}"
+    for count, value in (("envs", envs), ("iterations", iterations)):
+        if value is not None and value < 1:
+            return f"{count} must be at least 1, got {value}"
+    if name is not None and RECIPES[recipe] != ARCHIVED_AGENT:
+        return "a smoke run saves nothing, so it takes no name; name a full run"
+    return ""
+
+
+# The training recipe that archives its run (checkpoints, identity); a
+# smoke archives nothing.
+ARCHIVED_AGENT = "g3"
+# What `train_walk(recipe=...)` takes, and the trainer's own name for it.
+# The argument was `agent`, a word an AI agent read as itself (review).
+RECIPES = {"smoke": "smoke", "full": ARCHIVED_AGENT}
+
+
+def _dated_run_name(robot: str | None) -> str:
+    """An unnamed archived run's folder name in the open project: the
+    robot's walk and the time. Unnamed, the trainer wrote under the
+    checkout's runs/, outside every project, and the evaluation, export
+    and gate after it could not find the experiment (an agent run, 14 of
+    34 calls refused, 2026-10-04)."""
+    from datetime import datetime  # noqa: PLC0415
+
+    return f"{robot or 'walk'}-walk-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
 
 def _run_dir(root: Path | None, name: str | None) -> str | None:
@@ -521,15 +645,20 @@ def _the_project_walk(root: Path | None) -> str | None:
     return walks[0].name if len(walks) == 1 else None
 
 
-def _no_single_walk(root: Path | None) -> str:
+def _no_single_walk(root: Path | None, argument: str = "task") -> str:
+    """Why no walk was chosen, naming the argument the calling tool takes
+    (evaluate_walk once asked for a `task` it does not have: review)."""
     walks = _declared_walks(root)
     if not walks:
         return (
             "name the walk: `task` (a declared walk in the project) or `robot` "
             "(a registered walk family's robot); this project declares no walk"
+            if argument == "task"
+            else "name the walk with `robot` (go1, go2 or microduck); this "
+            "project declares no walk"
         )
-    return "name the walk with `task`; this project declares several: " + ", ".join(
-        w.name for w in walks
+    return f"name the walk with `{argument}`; this project declares several: " + (
+        ", ".join(w.name if argument == "task" else w.robot for w in walks)
     )
 
 
@@ -539,15 +668,38 @@ CHECKPOINT_GLOB = "model_*.pt"
 def checkpoint_path(checkpoint: str, root: Path | None) -> Path:
     """The file a checkpoint argument names: absolute as given, else under
     the project's runs — `c0/model_1.pt` and `runs/c0/model_1.pt` name the
-    same file. The job gets THIS path, never the bare form: the judge runs
-    in another directory and a bare `run/model_N.pt` died there on
-    FileNotFoundError after the check here had passed (stranger test,
-    2026-10-03)."""
+    same file, and the experiment `c0` alone names its newest checkpoint
+    (an agent passed the experiment's name twice, 2026-10-04). The job
+    gets THIS path, never the bare form: the judge runs in another
+    directory and a bare `run/model_N.pt` died there on FileNotFoundError
+    after the check here had passed (stranger test, 2026-10-03)."""
     path = Path(checkpoint).expanduser()
     if not path.is_absolute() and root is not None:
         under = path.parts[0] == RUNS_FOLDER
         path = root / path if under else root / RUNS_FOLDER / path
-    return path
+    if path.is_dir():  # an experiment named by its kind: its newest checkpoint
+        held = _checkpoints_in(path)
+        if held:
+            return path / held[-1]
+    return with_checkpoint_suffix(path)
+
+
+def with_checkpoint_suffix(path: Path) -> Path:
+    """`model_149` as `model_149.pt` when only the latter exists: the
+    checkpoint's name as the reply shows it, without the file's suffix (an
+    agent passed it so, 2026-10-04)."""
+    from trainnr.project.kinds import CHECKPOINT_SUFFIX  # noqa: PLC0415
+
+    suffixed = path.with_name(path.name + CHECKPOINT_SUFFIX)
+    return suffixed if not path.exists() and suffixed.is_file() else path
+
+
+def _checkpoints_in(folder: Path) -> list[str]:
+    """The checkpoint files in a run folder, oldest iteration first."""
+    return sorted(
+        (q.name for q in folder.glob(CHECKPOINT_GLOB)),
+        key=lambda n: int(re.sub(r"\D", "", n) or 0),
+    )
 
 
 def checkpoint_missing(checkpoint: str, root: Path | None) -> str | None:
@@ -556,15 +708,23 @@ def checkpoint_missing(checkpoint: str, root: Path | None) -> str | None:
     refused here naming the checkpoints its run folder holds, instead of
     a job that dies on FileNotFoundError twelve seconds later
     (2026-09-28)."""
+    from trainnr.project.locate import NO_PROJECT  # noqa: PLC0415
+
+    if root is None:
+        return NO_PROJECT
     path = checkpoint_path(checkpoint, root)
+    if not path.resolve().is_relative_to(root.resolve()):
+        # a checkpoint is a pickle that runs code on load: only the
+        # project's own (security review, 2026-10-04)
+        return (
+            f"checkpoint {checkpoint!r} is outside the current project; "
+            "import_experiment brings an experiment in"
+        )
     if path.is_file():
         return None
-    folder = path.parent
+    folder = path if path.is_dir() else path.parent
     if folder.is_dir():
-        have = sorted(
-            (q.name for q in folder.glob(CHECKPOINT_GLOB)),
-            key=lambda n: int(re.sub(r"\D", "", n) or 0),
-        )
+        have = _checkpoints_in(folder)
         held = ", ".join(have) if have else "no checkpoints"
         return f"no checkpoint {path.name!r} in {folder}: it holds {held}"
     return f"no checkpoint {checkpoint!r}: {folder} is not a run folder"
@@ -589,16 +749,20 @@ class WalkConditions(TypedDict, total=False):
 
 
 def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each named
-    checkpoint: str,
+    checkpoint: Annotated[
+        str, arg("an experiment (its newest checkpoint) or <experiment>/model_N")
+    ],
     trials: int = 40,
     seed: int = 1000,
-    device: str | None = None,
-    student: str | None = None,
+    device: Annotated[str | None, arg("cuda (default when present) or cpu")] = None,
+    student: Annotated[
+        str | None, arg("a distilled student: its folder or a Hugging Face repo")
+    ] = None,
     horizon: int = 20,
     robot: str | None = None,
     scene: str | None = None,
     conditions: WalkConditions | None = None,
-) -> JobHandle | Refusal:
+) -> dict[str, Any] | Refusal:
     """Evaluate a walk policy: seeded paired episodes, exact intervals,
     the run's versions on every row; `robot` names the walk the checkpoint
     belongs to, else the project's one declared walk. With a project open
@@ -619,10 +783,17 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     missing = checkpoint_missing(checkpoint, root)
     if missing:
         return refusal(missing)
+    if robot is None and root is not None:
+        # the walk the experiment trained, as export and play read it
+        from trainnr.project import index_project  # noqa: PLC0415
+        from trainnr.project.locate import Project  # noqa: PLC0415
+
+        run_dir = checkpoint_path(checkpoint, root).parent
+        robot = _walk_of_run(index_project(Project(root)).artifacts, run_dir)
     if robot is None:
         walk = _the_project_walk(root)
         if walk is None:
-            return refusal(_no_single_walk(root))
+            return refusal(_no_single_walk(root, argument="robot"))
         declared = _declared_walk(root, walk)
         assert isinstance(declared, DeclaredWalk)
         robot = declared.robot
@@ -632,7 +803,7 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
         known = sorted(WalkConditions.__annotations__)
         return refusal(f"unknown conditions {unknown}; one of {known}")
     try:
-        return Actions(JobManager(_jobs_root)).evaluate_walk(
+        handle = Actions(JobManager(_jobs_root)).evaluate_walk(
             str(checkpoint_path(checkpoint, root)),
             trials=trials,
             seed=seed,
@@ -649,21 +820,33 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
         )
     except ValueError as why:
         return refusal(str(why))
+    return {
+        **handle,
+        "next": "once the job is done, list_evaluations names this evaluation "
+        "by its stamp (`evaluation`), the value describe_evaluation and "
+        "export_deployment take",
+    }
 
 
 def export_deployment(  # noqa: PLR0911 - each return is one named refusal
-    experiment: str,
-    checkpoint: str,
-    name: str,
-    evaluation: str | None = None,
-    unevaluated: bool = False,
+    experiment: Annotated[str, arg("an experiment in the project")],
+    checkpoint: Annotated[str, arg("model_N (with or without .pt)")],
+    name: Annotated[str, arg("the new deployment's name")],
+    evaluation: Annotated[
+        str | None,
+        arg("a stamp from list_evaluations; default the newest own-world one"),
+    ] = None,
+    unevaluated: Annotated[
+        bool, arg("export with no evaluation on purpose; the gate then judges nothing")
+    ] = False,
 ) -> JobHandle | Refusal:
     """Export a trained policy for deployment: `experiment` is its folder
     under runs/, `checkpoint` a file in it (model_7999.pt), `name` the new
     deployment's folder. The policy artifact and the evaluation it cites
-    (`evaluation` by version, else the checkpoint's newest) come from the
-    index. A checkpoint with no evaluation is refused by name —
-    a deployment the gates cannot judge is one nobody can trust — unless
+    (`evaluation`, its stamp as list_evaluations names it, else the
+    checkpoint's newest) come from the index. A checkpoint with no
+    evaluation is refused by name — a deployment the gates cannot judge
+    is one nobody can trust — unless
     `unevaluated` says the export is deliberate (a smoke, a mechanics
     check); the order that closes the loop is evaluate, export, gate.
     The manifest carries everything a runtime needs —
@@ -684,9 +867,15 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
     except ValueError as why:
         return refusal(str(why))
     run_dir = project.folder(RUNS_FOLDER) / run
-    path = run_dir / checkpoint
+    path = with_checkpoint_suffix(run_dir / checkpoint)
+    if not path.resolve().is_relative_to(run_dir.resolve()):
+        return refusal(f"checkpoint {checkpoint!r} is not a file of run {run!r}")
     if not path.is_file():
-        return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
+        held = ", ".join(_checkpoints_in(run_dir)) if run_dir.is_dir() else ""
+        return refusal(
+            f"no checkpoint {checkpoint!r} in run {run!r}; it holds {held or 'none'}"
+        )
+    checkpoint = path.name
     if (project.folder(DEPLOY_FOLDER) / name).exists():
         return refusal(f"deployment {name!r} already exists")
     refresh_records(project)  # an evaluation judged a moment ago counts
@@ -707,9 +896,23 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
             f"run {run!r} names no walk (no task in its identity); pass one by name"
         )
     policy = policy_of_checkpoint(index.artifacts, run, run_art.stamp, checkpoint)
+    unknown = _unknown_evaluation(index.artifacts, certificate, policy)
+    if unknown:
+        return refusal(unknown)
     if certificate is None and policy is not None:
-        newest = newest_evaluation_of(index.artifacts, policy.stamp)
+        newest = newest_evaluation_of(index.artifacts, policy.stamp, project.root)
         certificate = newest.stamp if newest else None
+        perturbed = [
+            a.stamp
+            for a in index.artifacts
+            if a.kind == "certificate" and a.cites.get("policy") == policy.stamp
+        ]
+        if certificate is None and perturbed:
+            return refusal(
+                f"{run}/{checkpoint} has only evaluations under changed conditions "
+                f"{perturbed}; a deployment cites one in the policy's own world "
+                "(evaluate_walk without conditions), or name one as `evaluation`"
+            )
     if certificate is None and not unevaluated:
         return refusal(
             f"{run}/{checkpoint} has no evaluation to cite: evaluate it first "
@@ -750,12 +953,67 @@ def policy_of_checkpoint(
     )
 
 
-def newest_evaluation_of(artifacts: Iterable[Any], policy_stamp: str) -> Any | None:
-    """The newest evaluation citing a policy by version, or None."""
+def _unknown_evaluation(
+    artifacts: Iterable[Any], wanted: str | None, policy: Any | None
+) -> str:
+    """Why `wanted` is no evaluation in the index, naming the ones of this
+    checkpoint's policy; "" when it is one or none was named. Unchecked,
+    an agent's folder path was written into the manifest as the citation
+    and the gate then judged nothing (an agent run, 2026-10-04)."""
+    if wanted is None:
+        return ""
+    judged = [a for a in artifacts if a.kind == "certificate"]
+    if any(a.stamp == wanted for a in judged):
+        return ""
+    mine = [
+        a.stamp
+        for a in judged
+        if policy is not None and a.cites.get("policy") == policy.stamp
+    ]
+    return (
+        f"no evaluation {wanted!r} in the index; this checkpoint's are "
+        f"{mine or 'none'} (list_evaluations names them; omit `evaluation` "
+        "to cite the newest)"
+    )
+
+
+def perturbed_evaluation(certificate: dict[str, Any]) -> bool:
+    """Whether an evaluation judged the policy outside its own world: in
+    another fit (a cross-evaluation), with a gain scaled, or with an
+    action delay. Such a run is a stress result, never a deployment's
+    certificate: export once cited a newer delay-2 run by default (tool
+    review, 2026-10-04)."""
+    protocol = certificate.get("protocol") or {}
+    judged = str(protocol.get("judged_at") or "")
+    return (
+        judged.startswith("CROSS")
+        or re.search(r"(kp|kd|armature) at fit x", judged) is not None
+        or bool(protocol.get("delay"))
+    )
+
+
+def newest_evaluation_of(
+    artifacts: Iterable[Any], policy_stamp: str, root: Path | None = None
+) -> Any | None:
+    """The newest evaluation citing a policy by version, or None; with the
+    project's `root`, the newest in the policy's own world."""
+    from trainnr.project.kinds import CERTIFICATE_FILE  # noqa: PLC0415
+
+    def own_world(a: Any) -> bool:
+        if root is None:
+            return True
+        try:
+            record = json.loads((root / a.path / CERTIFICATE_FILE).read_text())
+        except (OSError, ValueError):
+            return False
+        return not perturbed_evaluation(record)
+
     judged = [
         a
         for a in artifacts
-        if a.kind == "certificate" and a.cites.get("policy") == policy_stamp
+        if a.kind == "certificate"
+        and a.cites.get("policy") == policy_stamp
+        and own_world(a)
     ]
     judged.sort(key=lambda a: a.updated or "", reverse=True)
     return judged[0] if judged else None
@@ -787,7 +1045,7 @@ def _task_id_in_project(artifacts: Iterable[Any], ref: str | None) -> str | None
     by the door cites its task by the project's stamp (`go2-walk@0e7e…`,
     the environment card), and the family id (`trainnr/go2-walk`) is
     what that card's spec records; a run that names the family id
-    directly is taken as is. Unknown: None (the box, 2026-09-11 - the
+    directly is taken as is. Unknown: None (the WSL machine, 2026-09-11 - the
     export door handed the stamp to the registry and was refused)."""
     if not ref:
         return None
@@ -1163,9 +1421,14 @@ def play_walk(
     try:
         plain_name(run, "run name")
         run_dir = project.folder(RUNS_FOLDER) / run
-        path = run_dir / checkpoint
+        if not run_dir.is_dir():
+            return refusal(f"no experiment {run!r} in this project")
+        path = with_checkpoint_suffix(run_dir / checkpoint)
+        if not path.resolve().is_relative_to(run_dir.resolve()):
+            return refusal(f"checkpoint {checkpoint!r} is not a file of {run!r}")
         if not path.is_file():
-            return refusal(f"no checkpoint {checkpoint!r} in run {run!r}")
+            held = ", ".join(_checkpoints_in(run_dir)) or "none"
+            return refusal(f"no checkpoint {checkpoint!r} in {run!r}; it holds {held}")
         robot = _walk_of_run(index_project(project).artifacts, run_dir)
         if robot is None:
             return refusal(f"run {run!r} names no walk")
@@ -1241,13 +1504,20 @@ def check_task(task: str) -> JobHandle | Refusal:
 
 
 def describe_task(task: str) -> dict[str, Any]:
-    """One task built for real: its spec's numbers and its content stamp.
+    """One task: a task declared in the open project by its name (family,
+    version, settings, the check's verdict, reward previews), else a
+    registered task built for real (its spec's numbers and content stamp).
+    create_task then describe_task once refused the task just made: the
+    tool read only the registry (tool review, 2026-10-04).
 
     Compiling the scene is what makes the stamp honest — this needs the
     sim extra, same as everything else that touches the model.
     """
     from dataclasses import asdict  # noqa: PLC0415 - tiny, keeps the top clean
 
+    declared = _declared_task_detail(task)
+    if declared is not None:
+        return declared
     entry = resolve(task)
     built = entry.build()
     detail: dict[str, Any] = {
@@ -1261,34 +1531,104 @@ def describe_task(task: str) -> dict[str, Any]:
     return detail
 
 
+def _declared_task_detail(name: str) -> dict[str, Any] | None:
+    """A task the open project declares, as data; None when there is no
+    project or no such task (the registry is asked next)."""
+    from trainnr.project.kinds import ACCEPTANCE_FILE  # noqa: PLC0415
+    from trainnr.project.task_ref import read_task_reference  # noqa: PLC0415
+
+    project = _project_if_any()
+    if project is None or "/" in name or name.startswith("."):
+        return None
+    try:
+        ref = read_task_reference(project, name)
+    except (FileNotFoundError, ValueError):
+        return None
+    detail: dict[str, Any] = {
+        "task": ref.name,
+        "declared": True,
+        "family": ref.task_id,
+        "version": ref.stamp,
+        "settings": ref.spec,
+    }
+    records = [("check", ref.folder / ACCEPTANCE_FILE)]
+    records += [
+        (f"preview {p.stem.removeprefix('preview-')}", p)
+        for p in sorted(ref.folder.glob("preview-*.json"))
+    ]
+    for label, path in records:
+        with contextlib.suppress(OSError, ValueError):
+            detail[label] = json.loads(path.read_text(encoding="utf-8"))
+    if "check" not in detail:
+        detail["next"] = f"check_task({ref.name!r})"
+    return detail
+
+
 def list_engines() -> list[dict[str, Any]]:
     """The engine registry: every physics backend an evaluation can name."""
     return [{"name": entry.name, "doc": entry.doc} for entry in engines().values()]
 
 
 def list_experiments(runs_root: Path | None = None) -> list[dict[str, Any]]:
-    """Every run on record: the imitation chain's `run.json` manifests under
-    `trainnr/runs/` (or `runs_root`), verbatim, and — when a project is open
-    and no root was named — the project's own `runs/`, where a walk's
-    experiments keep `training.json` and `identity.json` (an agent reading
-    the README's "query and learn" row saw [] there, stranger test
-    2026-10-03). Each entry names the run and, for a project's, where it
-    lives."""
+    """Every experiment, one short row each: the open project's (its
+    `runs/`, when no root is named) with status, iterations, final reward,
+    robot, task, fit and checkpoints; then the imitation chain's runs under
+    `trainnr/runs/` (or `runs_root`) with their `run.json` manifests. The
+    curves stay out: one call returned 3.7 MB, about 0.9M tokens, on a
+    project of 13 runs (tool review, 2026-10-04); describe_experiment
+    gives one experiment in full."""
+    described = _project_runs() if runs_root is None else []
     root = _runs_root(runs_root)
-    described = []
     if root.is_dir():
         for manifest in sorted(root.glob("*/run.json")):
             described.append(
                 {
-                    "run": manifest.parent.name,
+                    "experiment": manifest.parent.name,
                     "manifest": json.loads(manifest.read_text()),
                 }
             )
-    if runs_root is None:
-        described.extend(_project_runs())
     return described
 
 
+def describe_experiment(experiment: str) -> dict[str, Any]:
+    """One experiment of the open project in full: its training record
+    (every logged iteration), identity (robot, actuator, fit, task, the
+    randomization basis), manifests and checkpoints, and the evaluations
+    citing it. Refused by name, listing the project's experiments."""
+    from trainnr.project.locate import plain_name  # noqa: PLC0415
+
+    plain_name(experiment, "experiment name")
+    runs = _project_runs_root()
+    folder = None if runs is None else runs / experiment
+    if folder is None or not folder.is_dir():
+        known = [row["experiment"] for row in _project_runs()]
+        raise KeyError(f"no experiment {experiment!r} in this project; it has {known}")
+    detail: dict[str, Any] = {"experiment": experiment, "where": str(folder)}
+    detail.update(_run_manifests(folder))
+    training = detail.get("training")
+    if isinstance(training, dict) and len(training.get("curve") or []) > CURVE_ROWS:
+        # A 150-iteration curve was 81 KB, past what a client shows an agent
+        # (an agent run, 2026-10-05): rows sampled evenly, the last kept.
+        curve = training["curve"]
+        step = (len(curve) - 1) / (CURVE_ROWS - 1)
+        picked = sorted({round(i * step) for i in range(CURVE_ROWS)})
+        training["curve"] = [curve[i] for i in picked]
+        training["curve_rows_recorded"] = len(curve)
+        training["curve_note"] = (
+            f"{len(picked)} of {len(curve)} rows, evenly; the full record is "
+            "training.json in `where`"
+        )
+    detail["checkpoints"] = _checkpoints_in(folder)
+    detail["evaluations"] = [
+        row["evaluation"]
+        for row in list_evaluations()
+        if str(row.get("run", "")).split("@")[0] == experiment
+    ]
+    return detail
+
+
+# The most training-curve rows describe_experiment returns.
+CURVE_ROWS = 40
 # The manifests a project's run folder may hold, by the loop that wrote it.
 PROJECT_RUN_MANIFESTS = ("run.json", "training.json", "identity.json")
 
@@ -1299,21 +1639,48 @@ def _project_runs_root() -> Path | None:
     return None if root is None else root / RUNS_FOLDER
 
 
+def _run_manifests(folder: Path) -> dict[str, Any]:
+    """The manifests a run folder holds, by name without `.json`."""
+    manifests: dict[str, Any] = {}
+    for name in PROJECT_RUN_MANIFESTS:
+        path = folder / name
+        if path.is_file():
+            with contextlib.suppress(ValueError, OSError):
+                manifests[name.removesuffix(".json")] = json.loads(path.read_text())
+    return manifests
+
+
+def _experiment_row(
+    name: str, folder: Path, manifests: dict[str, Any]
+) -> dict[str, Any]:
+    """An experiment's short row: what an agent picks one by."""
+    training = manifests.get("training") or {}
+    identity = manifests.get("identity") or {}
+    final = training.get("final") or {}
+    return {
+        "experiment": name,
+        "where": str(folder),
+        "status": training.get("status"),
+        "iterations": training.get("iterations"),
+        "iterations_logged": training.get("iterations_logged"),
+        "final_reward": final.get("reward"),
+        "robot": identity.get("robot"),
+        "task": identity.get("task"),
+        "fit": identity.get("fit"),
+        "checkpoints": _checkpoints_in(folder),
+    }
+
+
 def _project_runs() -> list[dict[str, Any]]:
-    """The open project's runs, each with whichever manifests it holds."""
+    """The open project's experiments, one short row each."""
     runs = _project_runs_root()
     if runs is None or not runs.is_dir():
         return []
     found = []
     for folder in sorted(p for p in runs.iterdir() if p.is_dir()):
-        manifests = {}
-        for name in PROJECT_RUN_MANIFESTS:
-            path = folder / name
-            if path.is_file():
-                with contextlib.suppress(ValueError, OSError):
-                    manifests[name.removesuffix(".json")] = json.loads(path.read_text())
+        manifests = _run_manifests(folder)
         if manifests:
-            found.append({"run": folder.name, "where": str(folder), **manifests})
+            found.append(_experiment_row(folder.name, folder, manifests))
     return found
 
 
@@ -1339,60 +1706,108 @@ def _runs_root(runs_root: Path | None) -> Path:
 
 # Where a run keeps its per-episode rows: beside the manifest (the
 # imitation chain) or under `verdict/` (a walk's evaluation, `records-*.jsonl`).
-EVAL_RECORD_GLOBS = ("*/*episodes.jsonl", "*/verdict/records*.jsonl")
+EPISODE_RECORD_GLOB = "*/*episodes.jsonl"
 
 
-def _eval_records_under(root: Path, where: str | None = None) -> list[dict[str, Any]]:
+def _eval_records_under(root: Path) -> list[dict[str, Any]]:
+    """Episode-record files written outside a project (a manipulation
+    chain's runs): each named by its run folder, which is what
+    describe_evaluation takes for them."""
     found = []
-    for pattern in EVAL_RECORD_GLOBS:
-        for path in sorted(root.glob(pattern)):
-            run = path.relative_to(root).parts[0]
-            entry = {
-                "run": run,
+    for path in sorted(root.glob(EPISODE_RECORD_GLOB)):
+        found.append(
+            {
+                "evaluation": path.relative_to(root).parts[0],
                 "file": path.name,
                 "records": sum(1 for line in path.read_text().splitlines() if line),
             }
-            if where is not None:
-                entry["where"] = str(path.parent)
-            found.append(entry)
+        )
     return found
+
+
+def _project_evaluations() -> list[Any]:
+    """The open project's evaluations as its index holds them; [] with no
+    project open. Read only: the evaluation job registers its result as
+    it ends (`trainnr_mjlab.walk_verdict`), and describe_project(refresh)
+    or an export brings in one judged elsewhere."""
+    from trainnr.project import index_project  # noqa: PLC0415
+
+    project = _project_if_any()
+    if project is None:
+        return []
+    return [a for a in index_project(project).artifacts if a.kind == "certificate"]
 
 
 def list_evaluations(runs_root: Path | None = None) -> list[dict[str, Any]]:
-    """Every episode-record file: under `trainnr/runs/` (or `runs_root`) —
-    the JSONL the evaluation layer writes — and, when a project is open and
-    no root was named, under the project's own `runs/`, where a walk's
-    evaluation keeps its rows in `verdict/` (stranger test 2026-10-03)."""
-    root = _runs_root(runs_root)
-    found = _eval_records_under(root) if root.is_dir() else []
+    """Every evaluation, each named by `evaluation`, the value
+    describe_evaluation and export_deployment take: the open project's by
+    their stamp (`name@hash`), with the policy and run they judged and
+    the rate; then any episode-record files under `trainnr/runs/` (or
+    `runs_root`) by their run folder. One name per evaluation, copied from
+    one tool into the next: an agent once passed a run folder where a
+    stamp was wanted and the gate judged nothing (2026-10-04)."""
+    from trainnr.project.index import HEADLINE_KEY  # noqa: PLC0415
+
+    found: list[dict[str, Any]] = []
     if runs_root is None:
-        project_runs = _project_runs_root()
-        if project_runs is not None and project_runs.is_dir():
-            found.extend(_eval_records_under(project_runs, where="project"))
+        for art in _project_evaluations():
+            found.append(
+                {
+                    "evaluation": art.stamp,
+                    "policy": art.cites.get("policy"),
+                    "run": art.cites.get("run"),
+                    **{k: v for k, v in art.summary.items() if k != HEADLINE_KEY},
+                }
+            )
+    root = _runs_root(runs_root)
+    if root.is_dir():
+        found.extend(_eval_records_under(root))
     return found
+
+
+def _describe_certificate(art: Any) -> dict[str, Any]:
+    """A project evaluation: its certificate (rate, interval, funnel,
+    protocol, versions) and each trial's verdict from its records."""
+    from trainnr.project import current_project  # noqa: PLC0415
+    from trainnr.project.kinds import CERTIFICATE_FILE  # noqa: PLC0415
+
+    folder = current_project().root / art.path
+    detail: dict[str, Any] = {
+        "evaluation": art.stamp,
+        **json.loads((folder / CERTIFICATE_FILE).read_text(encoding="utf-8")),
+    }
+    detail["episodes"] = [
+        {key: row.get(key) for key in ("trial", "success", "steps")}
+        for path in sorted(folder.glob("records*.jsonl"))
+        for row in (json.loads(line) for line in path.read_text().splitlines() if line)
+    ]
+    return detail
 
 
 def describe_evaluation(
     evaluation: str, runs_root: Path | None = None
 ) -> dict[str, Any]:
-    """One evaluation's episode records, folded the way the evaluation is:
-    trials, successes, the milestone funnel, and every trial's verdict —
-    through `trainnr.evaluate.records`, never a private re-parse.
-    `evaluation` is the run folder holding the records (`list_evaluations`
-    names it as `run`)."""
-    run = evaluation
+    """One evaluation, named as `list_evaluations` names it: a project
+    evaluation by its stamp (its certificate and every trial's verdict),
+    or episode records outside a project by their run folder (folded
+    through `trainnr.evaluate.records`: trials, successes, the milestone
+    funnel)."""
     from trainnr.evaluate.records import (  # noqa: PLC0415 - keeps import cheap
         funnel,
         milestones,
         read_records,
     )
 
+    if runs_root is None:
+        for art in _project_evaluations():
+            if art.stamp == evaluation:
+                return _describe_certificate(art)
     root = _runs_root(runs_root)
-    paths = sorted((root / run).glob("*episodes.jsonl"))
-    if not paths:
-        known = [entry["run"] for entry in list_evaluations(runs_root)]
-        raise KeyError(f"no episode records under {run!r}; runs with records: {known}")
-    detail: dict[str, Any] = {"run": run, "files": {}}
+    paths = sorted((root / evaluation).glob(EPISODE_RECORD_GLOB.split("/", 1)[1]))
+    if "/" in evaluation or not paths:
+        known = [entry["evaluation"] for entry in list_evaluations(runs_root)]
+        raise KeyError(f"no evaluation {evaluation!r}; list_evaluations names {known}")
+    detail: dict[str, Any] = {"evaluation": evaluation, "files": {}}
     for path in paths:
         records = read_records(path)
         detail["files"][path.name] = {
@@ -1583,6 +1998,11 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
         return refusal(
             f"a capture named {held.name!r} is already listening on "
             f"{held.state.source} for this project; stop_capture first"
+        )
+    if window_s is not None and not 0 < float(window_s) <= MAX_CAPTURE_WINDOW_S:
+        return refusal(
+            f"window_s is between 0 and {MAX_CAPTURE_WINDOW_S:g} seconds, "
+            f"got {window_s}"
         )
     given = {"port": port, "network": network, "basis": basis}
     options = {k: v for k, v in given.items() if v is not None}
@@ -2012,7 +2432,7 @@ def control_simulator(  # noqa: PLR0913, PLR0917
     keyframe: str | None = None,
     speed: float | None = None,
     manual: bool | None = None,
-    follow: str | None = None,
+    follow: Annotated[str | None, arg("a world to follow: w0, w1, …")] = None,
 ) -> dict[str, Any]:
     """MuJoCo simulate's Simulation section on the running scene: `play`
     (True runs, False pauses), `step` n physics steps (pauses and takes
@@ -2042,7 +2462,9 @@ def set_simulator_input(
     value: float | None = None,
     actuator: str | None = None,
     joint: str | None = None,
-    command: str | None = None,
+    command: Annotated[
+        str | None, arg("a walk's twist: vx, vy (m/s) or wz (rad/s); own hands it back")
+    ] = None,
 ) -> dict[str, Any] | Refusal:
     """One slider of simulate's Control or Joint panel: an actuator's
     control value by name, or a hinge/slide joint's position by name
@@ -2350,6 +2772,56 @@ def identify_system(
     }
 
 
+def _recording_versions(recording: str, recording_dir: Path) -> set[str]:
+    """Every version a fit may cite a recording by: the project's, the
+    folder's own content stamp (legged fits), and each raw log's (the
+    drivetrain fit stamps the `.wire` it read)."""
+    versions = {recording, stamp(recording_dir.name, recording_dir)}
+    versions |= {stamp(p.stem, p) for p in recording_dir.rglob("*.wire")}
+    return versions
+
+
+def _refuse_meaningless_drift(
+    project: Any,
+    bundle_dir: Path,
+    recording: str,
+    against: str | None,
+    recording_dir: Path | None = None,
+) -> None:
+    """Refuse a drift check that can only say "within": the recording a
+    reference fit was identified from, judged against that fit, shifts by
+    exactly zero (an agent ran it and the Studio showed "within interval",
+    2026-10-04). And an `against` that names nothing in the project was
+    written into the record unchecked (tool review)."""
+    from trainnr.robot.fit_record import load_fit_records  # noqa: PLC0415
+
+    sources = {r.recording for r in load_fit_records(bundle_dir)}
+    cited_as = (
+        {recording}
+        if recording_dir is None
+        else _recording_versions(recording, recording_dir)
+    )
+    if sources & cited_as:
+        raise ValueError(
+            f"{recording} is the recording the robot's fit was identified from; "
+            "drift needs fresh telemetry from the robot (record it, or ingest "
+            "another public log) to compare against the fit"
+        )
+    if against:
+        from trainnr.project import index_project  # noqa: PLC0415
+
+        known = {
+            a.stamp.split("@")[0]: a.stamp
+            for a in index_project(project).artifacts
+            if a.kind in ("deploy", "certificate")
+        }
+        if against not in known and against not in known.values():
+            raise ValueError(
+                f"`against` names no deployment or evaluation in this project: "
+                f"{against!r}; it has {sorted(known)}"
+            )
+
+
 def check_drift(
     robot: str,
     recording: str,
@@ -2385,6 +2857,9 @@ def check_drift(
         robot, recording = bundle.stamp, rec.stamp
         bundle_dir = project.root / bundle.path
         recording_dir = project.root / rec.path
+        _refuse_meaningless_drift(
+            project, bundle_dir, recording, against, recording_dir
+        )
         check_name = plain_name(
             name if name else f"{recording.split('@', 1)[0]}-check", "check name"
         )
@@ -2519,7 +2994,6 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
     steps: int = 30_000,
     scale: float | None = None,
     floor_friction: list[float] | None = None,
-    brush: str | None = None,
     splatter: str = DEFAULT_SPLATTER,
 ) -> JobHandle | Refusal:
     """Capture a scene from a phone video (or a folder of still frames):
@@ -2535,9 +3009,12 @@ def capture_scene(  # noqa: PLR0913, PLR0917 - the capture's knobs, each named
     any OS); auto takes gsplat where it answers. A job of minutes to an
     hour; streams into the Studio when one is open. The
     scene appears under the project's scenes when the chain completes.
-    Refused by name: a missing tool (colmap, ffmpeg, Brush's binary by
-    path or on PATH as brush_app), a bad name, a source that is neither
-    a file nor a folder."""
+    Refused by name: a missing tool (colmap, ffmpeg, Brush's binary on
+    PATH as brush_app or at `$TRAINNR_BRUSH`), a bad name, a source that
+    is neither a file nor a folder. Brush's location is the user's
+    setting, never a tool argument: an argument naming any file ran it
+    as a program (security review, 2026-10-04)."""
+    brush = os.environ.get(BRUSH_ENV) or None
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
@@ -2637,9 +3114,11 @@ def _any_project_artifact(stamp: str) -> Any:
 
 def describe_identification(robot: str) -> dict[str, Any] | Refusal:
     """A robot's system identification as recorded: every fit record with
-    its parameters, intervals and verdicts, the anchor statements, and the
+    its own stamp (`fit`, what training takes), its parameters, intervals
+    and verdicts, the anchor statements, and the
     cross-run spread verdict when two or more records exist."""
     from trainnr.robot.fit_record import (  # noqa: PLC0415
+        fit_stamp,
         load_fit_records,
         spread_verdicts,
     )
@@ -2654,6 +3133,7 @@ def describe_identification(robot: str) -> dict[str, Any] | Refusal:
         "robot": robot,
         "records": [
             {
+                "fit": fit_stamp(r),  # what train_walk's `fit` takes
                 "recording": r.recording,
                 "created_utc": r.created_utc,
                 "confidence": r.confidence,
@@ -2687,21 +3167,24 @@ def describe_identification(robot: str) -> dict[str, Any] | Refusal:
 
 
 def create_project_dir(
-    path: str, name: str, description: str = "", loop: str = ""
+    name: str, path: str | None = None, description: str = "", loop: str = ""
 ) -> dict[str, Any] | Refusal:
     """Make a project directory: the manifest and one folder per artifact
-    kind. A bare name or relative `path` lands in the projects home
-    (`$TRAINNR_PROJECTS`, else ~/trainnr/projects); an absolute one is
-    used as given. The new project becomes the current one. `loop` says
-    how its policy learns — `imitation` (from a dataset) or
-    `reinforcement` (from its own rollouts; the dataset stage is then
-    marked not needed) — or is left unset and read off the runs. Never
-    overwrites an existing project."""
+    kind. It lands in the projects home (`$TRAINNR_PROJECTS`, else
+    ~/trainnr/projects) under `path`, by default its `name`; a relative
+    `path` stays inside the home; an absolute one is used as given. The
+    new project becomes the current one. `loop` says how its policy
+    learns — `imitation` (from a dataset) or `reinforcement` (from its
+    own rollouts; the dataset stage is then marked not needed) — or is
+    left unset and read off the runs. Never overwrites a project."""
     from trainnr.project import create_project, remember_project  # noqa: PLC0415
     from trainnr.project.locate import projects_home  # noqa: PLC0415
 
-    target = Path(path).expanduser()
-    root = target if target.is_absolute() else projects_home() / target
+    target = Path(path if path is not None else name).expanduser()
+    home = projects_home().resolve()
+    root = target if target.is_absolute() else home / target
+    if not target.is_absolute() and not root.resolve().is_relative_to(home):
+        return refusal(f"path {path!r} leaves the projects home {home}")
     try:
         project = create_project(root, name, description, loop=loop)
     except (FileExistsError, ValueError) as why:
@@ -2736,6 +3219,7 @@ READ_ONLY_TOOLS = frozenset(
         "describe_capture",
         "describe_dataset",
         "describe_evaluation",
+        "describe_experiment",
         "describe_friction",
         "describe_identification",
         "describe_job",
@@ -2763,9 +3247,7 @@ READ_ONLY_TOOLS = frozenset(
         "read_studio_events",
     }
 )
-DESTRUCTIVE_TOOLS = frozenset(
-    {"cancel_job", "stop_deployment", "quit_studio", "stage_deployment"}
-)
+DESTRUCTIVE_TOOLS = frozenset({"cancel_job", "stop_deployment", "quit_studio"})
 # Failures a tool reports as a refusal with its own sentence: the caller
 # named something that is not there, or not allowed, or not valid.
 REFUSABLE = (FileNotFoundError, KeyError, ValueError, PermissionError)
@@ -2845,7 +3327,8 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
             "telemetry, identify its dynamics, declare and check a task, "
             "generate demonstrations, train, evaluate, export, gate, run "
             "pre-flight and check drift. list_ and describe_ tools read what exists; "
-            "long work returns a job handle (describe_job, cancel_job); the "
+            "long work returns a job handle (describe_job waits with wait_s; "
+            "cancel_job); the "
             "Studio tools drive the desktop app. A refused call says why."
         ),
     )
@@ -2869,7 +3352,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     )(describe_dataset)
     server.tool(description="The task registry: ids, names, rigs")(list_tasks)
     server.tool(
-        description="One environment built for real: its task spec and version"
+        description="One task: a task declared in the project (its family, "
+        "version, settings, check verdict, reward previews), else a registered "
+        "task built for real (spec and version)"
     )(describe_task)
     server.tool(description="The physics-engine registry")(list_engines)
 
@@ -2877,31 +3362,36 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     # tests, not for clients — a Path in the tool schema would only invite
     # an argument nobody should pass.
     def experiments() -> list[dict[str, Any]]:
-        """Training-run manifests under trainnr/runs/."""
+        """Every experiment, one short row each."""
         return list_experiments()
 
     server.tool(
         name="list_experiments",
-        description="Training-run manifests under trainnr/runs/",
+        description="Every experiment in the project, one row each: status, "
+        "iterations, final reward, robot, task, fit, checkpoints",
     )(experiments)
+    server.tool(
+        description="One experiment in full: its training curve, identity, "
+        "manifests, checkpoints and the evaluations citing it"
+    )(describe_experiment)
 
     def evaluations() -> list[dict[str, Any]]:
-        """Every episode-record file under trainnr/runs/."""
+        """Every evaluation, named as describe_evaluation takes it."""
         return list_evaluations()
 
     def evaluation_detail(evaluation: str) -> dict[str, Any]:
-        """One evaluation's records folded: successes, funnel, per-trial verdicts."""
+        """One evaluation: its rate, interval, funnel and per-trial verdicts."""
         return describe_evaluation(evaluation)
 
     server.tool(
         name="list_evaluations",
-        description="Every episode-record file under trainnr/runs/",
+        description="Every evaluation, each named by `evaluation` (a project's by "
+        "stamp), with the policy it judged and its success rate",
     )(evaluations)
     server.tool(
         name="describe_evaluation",
-        description="One evaluation's episode records (evaluation = the run folder "
-        "holding them, as list_evaluations names it): successes, milestone "
-        "funnel, trials",
+        description="One evaluation, named as list_evaluations names it: success "
+        "rate, confidence interval, funnel, every trial's verdict",
     )(evaluation_detail)
     server.tool(
         description="An actuator's friction-torque curves over velocity, from its model"
@@ -3003,9 +3493,12 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "there."
     )(stage_deployment)
     server.tool(
-        description="Test how a staged deployment tolerates scene error: it is gated "
-        "nine times with the terrain shifted ±20 mm per axis and turned "
-        "±5°, and the drop in success is reported. A job."
+        description=(
+            "Measure how an exported deployment tolerates scene error: it is staged "
+            "on `scene` nine times (nominal, ±20 mm per axis, ±5° turned) as new "
+            "deployments named <deployment>-on-<scene>…, each gated at one seed; "
+            "the drop in success is reported. A job."
+        ),
     )(assay_deployment)
     server.tool(
         description="Find which parameter breaks a policy first: a passing gate is "
@@ -3051,12 +3544,17 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "viewer recording and time cursor, presenter; with alive/heartbeat."
     )(describe_studio)
     server.tool(
-        description="Start the Studio window on the current project; waits for "
-        "its heartbeat. Refuses when one already runs."
+        description=(
+            "Open the Studio on the current project and wait for it to start. "
+            "Without a local build, the first launch downloads the prebuilt Studio "
+            "(about 72 MB) from the project's GitHub release. Refused when one "
+            "already runs."
+        ),
     )(launch_studio)
-    server.tool(description="Close the Studio (a quit command, then by pid).")(
-        quit_studio
-    )
+    server.tool(
+        description="Close the Studio window: it is asked to quit, then its "
+        "process is stopped."
+    )(quit_studio)
     server.tool(
         description="Navigate the Studio: a page by name, an artifact by version "
         "(its drawer opens), a table of it by title (the modal), or another project."
@@ -3083,13 +3581,19 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "and the card pictures follow, and the choice is kept."
     )(set_studio_theme)
     server.tool(
-        description="Run a scene in the MuJoCo viewport (a task's preview scene, or "
-        "walk:<robot> for the newest trained walk) and open the Live view; no scene "
-        "stops it. State reports viewport_fps."
+        description=(
+            "Play a scene live in the Studio's MuJoCo view (Simulator page): a "
+            "task preview (kitting, lift, duck), `walk` (the newest trained walk) "
+            "or `deploy:<deployment>` (drivable; add `:gate:<runtime>:<trial>` or "
+            "`:preflight:<segment>` to replay). No scene stops it."
+        ),
     )(run_simulation)
     server.tool(
-        description="simulate's Simulation section on the running scene: run/pause, "
-        "step n, reset (to a keyframe), speed, manual control; follow a world."
+        description=(
+            "Control the simulation running in the Studio: run or pause, step n, "
+            "reset to a keyframe, set the speed, drive it by hand, follow one "
+            "world."
+        ),
     )(control_simulator)
     server.tool(
         description="One Control or Joint slider by name: an actuator's control value "
@@ -3162,9 +3666,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train a walk policy with trainnr-mjlab on a declared walk task "
-        "or a registered robot. agent=smoke runs in minutes; agent=g3 is "
-        "the full walk-training recipe (hours on a GPU). Job handle."
+        description="Train a walk policy (a declared task, or robot go1/go2/"
+        "microduck). recipe=smoke checks the stack in minutes and saves nothing; "
+        "recipe=full trains (8000 iterations unless set, hours on a GPU) and "
+        "saves experiment `name`, never over an existing one."
     )(train_walk)
     server.tool(
         description="Evaluate a walk policy: paired episodes, exact confidence "
@@ -3172,9 +3677,11 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "project's one declared walk. Job handle."
     )(evaluate_walk)
     server.tool(
-        description="Open a checkpoint of an experiment in mjlab's own viewer "
-        "(viser in the browser, or native), the same rollout streamed into the "
-        "Studio's Live view. Job handle; the viewer lives until closed."
+        description=(
+            "Open a checkpoint of an experiment in mjlab's own viewer (viser in the "
+            "browser on this machine, or native), the same rollout streamed into "
+            "the Studio's Simulator page. A job; the viewer lives until closed."
+        ),
     )(play_walk)
     server.tool(
         description="See the reward before training: roll the declared walk for "
@@ -3197,16 +3704,35 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "loads; the reply lists the collision geoms, sites and trunk a "
         "trainer needs."
     )(onboard_robot)
-    server.tool(description="A job's state and log tail")(actions.describe_job)
-    server.tool(description="SIGTERM a job's process group")(actions.cancel_job)
+    server.tool(
+        description="A job's state and log tail; `wait_s` (up to 300) waits for "
+        "a running job to end first"
+    )(actions.describe_job)
+    server.tool(
+        description="Stop a running job and every process it started; refused "
+        "when it already ended"
+    )(actions.cancel_job)
     server.tool(description="Every job on record, newest first")(actions.list_jobs)
     if plugins:
         register_plugin_tools(server)
     for (
         registered
     ) in server._tool_manager.list_tools():  # the SDK keeps no public setter
+        forbid_unknown_arguments(registered)
         registered.parameters = trim_schema(registered.parameters)
     return server
+
+
+def forbid_unknown_arguments(registered: Any) -> None:
+    """Refuse a call that passes an argument the tool does not take. The
+    SDK's argument models ignore unknown keys, so a call written against an
+    old name (`overlay` for `settings`, `certificate` for `evaluation`)
+    would run with the defaults and say nothing. Each tool has its own
+    generated model, so setting it here touches no other tool."""
+    model = registered.fn_metadata.arg_model
+    model.model_config["extra"] = "forbid"
+    model.model_rebuild(force=True)
+    registered.parameters = model.model_json_schema(by_alias=True)
 
 
 def tool_api(server: Any) -> list[dict[str, Any]]:
@@ -3222,7 +3748,9 @@ def tool_api(server: Any) -> list[dict[str, Any]]:
                 "name": tool.name,
                 "description": tool.description,
                 "inputSchema": tool.input_schema,
-                "annotations": tool.annotations.model_dump(exclude_none=True)
+                "annotations": tool.annotations.model_dump(
+                    by_alias=True, exclude_none=True
+                )
                 if tool.annotations
                 else {},
             }
@@ -3235,7 +3763,7 @@ def tool_api(server: Any) -> list[dict[str, Any]]:
 def trim_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """An input schema without pydantic's noise, saying the same thing: no
     `title` keys (each repeats its property's name), an optional value as
-    its type with default null rather than an anyOf with null, and a
+    its type, not required, rather than an anyOf with null, and a
     nested object written in place rather than under $defs. What a call
     may pass is unchanged — the SDK validates arguments with the pydantic
     model, never with this text — and every tool's schema is read on every
@@ -3279,7 +3807,8 @@ def trim_schema(schema: dict[str, Any]) -> dict[str, Any]:
         ):
             (kept,) = [option for option in options if option != {"type": "null"}]
             out.pop("anyOf")
-            out = {**kept, **out}
+            out.pop("default", None)  # omitted means null; a null default
+            out = {**kept, **out}  # would not validate against the kept type
         return out
 
     try:

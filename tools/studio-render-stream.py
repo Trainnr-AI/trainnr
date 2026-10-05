@@ -7,7 +7,7 @@ commands back on stdin, so the viewer on the other end can rotate and zoom.
 Why this exists: `mujoco-rs` (the Rust FFI binding) needs a patched fork of
 `glutin` to render on macOS at all, plus its own separate MuJoCo 3.9.0 install
 — a real dependency-trust and version-skew cost this repo chose not to pay
-(docs/e2e-research/54 and the trainnr-studio build log record the attempt).
+(an attempt in 2026-08 stopped there).
 MuJoCo already renders correctly from Python everywhere this repo runs it
 (`camera-match.py`, `kitting_demos.py`, `show-aloha2.py`); this script is
 that same `mujoco.Renderer` in a loop, framed onto stdout so any process in
@@ -1837,6 +1837,7 @@ def duck_scene() -> "object":
     business in the task census. The XML's own kp=0.55 position servos
     hold it under the idle sinusoid."""
     import mujoco  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
 
     repo = pathlib.Path(__file__).resolve().parent.parent
     scene = mujoco.MjSpec()
@@ -1870,7 +1871,7 @@ def duck_scene() -> "object":
     # give the twenty back — an asset job, not a viewer one.
     count, spacing = FLOCK_COUNT, 0.4
     columns = 5
-    xml = str(repo / "robots" / "microduck" / "robot_walk.xml")
+    xml = str(model_file_of(repo / "robots" / "microduck"))
     for index in range(count):
         duck = mujoco.MjSpec.from_file(xml)
         trunk = duck.worldbody.first_body()

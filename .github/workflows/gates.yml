@@ -5,9 +5,14 @@
 # download is a schedule's problem instead of every contributor's.
 name: gates
 
-# Armed 2026-10-02 with the first public push: a protected main requires the fast-gates check, so
-# the gates run on pushes to main and on pull requests, the heavy extras
-# weekly, and the whole suite stays one click away.
+# The gates run on pushes to main and on every pull request, the heavy
+# extras and the advisory audit weekly, and the whole suite stays one
+# click away. The main ruleset (tools/github-setup.sh, applied once the
+# repository is public) requires four of these jobs by their ids:
+# fast-gates, sign-off, supply-chain and package. A required check is
+# matched by the job's name, which is its id while it has no `name:` key,
+# so those four keep their ids and get no `name:`; renaming one would
+# leave main waiting for a check that never reports.
 on:
   push:
     branches: ["main"]
@@ -23,17 +28,27 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch or pull request cancels the older run.
+# A newer push to the same pull request cancels the older run. Pushes to
+# main (each merge), the weekly run and a manual run never cancel each
+# other or a pull request's run: each event kind has its own group.
 concurrency:
-  group: gates-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: gates-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The tools CI runs by name are pinned, so a release of one cannot change
+# a gate's verdict overnight. ruff moves with the ruff-pre-commit rev in
+# .pre-commit-config.yaml (and tools/verify.sh, tools/hooks/pre-commit).
+env:
+  RUFF: ruff@0.16.10
+  ZIZMOR: zizmor@1.30.1
 
 jobs:
+  # Required by the main ruleset: keep the id, add no `name:`.
   sign-off:
     # Every commit in a pull request carries a Developer Certificate of
     # Origin sign-off (CONTRIBUTING.md); `git commit -s` adds it.
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -57,13 +72,17 @@ jobs:
             exit 1
           fi
 
+  # Required by the main ruleset: keep the id, add no `name:`.
   supply-chain:
-    # Every change and every week: one version everywhere, the workflows
-    # linted for security (zizmor), the locked Python sets audited for
-    # known vulnerabilities, and the Studio's Rust dependencies checked
-    # for advisories, licences and sources (cargo-deny). The documented
-    # exceptions live in tools/supply-chain.py and the crate's deny.toml.
-    runs-on: ubuntu-latest
+    # Every change and every week, and deterministic: the same commit
+    # gets the same verdict. One version everywhere, the workflows linted
+    # for security (zizmor, offline audits), and the Studio's crates
+    # checked for licences, bans and sources (cargo-deny against
+    # Cargo.lock). Known-vulnerability audits read databases that change
+    # without a commit here, so they run in `advisories` below, which is
+    # not required. The documented exceptions live in
+    # tools/supply-chain.py and the crate's deny.toml.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CARGO_DENY_VERSION: "0.20.2"
@@ -78,21 +97,50 @@ jobs:
       - name: one version everywhere
         run: python3 tools/release.py check
       - name: workflows linted for security
-        run: uvx zizmor --format plain .github/workflows
+        run: uvx "$ZIZMOR" --offline --format plain .github/workflows
       - name: cargo-deny, from its release, checksum-verified
         run: |
           name="cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl"
           curl -fsSL -o deny.tar.gz "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${name}.tar.gz"
           echo "${CARGO_DENY_SHA256}  deny.tar.gz" | sha256sum -c -
           tar xzf deny.tar.gz && sudo mv "${name}/cargo-deny" /usr/local/bin/
-      - name: dependencies audited (Python and Rust)
-        run: python3 tools/supply-chain.py
+      - name: the Studio's crates (licences, bans, sources)
+        run: python3 tools/supply-chain.py --policy
 
+  advisories:
+    # Not required. Known vulnerabilities in every locked Python set
+    # (pip-audit) and in the Studio's crates (cargo-deny advisories), on
+    # every change and weekly. An advisory published today fails this job
+    # on every open pull request at once, a stranger's typo fix included;
+    # it is a maintainer's to act on (a bump, or a written exception in
+    # tools/supply-chain.py or deny.toml), not a contributor's to unblock.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CARGO_DENY_VERSION: "0.20.2"
+      CARGO_DENY_SHA256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - name: cargo-deny, from its release, checksum-verified
+        run: |
+          name="cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o deny.tar.gz "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY_VERSION}/${name}.tar.gz"
+          echo "${CARGO_DENY_SHA256}  deny.tar.gz" | sha256sum -c -
+          tar xzf deny.tar.gz && sudo mv "${name}/cargo-deny" /usr/local/bin/
+      - name: known vulnerabilities (Python and Rust)
+        run: python3 tools/supply-chain.py --advisories
+
+  # Required by the main ruleset: keep the id, add no `name:`.
   package:
     # The wheels a user installs from PyPI: both build, and each carries
     # LICENSE and NOTICE (Apache-2.0 4(a) and (d)); trainnr-mjlab's NOTICE
     # is a copy of the root one and must stay identical.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -101,19 +149,8 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - name: the packages' NOTICE copy matches the root
-        run: cmp NOTICE trainnr-mjlab/NOTICE && cmp LICENSE trainnr/LICENSE && cmp LICENSE trainnr-mjlab/LICENSE
-      - name: build both wheels; LICENSE and NOTICE inside each
-        run: |
-          (cd trainnr && uv build --out-dir ../dist)
-          (cd trainnr-mjlab && uv build --out-dir ../dist)
-          for wheel in dist/*.whl; do
-            for f in LICENSE NOTICE; do
-              python3 -c "import sys, zipfile; names = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(n.endswith('.dist-info/licenses/' + sys.argv[2]) for n in names) else 1)" "$wheel" "$f" \
-                || { echo "::error::$wheel has no $f"; exit 1; }
-            done
-            echo "$wheel: LICENSE and NOTICE present"
-          done
+      - name: the copies match the root; both wheels build with LICENSE and NOTICE
+        run: python3 tools/check-package.py
 
   python-matrix:
     # The supported Python versions on Linux: the core suite with the sim
@@ -123,16 +160,18 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.11", "3.13"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       MUJOCO_GL: egl
+      # A stale lockfile fails the run instead of being re-resolved.
+      UV_LOCKED: 1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Mesa's EGL for MuJoCo's renderer
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgles2 libosmesa6
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgles2
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
@@ -145,6 +184,8 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: macos-14
     timeout-minutes: 30
+    env:
+      UV_LOCKED: 1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -156,9 +197,10 @@ jobs:
         run: uv run --python 3.12 --extra sim --extra mcp python -m unittest discover -s tests
         working-directory: trainnr
 
+  # Required by the main ruleset: keep the id, add no `name:`.
   fast-gates:
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     # The clippy gate greps for lines STARTING with "error". The cache
     # action exports CARGO_TERM_COLOR=always, whose ANSI prefix defeated
@@ -177,6 +219,8 @@ jobs:
       # public push to 2026-10-03). Line tables keep panics readable.
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
+      # `uv run` against a stale lockfile fails instead of re-resolving.
+      UV_LOCKED: 1
     steps:
       - name: free the runner's disk (preinstalled SDKs this workflow does not use)
         run: |
@@ -186,8 +230,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: system libraries (eframe's X11, xkbcommon and GTK links; libudev for the gamepad input; Mesa's EGL and software GL for MuJoCo's renderer)
-        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev libegl1 libgl1-mesa-dri libgles2 libosmesa6
+      - name: system libraries (eframe's X11, xkbcommon and GTK links; libudev for the gamepad input; Mesa's EGL for MuJoCo's renderer)
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev libegl1 libgl1-mesa-dri libgles2
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           components: rustfmt, clippy
@@ -230,16 +274,16 @@ jobs:
       # that import mujoco, gymnasium or scipy). The mjlab trainer and the
       # USD door pull torch and Newton, so they run weekly below.
       - name: ruff format (trainnr)
-        run: uvx ruff format --check .
+        run: uvx "$RUFF" format --check .
         working-directory: trainnr
       - name: ruff lint (trainnr)
-        run: uvx ruff check .
+        run: uvx "$RUFF" check .
         working-directory: trainnr
       - name: ruff format + lint (tools)
-        run: uvx ruff format --check ../tools && uvx ruff check ../tools
+        run: uvx "$RUFF" format --check ../tools && uvx "$RUFF" check ../tools
         working-directory: trainnr
       - name: ruff lint (trainnr-mjlab)
-        run: uvx ruff check src tests
+        run: uvx "$RUFF" check src tests
         working-directory: trainnr-mjlab
       - name: mypy (trainnr)
         run: uv run --extra sim --extra mcp --extra deploy --extra viz --with mypy==2.3.1 mypy trainnr
@@ -256,6 +300,10 @@ jobs:
           uv run --with coverage python -m coverage json -o coverage.json -q
           python3 ../tools/coverage-badge.py coverage.json badge-coverage.json
         working-directory: trainnr
+      # The environment the tests just installed from the lock, against the
+      # licence allow-list; the train, usd and mjlab sets run weekly below.
+      - name: licences of the installed Python packages (trainnr)
+        run: python3 tools/supply-chain.py --licences trainnr/.venv
       - name: keep the coverage badge's data
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -272,7 +320,7 @@ jobs:
     # reads. Pull requests never reach it.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: fast-gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write
@@ -297,11 +345,20 @@ jobs:
   extras-weekly:
     timeout-minutes: 120
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      # The full suite renders, as fast-gates' does: headless through
+      # Mesa's EGL, or MuJoCo aborts with no display.
+      MUJOCO_GL: egl
+      UV_LOCKED: 1
     steps:
+      - name: free the runner's disk (torch, twice, and Newton)
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Mesa's EGL for MuJoCo's renderer
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1-mesa-dri libgles2
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
@@ -330,3 +387,7 @@ jobs:
           TRAINNR_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee usd.log
           grep -x OK usd.log
         working-directory: trainnr
+      - name: licences of every installed Python set
+        # trainnr with the train extra (LeRobot), the usd environment and
+        # the mjlab trainer, each against the allow-list and its exceptions.
+        run: python3 tools/supply-chain.py --licences trainnr/.venv trainnr/.venv-usd trainnr-mjlab/.venv

@@ -71,7 +71,7 @@ class TheRecord(unittest.TestCase):
     def test_without_the_total_there_is_no_record(self) -> None:
         self.assertIsNone(record_from_scalars({"Loss/value": [(0, 1.0)]}))
 
-    @unittest.skipUnless(GO2_RUN.is_dir(), "the Go2 run lives on the box")
+    @unittest.skipUnless(GO2_RUN.is_dir(), "needs a local projects/go2-walk run")
     def test_the_go2_run_s_file_reads(self) -> None:
         path = events_file(GO2_RUN)
         assert path is not None

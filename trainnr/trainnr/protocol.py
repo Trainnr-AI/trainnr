@@ -94,7 +94,7 @@ class EpisodeProtocol:
     while the SO-101 tasks were tuned from theirs.
 
     `milestones` is an ORDERED chain of (name, predicate(states, sensors,
-    step) -> bool) — Arena's progress tracking (docs/30 §7 row 39),
+    step) -> bool) — Arena's progress tracking (docs/e2e-research/39),
     computed offline over the episode we already keep. Never a verdict:
     `success` alone decides; milestones say how far a failure got
     ("moved 4/4, lifted 0/4"), which a row of zeros hides.

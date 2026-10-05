@@ -1,5 +1,5 @@
 """The tool extension seam: an installed package registers tools on the
-same server through the `trainnr.mcp_tools` entry-point group (docs/83)."""
+same server through the `trainnr.mcp_tools` entry-point group."""
 
 import unittest
 from importlib.metadata import EntryPoint

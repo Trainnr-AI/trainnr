@@ -15,7 +15,7 @@ What this module decides and says so on the record:
   1.0, recorded as unrecorded, when not: the scene's metres are then
   COLMAP's units, and the record says so.
 - **The proxy.** No dense reconstruction runs here (COLMAP's needs
-  CUDA; the 2DGS chain waits on the box), so the proxy is the visible
+  CUDA; the 2DGS chain waits on a CUDA GPU), so the proxy is the visible
   surface itself: the visible centres' top surface on a 2 cm grid, the
   surface the stage's heightfield would sample anyway (Poisson was
   tried first and aborted the interpreter from C++ on a flat room). The
@@ -157,7 +157,7 @@ CAPTURE_NOTES = (
     "stands above it as voxels): the gap measures its fidelity to the splat, "
     "not to the world",
     "no dense reconstruction: COLMAP's patch-match needs CUDA and the 2DGS chain "
-    "waits on the box (docs/78 §3)",
+    "waits on a CUDA GPU (docs/78 §3)",
     "the colour is the zeroth harmonic; the higher harmonics stay in the file",
 )
 

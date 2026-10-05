@@ -1,4 +1,4 @@
-"""Sharding a press (docs/66 D4): the plan is disjoint and seeded, a
+"""Sharding a press: the plan is disjoint and seeded, a
 shard's record round-trips, the merge states an exact keep rate, and
 the datasheet says so instead of refusing."""
 

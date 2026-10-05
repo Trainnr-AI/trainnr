@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The train venv on a rented machine — the WSL box's own recipe (the log
-# 2026-08-26), verbatim: apt for the GL and rsync bits, uv, the lockfile's
+# The train venv on a rented machine — the WSL machine's own recipe
+# (2026-08-26), verbatim: apt for the GL and rsync bits, uv, the lockfile's
 # extras, then a torch/CUDA/mujoco check that names the card.
 #
 # Sent over ssh as `bash -s` by `tools/cloud-gpu.py bootstrap`, which

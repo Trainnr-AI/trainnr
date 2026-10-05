@@ -25,7 +25,9 @@ from trainnr.robots.adapter import detect, resolve
 from trainnr.robots.recording import BASES, Recording
 
 RAW_DIR = "raw"  # the source file as received, inside the recording
-NAME_FORBIDDEN = "@/"
+# What a recording name may not hold: a separator, the version mark, a
+# drive mark (`project.locate.NAME_FORBIDDEN`; imported there would cycle).
+NAME_FORBIDDEN = "@/\\:"
 
 
 def ingest(  # noqa: PLR0913 - a recording's identity: source, name, adapter, whose robot, why

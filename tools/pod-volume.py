@@ -4,7 +4,7 @@
     python3 tools/pod-volume.py --bucket <volume-id> ls trainnr/runs/campaign-1/
     python3 tools/pod-volume.py --bucket <volume-id> rm trainnr/runs/x/ [--yes]
 
-The door that works when the pod is stopped (the log 2026-09-02).
+The door that works when the pod is stopped (2026-09-02).
 Credentials: a RunPod S3 API key pair as AWS_ACCESS_KEY_ID /
 AWS_SECRET_ACCESS_KEY in the environment, or `--env-file .env` to
 lift exactly those two names out of a file (nothing else is read).

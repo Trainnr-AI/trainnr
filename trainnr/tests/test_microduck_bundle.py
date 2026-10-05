@@ -32,13 +32,19 @@ class MicroduckBundle(unittest.TestCase):
             float(model.body_subtreemass[1]), TOTAL_MASS_KG, places=3
         )
 
-    def test_every_referenced_mesh_travels_with_the_bundle(self) -> None:
+    def test_every_referenced_mesh_is_in_the_fetch_manifest(self) -> None:
+        """The meshes are not carried (their licence: Creative Commons
+        BY-SA-NC); each is fetched from Pollen Robotics by blob id."""
         import re  # noqa: PLC0415
+
+        from trainnr.bundles.fetch import fetch_manifest  # noqa: PLC0415
 
         referenced = set(re.findall(r'file="([^"]+)"', XML.read_text()))
         self.assertEqual(len(referenced), MESHES)
-        for name in referenced:
-            self.assertTrue((BUNDLE / "assets" / name).exists(), name)
+        manifest = fetch_manifest(BUNDLE)
+        self.assertIsNotNone(manifest)
+        listed = {rel.removeprefix("assets/") for rel in manifest["files"]}
+        self.assertEqual(listed, referenced)
 
     def test_the_baked_in_fit_signature_is_theirs(self) -> None:
         # The flagship's opening exhibit (63 §1, README), measured at

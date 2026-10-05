@@ -6,7 +6,7 @@ harness stepped the env once per action — every chunk played five
 times too fast — and a policy that reproduced its training actions to
 0.005 rad scored 0/80 (2026-09-04; hold 1: 0/3, hold 5: 3/3 on the
 same checkpoint). The walk learned the same lesson first (campaign 1,
-docs/07 2026-09-02): cadence is the dataset's, and the env must honour
+2026-09-02): cadence is the dataset's, and the env must honour
 it. This wrapper is that honour: one action in, `ticks` control steps
 out, reward summed, the episode's end respected.
 """

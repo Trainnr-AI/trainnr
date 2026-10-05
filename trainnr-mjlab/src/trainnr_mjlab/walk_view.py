@@ -43,6 +43,7 @@ from trainnr.project.kinds import IDENTITY_FILE, POLICY_FILE, TASK_FILE
 from trainnr.project.locate import POLICIES_FOLDER, RUNS_FOLDER, TASKS_FOLDER
 from trainnr.viz import SIM_TIMELINE
 
+from trainnr_mjlab.checkpoint_guard import require_tensor_only
 from trainnr_mjlab.walks import (
     DEFAULT_ROBOT,
     NO_CAMERAS,
@@ -447,6 +448,7 @@ def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
             flush=True,
         )
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
+    require_tensor_only(checkpoint)  # before any unpickling
     runner.load(
         str(checkpoint), load_cfg={"actor": True}, strict=True, map_location=device
     )

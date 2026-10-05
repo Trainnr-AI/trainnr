@@ -1,5 +1,5 @@
-"""Task acceptance: the referee reviews the agent (docs/30 §3.6 rule 1,
-docs/e2e-research/44 §3 item 2).
+"""Task acceptance: the referee reviews the agent
+(docs/e2e-research/44 §3 item 2).
 
 A task is accepted only when it is demonstrably a test: the scripted
 EXPERT — the choreographer that made the demonstrations — passes the

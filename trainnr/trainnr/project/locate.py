@@ -223,8 +223,25 @@ def remembered_project() -> Path | None:
     return root if root is not None and _is_project(root) else None
 
 
+# The project this process chose (create_project, use_project). It wins
+# over the projects home's `.current`, which only seeds a new process: two
+# agent sessions shared that file, so one session's use_project moved the
+# other's training and exports into its own project (review, 2026-10-04).
+_session_root: Path | None = None
+
+
+def session_project() -> Path | None:
+    """The project this process chose, while it is still a project."""
+    if _session_root is not None and _is_project(_session_root):
+        return _session_root
+    return None
+
+
 def remember_project(root: Path) -> None:
-    """Make `root` the current project for every later call that names none."""
+    """Make `root` the current project for every later call in this
+    process that names none, and the starting project of later sessions."""
+    global _session_root  # noqa: PLW0603 - the one per-process choice
+    _session_root = Path(root).absolute()
     home = projects_home()
     home.mkdir(parents=True, exist_ok=True)
     (home / CURRENT_FILE).write_text(
@@ -256,7 +273,8 @@ NO_PROJECT = (
 
 
 def current_project() -> Project:
-    """`$TRAINNR_PROJECT`, else the remembered project, else a checkout's
+    """`$TRAINNR_PROJECT`, else the project this process chose, else the
+    remembered one (the projects home's `.current`), else a checkout's
     `projects/default`; refused by name when none of them is a project."""
     override = os.environ.get(PROJECT_ENV, "").strip()
     if override:
@@ -271,9 +289,9 @@ def current_project() -> Project:
                 "a directory that is not a project; create it with `create_project`"
             )
         return Project(root).use()
-    remembered = remembered_project()
-    if remembered is not None:
-        return Project(remembered).use()
+    chosen = session_project() or remembered_project()
+    if chosen is not None:
+        return Project(chosen).use()
     in_checkout = checkout_projects()
     if in_checkout is not None and _is_project(in_checkout / DEFAULT_PROJECT):
         return Project(in_checkout / DEFAULT_PROJECT).use()
@@ -335,10 +353,27 @@ def list_projects(root: Path | None = None) -> list[Project]:
             if _is_project(path) and key not in seen:
                 seen.add(key)
                 found.append(Project(path))
+    in_checkout = checkout_projects()
+    sample = (in_checkout / SAMPLE_PROJECT).resolve() if in_checkout else None
+    if sample is not None and any(p.root.resolve() != sample for p in found):
+        # the checkout's empty sample is for a fresh clone with nothing
+        # else; beside the user's own it read as a broken project (review)
+        found = [p for p in found if p.root.resolve() != sample]
     return sorted(found, key=lambda p: p.root.name)
 
 
-NAME_FORBIDDEN = "/\\@"
+# The project a fresh checkout carries (`projects/sample`), listed only
+# when there is no other.
+SAMPLE_PROJECT = "sample"
+# A name becomes a folder on every OS: no separators (`/`, `\`), no
+# version mark (`@`), no drive mark (`:`; `D:evil` escapes on Windows), and
+# not one of Windows' reserved device names (security review, 2026-10-04).
+NAME_FORBIDDEN = "/\\@:"
+WINDOWS_DEVICE_NAMES = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{i}" for i in range(1, 10)}
+    | {f"lpt{i}" for i in range(1, 10)}
+)
 
 
 def plain_name(name: str, what: str = "name") -> str:
@@ -348,8 +383,10 @@ def plain_name(name: str, what: str = "name") -> str:
         not name
         or name != name.strip()
         or any(c in name for c in NAME_FORBIDDEN)
+        or any(not c.isprintable() for c in name)
         or name in (".", "..")
         or name.startswith(".")
+        or name.split(".", 1)[0].lower() in WINDOWS_DEVICE_NAMES
     ):
         raise ValueError(f"{what}: one plain word, no separators; got {name!r}")
     return name

@@ -43,6 +43,7 @@ from trainnr.deploy.manifest import (
 from trainnr.project.kinds import IDENTITY_FILE, stamp_run
 from trainnr.scenes.stage import FLOOR_GEOM
 
+from trainnr_mjlab.checkpoint_guard import require_tensor_only
 from trainnr_mjlab.envelope import COMMAND_TERM
 from trainnr_mjlab.walk_view import fit_of, require_same_identity
 from trainnr_mjlab.walks import ROBOT_ENTITY, DeployFacts
@@ -175,6 +176,7 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
     )
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
     _require_same_actor_width(checkpoint, env, device)
+    require_tensor_only(checkpoint)  # before any unpickling
     runner.load(
         str(checkpoint), load_cfg={"actor": True}, strict=True, map_location=device
     )
@@ -252,7 +254,7 @@ def trained_actor_width(checkpoint: Path, device: str) -> int | None:
     its first layer; None when the file is not rsl_rl's layout."""
     import torch  # noqa: PLC0415
 
-    state = torch.load(str(checkpoint), map_location=device, weights_only=False)
+    state = torch.load(str(checkpoint), map_location=device, weights_only=True)
     weight = (state.get("actor_state_dict") or {}).get(ACTOR_FIRST_LAYER)
     return None if weight is None else int(weight.shape[1])
 

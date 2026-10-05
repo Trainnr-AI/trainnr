@@ -1,7 +1,6 @@
 cff-version: 1.2.0
 message: >-
-  If you use trainnr, please cite the software; if you build on its
-  results, please cite the paper under preferred-citation.
+  If you use trainnr, please cite the software.
 type: software
 title: "trainnr: the end-to-end robotics platform, from real-to-sim through training to a gated deployment"
 abstract: >-
@@ -22,7 +21,6 @@ repository-code: "https://github.com/Trainnr-AI/trainnr"
 url: "https://trainnr.ai"
 license-url: "https://github.com/Trainnr-AI/trainnr/blob/main/LICENSE"
 version: 0.1.0
-date-released: "2026-10-02"
 keywords:
   - robotics
   - system identification
@@ -31,18 +29,3 @@ keywords:
   - reinforcement learning
   - MuJoCo
   - mjlab
-preferred-citation:
-  type: unpublished
-  title: >-
-    How Wide a Span, and What Does Identification Buy? Domain Randomization
-    Around Identified Actuator Models on Two Legged Robots
-  authors:
-    - family-names: Aggarwal
-      given-names: Prakhar
-      affiliation: Trainnr AI
-  year: 2026
-  month: 9
-  notes: >-
-    Draft v3 (2026-09-29), docs/paper/manuscript.md in the repository; every
-    number resolves to a record under docs/findings/.
-  url: "https://github.com/Trainnr-AI/trainnr/blob/main/docs/paper/manuscript.md"

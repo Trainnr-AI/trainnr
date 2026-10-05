@@ -899,7 +899,7 @@ def onboard_usd(
     return write_usd_bundle(source_path, name, destination, ImportSettings(**options))
 
 
-# -- the audit reader (docs/e2e-research/78 §1 item 2) ---------------------
+# -- the audit reader ----------------------------------------------------
 
 USD_JOINT_KINDS = {  # the prim type names UsdPhysics gives its joints
     "PhysicsRevoluteJoint": HINGE,

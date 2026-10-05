@@ -12,7 +12,7 @@ from tests._extras import needs_envs, needs_render
 SHORT_STEPS = 40  # four control ticks of the ALOHA protocol, enough to truncate
 SOURCE = "aloha2-transfer@testhash"
 SERVOS = 14
-# GPU rasterizers are not bit-exact frame to frame: on the WSL box's D3D12
+# GPU rasterizers are not bit-exact frame to frame: on the WSL machine's D3D12
 # path the same state renders with ±1 in ~20 of 307k pixels, and once in a
 # full suite run a pixel went to ±2 (llvmpipe is exact; measured 2026-08-26,
 # 30 frames). Physics pairing is exact; pixels pair to within the
@@ -247,7 +247,7 @@ class GymnasiumContract(unittest.TestCase):
             scale = drawn["joints.damping_scale"]
             self.assertTrue(np.allclose(env.model.dof_damping, nominal_damping * scale))
             gain = drawn["actuators.gain_scale"]
-            # BOTH kp terms, so the setpoint stays put (the log, the gain
+            # BOTH kp terms, so the setpoint stays put (2026-08-26: the gain
             # that was a setpoint).
             self.assertTrue(
                 np.allclose(env.model.actuator_gainprm[:, 0], nominal_gain * gain)

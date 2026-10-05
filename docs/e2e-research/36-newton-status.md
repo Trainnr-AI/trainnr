@@ -12,7 +12,7 @@ agent's report follows verbatim.*
 *Historical (2026-08-25). Superseded by the measured reads
 [47](47-newton-docs-review.md), [50](50-newton-delta-probe.md) and
 [51](51-solvermujoco-roundtrip.md), which ran Newton; kept because the paper
-cites it ([docs/paper/references.md](../paper/references.md)).*
+cites it (in the paper's references; the paper is in preparation).*
 
 ---
 

@@ -36,7 +36,10 @@ def entity_from_bundle(
     per rig today; the stamp covers every byte in `robot_dir`, so an
     edited mesh or MJCF changes the identity the caller records.
     """
+    from trainnr.bundles.fetch import ensure_fetched  # noqa: PLC0415
+
     robot_dir = Path(robot_dir)
+    ensure_fetched(robot_dir)  # meshes a bundle does not carry (its licence)
     model_path = robot_dir / model_file
     if not model_path.is_file():
         raise FileNotFoundError(

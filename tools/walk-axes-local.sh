@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# The per-axis mismatch matrices, run where the GPU is free (the WSL
-# box, 2026-09-05): the nine walk C1 checkpoints are tracked under
+# The per-axis mismatch matrices, run where the GPU is free (a local
+# GPU workstation, 2026-09-05): the nine walk C1 checkpoints are tracked under
 # docs/artifacts/walk-c1/<run>/train/ with their identities, so the
 # matrix script can run straight on the repo tree and the certificates
 # land beside the tracked ones, ready to commit. Then one fold per axis.
 #
-#   tools/walk-axes-on-box.sh [axes] [scales] [date]
-#   e.g. tools/walk-axes-on-box.sh "kt friction R" "0.7 0.8 0.9 1.1 1.2 1.3" 2026-09-05
+#   tools/walk-axes-local.sh [axes] [scales] [date]
+#   e.g. tools/walk-axes-local.sh "kt friction R" "0.7 0.8 0.9 1.1 1.2 1.3" 2026-09-05
 #
-# On the box, export the launch environment first (trainnr/wsl.env:
+# Under WSL2, export the launch environment first (trainnr/wsl.env:
 # MUJOCO_GL=egl, GALLIUM_DRIVER=d3d12, LD_LIBRARY_PATH for Warp).
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A fresh pod over the network volume, made ready in one line — the
-# steps a bare container lacks (2026-09-03/04, the log): the GL and
+# steps a bare container lacks (measured 2026-09-03/04): the GL and
 # rsync apt bits, and the uv-managed Python BOTH venvs symlink to
 # (`/root/.local/share/uv/python/cpython-<ver>`, the container disk a
 # migrated pod kept and a fresh one does not). Idempotent; verifies

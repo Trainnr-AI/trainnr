@@ -277,6 +277,27 @@ class TheWholePath(unittest.TestCase):
         rec_c = ingest(self.project, SWEEP_C, name="sweep-c")
         return identify_system(robot, rec_c["stamp"])["robot"]
 
+    def test_the_fits_own_recording_is_refused(self) -> None:
+        """Judged against the fit made from it, a recording shifts by zero:
+        "within" proves nothing (an agent ran it, 2026-10-04)."""
+        from trainnr.mcp_server import check_drift  # noqa: PLC0415
+
+        robot = self._identified()
+        source = next(
+            a.stamp
+            for a in index_project(self.project).by_kind(Kind.RECORDING)
+            if a.stamp.startswith("sweep-b@")
+        )
+        out = check_drift(robot, source)
+        self.assertEqual(out["status"], "refused", out)
+        self.assertIn("fresh telemetry", out["reason"])
+        nothing = ingest(
+            self.project, _worn(SWEEP_B, Path(self.tmp.name) / "w.wire", WEAR), name="w"
+        )
+        out = check_drift(robot, nothing["stamp"], against="no-such-deployment")
+        self.assertEqual(out["status"], "refused", out)
+        self.assertIn("names no deployment", out["reason"])
+
     def test_synthetic_wear_is_named_and_nothing_else(self) -> None:
         from trainnr.mcp_server import check_drift  # noqa: PLC0415
         from trainnr.project.details import _drift  # noqa: PLC0415

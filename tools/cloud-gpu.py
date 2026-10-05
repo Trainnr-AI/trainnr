@@ -17,7 +17,7 @@ the provider seam (`trainnr/cloud`). The first vendor is Runpod.
 The API key is read from the repo's `.env` (`RUNPOD_API_KEY`) into the
 environment and travels in one request header; this tool never prints
 it and `push` never ships it (`trainnr/cloud/transfer.py` names
-what leaves the box). Billing starts at `launch` and stops at
+what leaves this machine). Billing starts at `launch` and stops at
 `terminate` — `stop` keeps the disk and a smaller bill; nothing here
 terminates on your behalf.
 """
@@ -284,7 +284,7 @@ def run_remote(door: SshEndpoint, key: Path | None, script: str) -> None:
 
 def run_local(argv: Sequence[str]) -> None:
     if shutil.which(argv[0]) is None:
-        raise SystemExit(f"cloud-gpu: {argv[0]} is not installed on this box")
+        raise SystemExit(f"cloud-gpu: {argv[0]} is not installed on this machine")
     print("$", " ".join(argv), flush=True)
     completed = subprocess.run(argv, check=False)
     if completed.returncode:

@@ -4,6 +4,7 @@ script that returned still leaves the code the Studio reads."""
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -47,6 +48,82 @@ class TheRunner(unittest.TestCase):
                 "x",
             ],
         )
+
+
+class AJobInAnotherProject(unittest.TestCase):
+    """A job keeps running after use_project switches away; asked about
+    from the new project, the reply names the project that holds it
+    rather than "no job; known: []" (review, 2026-10-04)."""
+
+    def test_the_reply_names_the_owning_project(self) -> None:
+        projects = Path(tempfile.mkdtemp())
+        first = JobManager(projects / "qa")
+        handle = first.start("fake", [sys.executable, "-c", "pass"], projects)
+        first.join(WAIT_S)
+        second = JobManager(projects / "qb")
+        with self.assertRaisesRegex(KeyError, "belongs to project 'qa'; use_project"):
+            second.status(handle["job_id"])
+        with self.assertRaisesRegex(KeyError, r"no job 'nope'; known: \[\]"):
+            second.status("nope")
+
+
+class AFailedJobSaysWhy(unittest.TestCase):
+    """The traceback sat 100 lines above the tail and the agent guessed a
+    CUDA problem (a stranger's install, 2026-10-04); a failed job reports
+    its last exception line. The log read is the one beside the record."""
+
+    def test_the_last_exception_line_is_the_error(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        jobs = JobManager(root)
+        script = (
+            "import sys\n"
+            "print('starting')\n"
+            "try:\n"
+            "    import not_a_module_xyz\n"
+            "finally:\n"
+            "    print('\\n'.join(f'table row {i}' for i in range(100)))\n"
+        )
+        handle = jobs.start("fake", [sys.executable, "-c", script], root)
+        jobs.join(WAIT_S)
+        status = jobs.status(handle["job_id"])
+        self.assertTrue(status["state"].startswith("failed"), status["state"])
+        self.assertIn("ModuleNotFoundError", status["error"])
+        self.assertNotIn("ModuleNotFoundError", "\n".join(status["log_tail"]))
+
+    def test_a_record_naming_another_log_is_not_followed(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        secret = root / "secret.txt"
+        secret.write_text("do not show")
+        jobs = JobManager(root)
+        handle = jobs.start("fake", [sys.executable, "-c", "print('mine')"], root)
+        jobs.join(WAIT_S)
+        record = Path(handle["log"]).with_suffix(".json")
+        planted = json.loads(record.read_text())
+        planted["log"] = str(secret)
+        record.write_text(json.dumps(planted))
+        status = jobs.status(handle["job_id"])
+        self.assertNotIn("do not show", "\n".join(status["log_tail"]))
+        self.assertEqual(status["error"], "")
+
+
+class WaitingOnAJob(unittest.TestCase):
+    """An agent waits on a job through describe_job, not a shell loop: a
+    headless agent that could not wait ended its turn with training at
+    iteration 0 (2026-10-04)."""
+
+    def test_the_wait_returns_when_the_job_ends(self) -> None:
+        from trainnr.mcp_actions import Actions  # noqa: PLC0415
+
+        root = Path(tempfile.mkdtemp())
+        actions = Actions(JobManager(root), env_file=None)
+        handle = actions.jobs.start(
+            "fake", [sys.executable, "-c", "import time; time.sleep(1)"], root
+        )
+        self.assertEqual(actions.describe_job(handle["job_id"])["state"], "running")
+        started = time.monotonic()
+        status = actions.describe_job(handle["job_id"], wait_s=WAIT_S)
+        self.assertEqual(status["state"], "done")
+        self.assertLess(time.monotonic() - started, WAIT_S)
 
 
 class TheEnvironmentIsReadyBeforeTheJob(unittest.TestCase):

@@ -4,7 +4,7 @@
 #   student -> certify the student on 40 trials. Every stage's output
 #   lands in ONE log the Studio's cloud feed tails; the final line is a
 #   sentinel the feed turns into a card (a pod cannot stop itself
-#   without the API key we never ship - the log 2026-09-01).
+#   without the API key we never ship - 2026-09-01).
 #
 #   tools/campaign-distill.sh <run_root> <teacher.pt> [episodes] [steps] [worlds] [frame_every]
 #   e.g. /workspace/trainnr/runs/campaign-2 runs/microduck-walk/<stamp>/model_7999.pt 120 30000 48 1
@@ -13,7 +13,7 @@
 #   export | train | certify): a campaign parked after its export
 #   (2026-09-03) trains the next day from the dataset already on the
 #   volume. BLANK=1 adds the blanked-camera certificate after the sighted
-#   one (the log 2026-09-03, the plan's item 0).
+#   one (2026-09-03, the campaign plan's first control).
 #
 # frame_every is the dataset's cadence in control ticks AND the student's
 # stride at certificate time: they must be equal, and for this gait they
@@ -50,7 +50,7 @@ if [ "$from" != press ] && [ -d "$root/demos" ]; then
   echo "kept $kept/$((kept + failed)) episodes -> $root/demos (replayed from the batch on disk: $failed rows in failures.jsonl)"
 fi
 if at press; then
-cd "$repo/trainnr_mjlab"
+cd "$repo/trainnr-mjlab"
 .venv/bin/python -m trainnr_mjlab.walk_press "$repo/$teacher" --out "$root/demos" \
   --episodes "$episodes" --worlds "$worlds" --seed 3000 --frame-every "$frame_every" --no-studio
 
@@ -91,7 +91,7 @@ fi
 
 at certify
 say "certify the student (40 trials, cuda)"
-cd "$repo/trainnr_mjlab"
+cd "$repo/trainnr-mjlab"
 .venv/bin/python -m trainnr_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
   --device cuda:0 --student "$root/student/checkpoints/last/pretrained_model" \
   --horizon 2 --stride "$frame_every" --no-studio

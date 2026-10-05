@@ -11,7 +11,7 @@ which turned a 1 s scripted episode into a 460 s one on 2026-08-26.)
 
 The generator itself is `trainnr.collect.kitting_demos.generate_demos`
 (what it draws, keeps and writes is documented and tested there); this
-is its command line. The WSL box's train venv converts the batch to a
+is its command line. The WSL machine's train venv converts the batch to a
 LeRobot dataset for T5 training; this side stays torch-free.
 """
 
@@ -62,13 +62,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-studio",
         action="store_true",
-        help="do not stream this run to the Studio (docs/66 §0 streams by default)",
+        help="do not stream this run to the Studio (a run streams by default)",
     )
     parser.add_argument(
         "--shards",
         type=int,
         default=1,
-        help="press in N runs with disjoint ranges and seeds (docs/66 D4), merged",
+        help="press in N runs with disjoint ranges and seeds, merged",
     )
     parser.add_argument(
         "--parallel",

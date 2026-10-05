@@ -6,10 +6,13 @@
 # `.sha256` beside it; the installer refuses one that does not match.
 #
 # Runs when a maintainer pushes a tag `v*`, or by hand for an existing tag
-# (a pre-release such as v0.1.0-rc.1, pushed first). The release is
-# created as a draft with the CHANGELOG's notes for the version, and is
-# published by a maintainer once every platform's archive is attached;
-# nothing is published when any platform failed.
+# (a pre-release such as v0.1.0-rc.1, pushed first). The tag must name the
+# version the tree carries (`tools/release.py show`; an -rc.N suffix
+# rehearses that version). The release is created as a draft with the
+# CHANGELOG's notes for the version, each archive with a build-provenance
+# attestation, and is published by a maintainer once every platform's
+# archive is attached; nothing is published when any platform failed, and
+# a published release is never touched again (GOVERNANCE.md, Releasing).
 name: studio-release
 
 on:
@@ -30,10 +33,11 @@ concurrency:
 
 jobs:
   licenses:
-    # THIRD_PARTY_LICENSES.md, generated once on Linux by cargo-about
-    # (installed from its release, checksum-verified) and shipped in
-    # every platform's archive.
-    runs-on: ubuntu-latest
+    # First: the tag names the tree's version. Then THIRD_PARTY_LICENSES.md,
+    # generated once on Linux by cargo-about (installed from its release,
+    # checksum-verified), completed with the Apache NOTICE files and the
+    # embedded fonts, checked, and shipped in every platform's archive.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CARGO_ABOUT_VERSION: "0.9.2"
@@ -43,6 +47,19 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: the tag names the version in the tree
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          version=$(python3 tools/release.py show)
+          tagged="${TAG#v}"
+          # v0.1.0-rc.2 rehearses 0.1.0; a tree bumped to a pre-release
+          # (0.2.0-rc.1) is tagged with exactly that.
+          if [ "$tagged" != "$version" ] && [ "${tagged%-rc.*}" != "$version" ]; then
+            echo "::error::tag $TAG does not name the version in the tree ($version, tools/release.py show)"
+            exit 1
+          fi
+          python3 tools/release.py check
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
       - name: cargo-about, from its release
         run: |
@@ -51,8 +68,14 @@ jobs:
           echo "${CARGO_ABOUT_SHA256}  about.tar.gz" | sha256sum -c -
           tar xzf about.tar.gz && sudo mv "${name}/cargo-about" /usr/local/bin/
       - name: generate
-        run: cargo about generate about.hbs -o "$GITHUB_WORKSPACE/THIRD_PARTY_LICENSES.md"
+        run: cargo about generate --locked about.hbs -o "$GITHUB_WORKSPACE/THIRD_PARTY_LICENSES.md"
         working-directory: crates/trainnr-studio
+      # Apache-2.0 4(d): the NOTICE files of Apache Arrow, DataFusion and
+      # the other crates that ship one, and each embedded font's copyright.
+      - name: NOTICE files and embedded fonts
+        run: python3 tools/third-party-notices.py append THIRD_PARTY_LICENSES.md
+      - name: every required attribution present, no HTML escapes
+        run: python3 tools/third-party-notices.py check THIRD_PARTY_LICENSES.md
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: third-party-licenses
@@ -118,7 +141,12 @@ jobs:
             archive="$name.zip"
           else
             cp "$bin" "dist/$name/"
-            tar -C dist -czf "dist/$name.tar.gz" "$name"
+            # Owned by root (0:0) by number, not by the runner's account.
+            if [ "${{ runner.os }}" = "macOS" ]; then
+              tar -C dist --uid 0 --gid 0 --numeric-owner -czf "dist/$name.tar.gz" "$name"   # bsdtar
+            else
+              tar -C dist --owner=0 --group=0 --numeric-owner -czf "dist/$name.tar.gz" "$name"
+            fi
             archive="$name.tar.gz"
           fi
           cd dist
@@ -138,10 +166,12 @@ jobs:
     # leave that platform's users with a failing download.
     needs: build
     if: needs.build.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write   # create the draft release and attach the archives
+      contents: write       # create the draft release and attach the archives
+      id-token: write       # sign the build-provenance attestation (Sigstore)
+      attestations: write   # store the attestation with the repository
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
@@ -171,13 +201,34 @@ jobs:
                     "and its SHA-256 is beside it.")
           pathlib.Path("notes.md").write_text((body + "\n\n" if body else "") + footer + "\n")
           PY
+      # Provenance: each archive's SHA-256 signed with this workflow run's
+      # identity, verifiable with `gh attestation verify <archive> -R
+      # Trainnr-AI/trainnr`. GitHub offers attestations to public
+      # repositories (private ones need Enterprise Cloud), so a rehearsal
+      # while the repository is private skips this step.
+      - name: build provenance for each archive
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
       - name: attach to a draft release
         run: |
           ls -la dist
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            # A published release is final: its archives are what users
+            # have downloaded and checked against their SHA-256. Never
+            # replace them; a fix is a new version.
+            if [ "$draft" != "true" ]; then
+              echo "::error::release $TAG is already published; its archives are never replaced (cut a new version)"
+              exit 1
+            fi
+          else
             flags="--draft"
             case "$TAG" in *-*) flags="$flags --prerelease" ;; esac
             # --verify-tag: the tag is a maintainer's; Actions never creates one.
             gh release create "$TAG" --verify-tag $flags --title "trainnr $TAG" --notes-file notes.md
           fi
+          # A draft only: a re-run replaces the draft's own earlier upload.
           gh release upload "$TAG" dist/* --clobber

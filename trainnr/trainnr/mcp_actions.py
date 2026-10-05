@@ -1,4 +1,4 @@
-"""The MCP surface's act-locally tools — docs/64 §3 stage 1.
+"""The MCP surface's act-locally tools: each starts a job on this machine.
 
 Every door here is THIN: it spawns the CLI that already owns the work,
 through the venv that CLI documents, with output teed to a job log —
@@ -22,6 +22,7 @@ Environment shapes (each the wrapped tool's own documented launch):
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from trainnr.bundles.locate import robots_dir
 from trainnr.deploy.runtimes import DEFAULT_RUNTIME
 from trainnr.deploy.unitree_stage import REFERENCE_CACHE, REFERENCE_ENV
 from trainnr.mcp_jobs import (
+    STATE_RUNNING,
     UV_NO_SYNC,
     Cancelled,
     JobHandle,
@@ -42,6 +44,10 @@ from trainnr.paths import checkout, train_python, wsl_env_file
 # carries the package (`paths.checkout`). Not the robot library's parent:
 # `TRAINNR_ROBOTS_DIR` moves the library without moving the tools.
 REPO_ROOT = checkout()
+# describe_job's wait: one call blocks at most this long (a client's own
+# tool timeout is often minutes), polling the job's state this often.
+MAX_JOB_WAIT_S = 300.0
+JOB_WAIT_POLL_S = 2.0
 PIPELINE_DIR = REPO_ROOT / "trainnr"
 TRAINNR_MJLAB_DIR = REPO_ROOT / "trainnr-mjlab"
 TOOLS_DIR = REPO_ROOT / "tools"
@@ -73,6 +79,13 @@ def unitree_reference() -> Path:
 ENV_FILE: Path | None = wsl_env_file()
 
 
+# Every trainer job records into the Studio (Rerun, the `viz` extra). A
+# job's environment is built from its own launch line, and without the
+# extra a fresh install's first train_walk died on the recorder's import
+# after a 6 GB download (a stranger's install, 2026-10-04).
+TRAINER_EXTRAS = ("viz",)
+
+
 def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     argv = ["uv", "run", UV_NO_SYNC, "--project", str(project)]
     if env_file is not None:
@@ -80,6 +93,31 @@ def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     for extra in extras:
         argv += ["--extra", extra]
     return [*argv, "python"]
+
+
+def inside_project(value: str | None, *, default: str, what: str) -> str:
+    """A path a tool reads or writes, inside the current project: a bare
+    name lands in the project's `runs/`, a relative path is read from the
+    project's root, and anything that resolves outside the project is
+    refused by name, as is a call with no project selected. SECURITY.md
+    says tools act only inside the open project; `out`, `dataset` and
+    `checkpoint` once took any path the user could write (security
+    review, 2026-10-04)."""
+    from trainnr.project import current_project  # noqa: PLC0415
+    from trainnr.project.locate import RUNS_FOLDER  # noqa: PLC0415
+
+    root = current_project().root.resolve()
+    path = Path(value if value is not None else default).expanduser()
+    if not path.is_absolute():
+        path = root / RUNS_FOLDER / path if len(path.parts) == 1 else root / path
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError(
+            f"{what} {value!r} is outside the current project ({root}); "
+            "name it inside the project (import_experiment brings an "
+            "experiment in)"
+        )
+    return str(resolved)
 
 
 def project_output(name: str) -> str:
@@ -130,9 +168,9 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
 ) -> list[str]:
     """The one command line that trains a walk through trainnr_mjlab, for the
     door and for the acceptance smoke alike — with the launch environment
-    (`env_file`) the trainer needs on the box, so no caller can drop it."""
+    (`env_file`) the trainer needs on this machine, so no caller can drop it."""
     argv = [
-        *_uv(TRAINNR_MJLAB_DIR, env_file=env_file),
+        *_uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS, env_file=env_file),
         "-m",
         "trainnr_mjlab.walk_train",
     ]
@@ -211,7 +249,7 @@ class Actions:
             *self._uv(PIPELINE_DIR, "sim"),
             str(TOOLS_DIR / "kitting-demos.py"),
             str(episodes),
-            out if out is not None else project_output("kitting-demos"),
+            inside_project(out, default="kitting-demos", what="output"),
             "--seed",
             str(seed),
         ]
@@ -226,17 +264,17 @@ class Actions:
         out: str | None = None,
         shards: int = 1,
     ) -> JobHandle:
-        """The planner expert generates demonstrations (docs/66 D3) on a
+        """The planner expert generates demonstrations on a
         task from the registry (`list_tasks`): the planner reads each
         seated scene, writes the beats and executes them by chained IK;
         the success criterion keeps or discards. Streams to the Studio."""
+        default = "planner-demos-" + task.replace("/", "-")
         argv = [
             *self._uv(PIPELINE_DIR, "sim", "viz"),
             str(TOOLS_DIR / "planner-demos.py"),
             task,
+            inside_project(out, default=default, what="output"),
         ]
-        if out is not None:
-            argv.append(out)
         argv += ["--episodes", str(episodes), "--seed", str(seed)]
         argv += ["--dr-span", str(dr_span)]
         if shards > 1:
@@ -257,8 +295,8 @@ class Actions:
         argv = [
             *self._uv(PIPELINE_DIR, "sim", "mjx"),
             str(TOOLS_DIR / "press-multiply.py"),
-            dataset,
-            out,
+            inside_project(dataset, default=dataset, what="dataset"),
+            inside_project(out, default=out, what="output"),
             "--episodes",
             str(episodes),
             "--seed",
@@ -283,8 +321,12 @@ class Actions:
         lerobot-train (in-loop eval) → paired evaluation → the fold
         with intervals and funnels. `scale="smoke"` finishes in minutes
         on a laptop; `scale="cloud"` is the real recipe for a GPU."""
+        from trainnr.project import current_project  # noqa: PLC0415
+        from trainnr.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "chain name")
         argv = self._under_env([str(TRAIN_PYTHON), str(TOOLS_DIR / "e2e-smoke.py")])
-        argv += ["--name", name]
+        argv += ["--name", name, "--runs", str(current_project().runs)]
         argv += ["--scale", scale]
         if episodes is not None:
             argv += ["--episodes", str(episodes)]
@@ -321,7 +363,7 @@ class Actions:
         `list_task_families`); `project` is where the robot's bundle
         is searched first and where `log_dir` — the run's own folder —
         should live so the project's index sees it. `agent="smoke"` is
-        the box's 2-minute check; `agent="g3"` is the flagship recipe."""
+        the 2-minute check; `agent="g3"` is the flagship recipe."""
         argv = walk_train_argv(
             agent=agent,
             robot=require_walk_robot(robot),
@@ -360,11 +402,11 @@ class Actions:
         """The locomotion evaluation (C1's shape): seeded paired
         episodes, tracking error and fall counts with exact intervals,
         the run's versions on every row. With `student` (a LeRobot
-        checkpoint distilled from this teacher's data, docs/66 D2) the
+        checkpoint distilled from this teacher's data) the
         vision student is judged instead, through the policy bridge,
         seeing the same chase camera the data generation wrote."""
         argv = [
-            *self._uv(TRAINNR_MJLAB_DIR),
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
             "-m",
             "trainnr_mjlab.walk_verdict",
             checkpoint,
@@ -414,7 +456,7 @@ class Actions:
         browser viewer - the walk in play mode, streamed to the Studio at
         the same time by the recorder."""
         argv = [
-            *self._uv(TRAINNR_MJLAB_DIR),
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
             "-m",
             "trainnr_mjlab.walk_play",
             checkpoint,
@@ -445,7 +487,7 @@ class Actions:
         actor or the held posture, every term streamed to the Studio,
         a summary written beside the task."""
         argv = [
-            *self._uv(TRAINNR_MJLAB_DIR),
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
             "-m",
             "trainnr_mjlab.reward_preview",
             "--robot",
@@ -473,28 +515,36 @@ class Actions:
         *,
         robot: str | None = None,
         scene: str | None = None,
-        project: str | None = None,
         frame_size: tuple[int, int] | None = None,
     ) -> JobHandle:
-        """The RL teacher generates demonstrations (docs/66 D2): the walk
+        """The RL teacher generates demonstrations: the walk
         checkpoint (newest by default) rolls out in the batched env,
         each episode judged by the evaluation's criterion; keepers
         become a stamped DemoLayout batch with chase-camera frames,
         discards a failures.jsonl. On a captured `scene` (docs/78 E3)
         the rollouts stand on it and the frames are the head camera's
         picture of its splat. Export with export_batch."""
+        from trainnr.project import current_project  # noqa: PLC0415
+
         if robot is not None:
             robot = require_walk_robot(robot)
-        if out is None:
-            out = project_output("walk-demos")
-        argv = [*self._uv(TRAINNR_MJLAB_DIR), "-m", "trainnr_mjlab.walk_press"]
-        argv += [checkpoint] if checkpoint else ["--latest"]
+        project = str(current_project().root)
+        out = inside_project(out, default="walk-demos", what="output")
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.walk_press",
+        ]
+        argv += (
+            [inside_project(checkpoint, default=checkpoint, what="checkpoint")]
+            if checkpoint
+            else ["--latest"]
+        )
         argv += ["--out", out, "--episodes", str(episodes)]
         argv += ["--worlds", str(worlds), "--seed", str(seed)]
         if robot is not None:
             argv += ["--robot", robot]
-        if project is not None:
-            argv += ["--project", project]
+        argv += ["--project", project]
         if scene is not None:
             argv += ["--scene", scene]
         if frame_size is not None:
@@ -519,7 +569,7 @@ class Actions:
             "--name",
             name,
         ]
-        return self.jobs.start("accept-task", argv, PIPELINE_DIR)
+        return self.jobs.start("check-task", argv, PIPELINE_DIR)
 
     def export_deployment(  # noqa: PLR0913 - the export's own knobs, each named
         self,
@@ -539,7 +589,7 @@ class Actions:
 
         plain_name(name, "deployment name")
         argv = [
-            *self._uv(TRAINNR_MJLAB_DIR),
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
             "-m",
             "trainnr_mjlab.walk_export",
             checkpoint,
@@ -779,9 +829,16 @@ class Actions:
 
     # -- jobs ----------------------------------------------------------
 
-    def describe_job(self, job_id: str) -> JobStatus:
-        """A job's state and its log tail."""
-        return self.jobs.status(job_id)
+    def describe_job(self, job_id: str, wait_s: float = 0) -> JobStatus:
+        """A job's state and its log tail. `wait_s` waits up to that many
+        seconds (at most `MAX_JOB_WAIT_S`) for a running job to end first,
+        so an agent waits without a shell loop; call again to wait more."""
+        deadline = time.monotonic() + min(max(wait_s, 0.0), MAX_JOB_WAIT_S)
+        status = self.jobs.status(job_id)
+        while status["state"] == STATE_RUNNING and time.monotonic() < deadline:
+            time.sleep(min(JOB_WAIT_POLL_S, max(deadline - time.monotonic(), 0.0)))
+            status = self.jobs.status(job_id)
+        return status
 
     def cancel_job(self, job_id: str) -> Cancelled | Refusal:
         """SIGTERM a job's process group, while the job's own process runs."""

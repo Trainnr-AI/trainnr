@@ -48,6 +48,38 @@ ACCEPTED_WORD = "accepted"
 
 Onboarder = Callable[[Path, str, Path, Mapping[str, Any]], dict[str, Any]]
 
+# A robot's folder is its model and assets: past these it is something else
+# (a model saved in the home folder would copy all of it). Links that leave
+# the folder are refused: one copied a secret file in as a regular file
+# (security review, 2026-10-04).
+MODEL_FOLDER_MAX_BYTES = 2 * 1024**3
+MODEL_FOLDER_MAX_FILES = 20_000
+
+
+def copy_model_folder(source_dir: Path, destination: Path) -> None:
+    """Copy a robot model's folder, refusing by name a link that points
+    outside it and a folder past MODEL_FOLDER_MAX_BYTES or _FILES."""
+    source_dir = Path(source_dir)
+    root = source_dir.resolve()
+    total, count = 0, 0
+    for path in source_dir.rglob("*"):
+        if path.is_symlink() and not path.resolve().is_relative_to(root):
+            raise ValueError(
+                f"{path} links outside the model's folder ({path.resolve()}); "
+                "copy the file in, or move the model to its own folder"
+            )
+        if path.is_file():
+            count += 1
+            total += path.stat().st_size
+        if count > MODEL_FOLDER_MAX_FILES or total > MODEL_FOLDER_MAX_BYTES:
+            raise ValueError(
+                f"{source_dir} holds more than a robot model (over "
+                f"{MODEL_FOLDER_MAX_FILES} files or "
+                f"{MODEL_FOLDER_MAX_BYTES >> 30} GB); move the model and its "
+                "assets to their own folder"
+            )
+    shutil.copytree(source_dir, destination)
+
 
 @dataclass(frozen=True)
 class ModelSource:
@@ -191,7 +223,7 @@ def onboard_mjcf(
 
     del options  # an MJCF source takes none; `onboard` refused any
     model = mujoco.MjModel.from_xml_path(str(source_path))
-    shutil.copytree(source_path.parent, destination)
+    copy_model_folder(source_path.parent, destination)
     write_bundle_record(destination, name, source_path.name, model, source=source_path)
     return {
         "stamp": stamp(name, destination),

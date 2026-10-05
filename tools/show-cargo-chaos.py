@@ -6,7 +6,7 @@ This runs that cycle twice from starts that differ by 1 nm — a distance
 no physical rig could hold and no measurement could resolve — and draws
 both cube paths together. They separate by centimetres, which is why
 `test_pick_present_stow_cycle` asserting a 1 cm landing tolerance passed
-on the Mac and failed on the WSL box: it pinned a number the physics
+on the Mac and failed on the WSL machine: it pinned a number the physics
 does not pin. (The test now asserts the deck landing, not the pocket.)
 
     cd trainnr && uv run --env-file wsl.env --extra sim --extra viz \

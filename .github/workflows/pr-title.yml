@@ -1,0 +1,38 @@
+# A pull request's title follows Conventional Commits (CONTRIBUTING.md):
+# a squash merge makes it the commit's title on main. Not a required
+# check (the main ruleset leaves it out): a wrong title is fixed by
+# editing it, which runs this again. It is its own workflow, not a job in
+# gates.yml, because listening for `edited` there would re-run every
+# gate, and cancel the running ones, each time a title or description
+# changed.
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-title:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      # The title is a stranger's text: it reaches the shell through an
+      # environment variable, never interpolated into the script, and is
+      # not echoed back (a line starting with :: is a workflow command).
+      - name: "the title reads type(scope): summary"
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9][a-z0-9._/,-]*\))?!?: [^ ].*$'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "The title follows Conventional Commits."
+          else
+            echo "::error title=Pull request title::Use type(scope): summary, as in fix(studio): ... or docs: ... (CONTRIBUTING.md). Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert; a ! before the colon marks a breaking change."
+            exit 1
+          fi

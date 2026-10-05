@@ -21,7 +21,7 @@ and drift monitoring. Three parts, in layers that never import upward
 
 Also: `robots/` (actuator library, nominal robot bundles), `tools/` (gates
 and scripts, listed in `tools/README.md`), `docs/` (decisions, research,
-the findings records and the paper; index in `docs/README.md`, words in
+the findings records; index in `docs/README.md`, words in
 `docs/GLOSSARY.md`), `.claude/` and `.claude-plugin/` (the plugin).
 
 ## Set up
@@ -34,26 +34,28 @@ cd trainnr-mjlab && uv sync --extra viz && cd ..         # only for trainer work
 
 ## Before you say a change is done
 
-Run the gates for what you touched, and say which you ran:
+Run the gates for what you touched, and say which you ran. `tools/verify.sh`
+runs them all and is the one list: each `step` line in it is a command
+you can run on its own, from the repository root. Pick by what changed:
 
-```sh
-cd trainnr && uv run python -m unittest discover -s tests && cd ..   # Python tests
-uvx ruff check trainnr tools && uvx ruff format --check trainnr tools
-(cd trainnr && uv run --extra sim --extra mcp --extra deploy --extra viz --with mypy==2.3.1 mypy trainnr)
-python3 tools/check-docs.py && python3 tools/check-layers.py && python3 tools/check-numbers.py
-python3 tools/release.py check                                       # one version everywhere
-(cd crates/trainnr-studio && cargo fmt --check && cargo clippy -q --all-targets && cargo test -q)
-```
+- the Studio (`crates/`): its formatting, clippy and tests steps, and the
+  cargo-deny step if `Cargo.toml` or `Cargo.lock` changed;
+- Python (`trainnr/`, `tools/`): the ruff, mypy and unit-test steps of
+  that package (trainnr-mjlab's suite needs its 6 GB CUDA environment;
+  CI runs it when `trainnr-mjlab/` changes);
+- docs, records, versions, workflows, packaging: the docs, layers,
+  numbers, version, zizmor and wheel steps.
 
-`tools/verify.sh` runs all of it. If you changed an MCP tool's name,
-arguments or description, also run `python3 tools/api-snapshot.py`
-(regenerate with `--write` and show the diff) and the agent test,
-`python3 tools/agent-e2e.py --go2 <go2.xml>`, and paste its output.
+If you changed an MCP tool's name, arguments or description, also run
+`python3 tools/api-snapshot.py` (regenerate with `--write` and show the
+diff) and the agent test, `python3 tools/agent-e2e.py --go2 <go2.xml>`,
+and paste its output.
 
 ## Rules
 
-- **Commits:** sign off every commit (`git commit -s`, the DCO; CI rejects
-  unsigned ones). Conventional titles: `feat(studio): …`, `fix(mcp): …`.
+- **Commits:** sign off every commit (`git commit -s`, the [DCO](DCO); CI
+  rejects unsigned ones). Conventional titles: `feat(studio): …`,
+  `fix(mcp): …`; a check reads the pull request's title.
   One change per pull request. Never force-push `main`.
 - **Docs move with code.** A changed contract changes its document in the
   same pull request; a user-visible change gets a line under *Unreleased*
@@ -64,9 +66,11 @@ arguments or description, also run `python3 tools/api-snapshot.py`
 - **The MCP tools are public API** (GOVERNANCE.md): names are verb first,
   `list_*` returns many, `describe_*` one; an existing artifact argument
   is named by its kind (`robot`, `task`, `experiment`, `evaluation`,
-  `deployment`), `name` only names something new. Tool errors are refusals
-  with a reason, never bare exceptions. Mark read-only and destructive
-  tools with their annotations.
+  `deployment`), `name` only names something new. A tool that can say no
+  returns a `Refusal` with the reason; any other failure reaches the agent
+  as an error carrying its message, never the SDK's bare "Error executing
+  tool". An argument the tool does not take is refused, never ignored.
+  Mark read-only and destructive tools with their annotations.
 - **Identity:** every artifact is `name@hash`; a bundle's hash covers its
   files, so editing a bundle changes its stamp and the records citing it.
   Licence texts go in a bundle's `LICENSES/`, which the hash leaves out.
@@ -75,7 +79,7 @@ arguments or description, also run `python3 tools/api-snapshot.py`
   `$TRAINNR_HOME` (default `~/trainnr`), never inside the checkout or an
   installed package.
 - **Words:** use the field's vocabulary (evaluation, dataset, experiment,
-  deployment, gate). Not: door, press, referee, the box, viewport.
+  deployment, gate). Not: door, press, referee, the box.
 - **Never** read, print or commit a `.env` file or any key; never add a
   network call that runs without the user asking (SECURITY.md lists the
   ones that exist); never change the MuJoCo, mjlab or Warp pins without a

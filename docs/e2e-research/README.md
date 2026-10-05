@@ -6,7 +6,7 @@ and a status: **current** (the facts still hold), **snapshot** (true at the
 date; versions and release states have moved since), or **historical**
 (superseded; kept as the record, with a banner that names what replaced
 it). Numbers missing from the sequence are the maintainers' working
-notes, which are not part of this edition.
+notes, which are not in this repository.
 
 Start with [the loop](../76-the-loop.md), then
 [23 Simulation and real-to-sim](23-simulation-and-real2sim.md), then the
@@ -20,7 +20,7 @@ by the loop.
 
 | Doc | What it covers | Status |
 |---|---|---|
-| [19 The system end to end](19-the-system.md) | Four-tier safety architecture and latency budget for the archived rig; policy off-robot on a LAN GPU | historical; the rig lives in Trainnr-AI/rig |
+| [19 The system end to end](19-the-system.md) | Four-tier safety architecture and latency budget for the archived rig; policy off-robot on a LAN GPU | historical; the rig's code is in a private archive |
 | [20 Policies and models](20-policies-and-models.md) | Which policy to train on a cheap arm and one 24 GB GPU; third-party benchmarks against author claims | current |
 | [21 Data collection](21-data-collection.md) | Teleop methods with numbers, the 50-demo floor, corrections over demos, LeRobot dataset rules | current |
 | [22 Data generation](22-data-generation.md) | Curation and cheap augmentation beat generative data; vision-only world models cannot generate contact | current |

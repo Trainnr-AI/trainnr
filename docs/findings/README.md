@@ -2,8 +2,8 @@
 
 One JSON file per result, `docs/findings/<id>.json`. They are the source
 of the ledger page (`docs/68-findings.md`) and of the numbers gate on the
-paper: `tools/check-numbers.py` refuses any success ratio in
-`docs/paper/manuscript.md` that is not in a record. The records are
+README: `tools/check-numbers.py` refuses any success ratio the README
+quotes that is not in a record. The records are
 frozen evidence: a command line and a commit are kept exactly as they
 ran, under the names of the time.
 
@@ -48,7 +48,7 @@ stays).
 
 - `python3 tools/findings.py` renders `docs/68-findings.md`; `--check`
   fails when the page is stale (the commit hook's use).
-- `python3 tools/check-numbers.py` traces every success ratio in the
-  manuscript to a record.
+- `python3 tools/check-numbers.py` traces every success ratio the README
+  quotes to a record.
 - `python3 tools/finding-figure.py <id>` draws `docs/figures/<id>.{svg,pdf,png,csv}`
   from a record's outcome; the CSV beside each figure is the plotted data.

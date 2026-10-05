@@ -1,8 +1,8 @@
 # Simulation and real→sim: how reality gets into the simulator
 
 > **Archived code.** The Rust crates, firmware and emulator tools this page
-> describes moved with their history to [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)
-> on 2026-10-02; the paths below are relative to that repository.
+> describes moved with their history to a private archive on 2026-10-02;
+> the paths below are relative to that archive, not to this repository.
 
 Research date: **2026-08-08**. Question: what is the fastest, cheapest path
 from a real commercial site and a real low-cost mobile manipulator to a
@@ -151,7 +151,7 @@ start measured in months, not years.
 ### What the archived rig already had, and the one thing that blocked it
 
 *The crates named in this section (`hil-protocol`, `sim-core`, `wire.rs`)
-are the 2025–26 rig's, now in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig);
+are the 2025–26 rig's, now in a private archive;
 the platform's identification lives in `trainnr/trainnr/robot/`.*
 
 The audit finding: **the repo already logs the exact input/output pair system

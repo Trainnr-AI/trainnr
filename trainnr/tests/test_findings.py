@@ -207,8 +207,8 @@ class TheFigure(unittest.TestCase):
                 for fmt in ("svg", "pdf", "png", "csv"):
                     self.assertTrue((Path(tmp) / written[fmt]).exists(), fmt)
                 svg = (Path(tmp) / written["svg"]).read_text()
-                # The canvas is clean since 2026-09-08 (the paper's figures
-                # carry no repository footer); the provenance line still
+                # The canvas is clean since 2026-09-08 (the figures carry
+                # no repository footer); the provenance line still
                 # exists for the tools that print it, and names the commit
                 # and the instrument.
                 self.assertNotIn("abc1234", svg)

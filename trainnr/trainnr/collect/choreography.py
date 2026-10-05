@@ -4,13 +4,13 @@ by chained IK - and the planner that writes the beats itself.
 `Waypoint` and `Episode` are the kitting expert's machinery
 (tasks/aloha2/expert.py), moved here so a second rig can use them.
 `Gripper` is what a planner needs to know about one arm, resolved once
-on a compiled model. `PickPlacePlanner` is docs/66 §3's expert source
-2: given an object's pose and size and a goal, it writes the beats
-(hover, descend, close, lift, carry, lower, open, retract) that the
-kitting choreography had by hand - so a new rigid pick/place task is
-"scene + referee", no joint vectors, no per-task authoring. Demo
-generation reads privileged state freely; the trained policy never
-sees any of this.
+on a compiled model. `PickPlacePlanner` is the second expert source
+(after hand-written beats): given an object's pose and size and a goal,
+it writes the beats (hover, descend, close, lift, carry, lower, open,
+retract) that the kitting choreography had by hand - so a new rigid
+pick/place task is "scene + referee", no joint vectors, no per-task
+authoring. Demo generation reads privileged state freely; the trained
+policy never sees any of this.
 """
 
 from __future__ import annotations

@@ -113,7 +113,12 @@ class ActuatorBundles(unittest.TestCase):
 
 class Datasheets(unittest.TestCase):
     def test_a_batch_summary_folds_with_its_keep_rate_bound(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
+        from trainnr.project.locate import create_project  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as root:
+            made = create_project(Path(root), "p")
+            tmp = str(made.runs / "batch")
+            Path(tmp).mkdir(parents=True)
             episode = Path(tmp) / "episode_0000"
             episode.mkdir()
             (episode / "manifest.json").write_text(
@@ -133,7 +138,8 @@ class Datasheets(unittest.TestCase):
                     }
                 )
             )
-            sheet = describe_dataset(tmp)
+            with mock.patch.dict(os.environ, {PROJECT_ENV: str(made.root)}):
+                sheet = describe_dataset(tmp)
             self.assertEqual(sheet["episodes"], 1)
             self.assertEqual(sheet["keep_rate_bound"], 0.25)
             self.assertEqual(sheet["bases"], ("identified-interval",))
@@ -192,7 +198,7 @@ class Evals(unittest.TestCase):
     def test_the_real_smoke_records_fold_with_funnel_and_successes(self) -> None:
         # Against the committed smoke runs — the same records the panel
         # and the certificate read.
-        runs = {entry["run"] for entry in list_evaluations()}
+        runs = {entry["evaluation"] for entry in list_evaluations()}
         self.assertIn("smoke-eval", runs)
         detail = describe_evaluation("smoke-eval")
         data = detail["files"]["episodes.jsonl"]
@@ -238,7 +244,7 @@ class Runs(unittest.TestCase):
             legacy = root / "legacy"
             (legacy / "t9").mkdir(parents=True)
             (legacy / "t9" / "run.json").write_text(json.dumps({"name": "t9"}))
-            project = create_project_dir(str(root / "p"), "p")
+            project = create_project_dir("p", str(root / "p"))
             run = Path(project["root"]) / "runs" / "g3-150"
             run.mkdir(parents=True)
             (run / "training.json").write_text(json.dumps({"iterations": 150}))
@@ -254,25 +260,37 @@ class Runs(unittest.TestCase):
                 records = list_evaluations()
             # an explicit root is that root alone, as before
             self.assertEqual(
-                list_experiments(legacy), [{"run": "t9", "manifest": {"name": "t9"}}]
+                list_experiments(legacy),
+                [{"experiment": "t9", "manifest": {"name": "t9"}}],
             )
-            self.assertEqual([r["run"] for r in runs], ["t9", "g3-150"])
-            project_run = runs[1]
+            # the project's first, one short row each; curves stay out
+            self.assertEqual([r["experiment"] for r in runs], ["g3-150", "t9"])
+            project_run = runs[0]
             self.assertEqual(project_run["where"], str(run))
-            self.assertEqual(project_run["training"], {"iterations": 150})
-            self.assertEqual(project_run["identity"], {"robot": "go2@abc"})
-            self.assertNotIn("run", project_run.keys() - {"run"})
-            self.assertEqual(
-                records,
-                [
-                    {
-                        "run": "g3-150",
-                        "file": "records-cuda.jsonl",
-                        "records": 2,
-                        "where": str(run / "verdict"),
-                    }
-                ],
+            self.assertEqual(project_run["iterations"], 150)
+            self.assertEqual(project_run["robot"], "go2@abc")
+            self.assertNotIn("training", project_run)
+            with mock.patch.dict(os.environ, {PROJECT_ENV: project["root"]}):
+                full = mcp_server.describe_experiment("g3-150")
+                with self.assertRaisesRegex(KeyError, "it has"):
+                    mcp_server.describe_experiment("nope")
+            self.assertEqual(full["training"], {"iterations": 150})
+            # a long curve comes back sampled, its last row kept
+            curve = [[i, float(i)] for i in range(500)]
+            (run / "training.json").write_text(
+                json.dumps({"iterations": 500, "curve": curve})
             )
+            with mock.patch.dict(os.environ, {PROJECT_ENV: project["root"]}):
+                sampled = mcp_server.describe_experiment("g3-150")["training"]
+            self.assertEqual(len(sampled["curve"]), mcp_server.CURVE_ROWS)
+            self.assertEqual(sampled["curve"][-1], [499, 499.0])
+            self.assertEqual(sampled["curve_rows_recorded"], 500)
+            self.assertEqual(full["identity"], {"robot": "go2@abc"})
+            # A project's evaluations are listed from its index by stamp
+            # (test_tool_api.OneNamePerEvaluation); a verdict with no
+            # checkpoint beside it never becomes one, and the legacy root
+            # here holds no episode records (2026-10-04).
+            self.assertEqual(records, [])
 
     def test_without_a_project_the_runs_are_the_legacy_root_alone(self) -> None:
         nowhere = Path(tempfile.gettempdir()) / "trainnr-no-such-runs"
@@ -291,7 +309,7 @@ class Runs(unittest.TestCase):
             manifest = {"name": "t9", "steps": 300}
             (root / "t9-watch" / "run.json").write_text(json.dumps(manifest))
             runs = list_experiments(root)
-            self.assertEqual(runs, [{"run": "t9-watch", "manifest": manifest}])
+            self.assertEqual(runs, [{"experiment": "t9-watch", "manifest": manifest}])
 
     def test_a_missing_runs_directory_is_empty_not_an_error(self) -> None:
         self.assertEqual(list_experiments(Path("/nonexistent/runs")), [])
@@ -322,7 +340,7 @@ class TheCaptureDoors(unittest.TestCase):
         from trainnr.robots.capture import FAILED, IDLE, LISTENING  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
-            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            made = create_project_dir("p", str(Path(tmp) / "p"), "test")
             with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
                 self.assertEqual(describe_capture()["state"], IDLE)
                 self.assertEqual(stop_capture()["status"], "refused")
@@ -383,7 +401,7 @@ class TheProjectDoors(unittest.TestCase):
         from unittest import mock  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
-            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            made = create_project_dir("p", str(Path(tmp) / "p"), "test")
             self.assertEqual(made["name"], "p")
             with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
                 index = describe_project()
@@ -406,7 +424,7 @@ class TheProjectDoors(unittest.TestCase):
         repo = Path(__file__).resolve().parents[2]
         wire = repo / "recordings" / "chase-arm-2026-08-17.wire"
         with tempfile.TemporaryDirectory() as tmp:
-            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            made = create_project_dir("p", str(Path(tmp) / "p"), "test")
             with mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}):
                 ingest(current_project(), wire, name="chase")
                 index = describe_project()
@@ -624,7 +642,16 @@ class TheCheckpointCheck(unittest.TestCase):
             run.mkdir(parents=True)
             for n in (0, 50, 100, 149):
                 (run / f"model_{n}.pt").write_bytes(b"x")
-            self.assertIsNone(checkpoint_missing(str(run / "model_149.pt"), None))
+            self.assertIsNone(checkpoint_missing(str(run / "model_149.pt"), Path(tmp)))
+            # a checkpoint runs code on load: none from outside the project
+            self.assertIn("no project", checkpoint_missing("c0/model_149.pt", None))
+            with tempfile.TemporaryDirectory() as other:
+                outside = Path(other) / "model_1.pt"
+                outside.write_bytes(b"x")
+                self.assertIn(
+                    "outside the current project",
+                    checkpoint_missing(str(outside), Path(tmp)),
+                )
             self.assertIsNone(checkpoint_missing("c0/model_149.pt", Path(tmp)))
             why = checkpoint_missing("c0/model_150.pt", Path(tmp))
             self.assertIn("no checkpoint 'model_150.pt'", why)
@@ -645,7 +672,7 @@ class PublicLogLicences(unittest.TestCase):
         from trainnr.robots import public_logs  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
-            made = create_project_dir(str(Path(tmp) / "p"), "p", "test")
+            made = create_project_dir("p", str(Path(tmp) / "p"), "test")
             with (
                 mock.patch.dict(os.environ, {PROJECT_ENV: made["root"]}),
                 mock.patch.object(public_logs, "locate", return_value=None),

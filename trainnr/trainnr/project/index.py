@@ -503,6 +503,7 @@ def _headline(kind: Kind, s: dict[str, Any]) -> str:  # noqa: PLR0911 - one line
     if kind is Kind.DEPLOY:
         preflight = s.get(PREFLIGHT_SUMMARY_KEY)
         return _join(
+            f"evaluated {s[EVALUATED_KEY]}" if s.get(EVALUATED_KEY) else None,
             f"gate {s['gate']}" if s.get("gate") else None,
             f"pre-flight {preflight}" if preflight else None,
             f"on {s['scene']}" if s.get("scene") else None,
@@ -860,6 +861,10 @@ PICTURE_KEY = "picture"
 CLIFF_PICTURE = "the fall at the cliff, {knob} {level:g}"
 
 
+# A deployment card's first fact: the success rate of the evaluation it cites.
+EVALUATED_KEY = "evaluated"
+
+
 def _gate_card_word(record: dict[str, Any]) -> str:
     word = gate_word(record)
     return word if draw_of(record) == DRAW_NOW else OLD_DRAW.format(word=word)
@@ -870,11 +875,20 @@ def _summary_deploy(path: Path) -> dict[str, Any]:
     for), then the checkpoint and the control rate."""
     m = _read(path / DEPLOY_FILE)
     gates = read_gates(path)
-    out: dict[str, Any] = {
-        "gate": _gate_card_word(gates[DEFAULT_RUNTIME])
+    out: dict[str, Any] = {}
+    # How well the policy does, first: a gate passes when the export
+    # reproduces its evaluation, so "gate passed" alone read as ready for
+    # a robot on a policy that succeeded 0 of 8 times (2026-10-04).
+    rate = ((gates.get(DEFAULT_RUNTIME) or {}).get("verdict") or {}).get(
+        "certificate_rate"
+    )
+    if isinstance(rate, (int, float)):
+        out[EVALUATED_KEY] = f"{rate:.0%} success"
+    out["gate"] = (
+        _gate_card_word(gates[DEFAULT_RUNTIME])
         if DEFAULT_RUNTIME in gates
-        else "not run",
-    }
+        else "not run"
+    )
     for runtime in RUNTIMES:
         if runtime != DEFAULT_RUNTIME and runtime in gates:
             out[f"gate ({runtime.upper()})"] = _gate_card_word(gates[runtime])

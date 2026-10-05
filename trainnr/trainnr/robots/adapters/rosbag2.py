@@ -610,7 +610,7 @@ CREATE_MESSAGES = (
 # fields `ros2 bag info` reads — duration, start, message counts per
 # topic, the files. The first capture wrote only the start (review
 # 2026-09-24); written in full so the store is a bag to ROS tools too
-# (not run against ROS here: no ROS on the box).
+# (not run against ROS here: no ROS installed where it was written).
 METADATA_VERSION = 5
 METADATA_HEAD = (
     "rosbag2_bagfile_information:\n"

@@ -37,7 +37,7 @@ JOINTS = ("j1", "j2", "j3")
 
 # The same arm with a wrist ROLL before the pads: the closing plane (the
 # site's y, the pad-to-pad line) can then turn about the link, which is
-# the nullspace the kitting expert's grasp fell into (the log 2026-08-27).
+# the nullspace the kitting expert's grasp fell into (2026-08-27).
 WRIST_ARM = ARM.replace(
     '<joint name="j3" type="hinge" axis="0 1 0"/>',
     '<joint name="j3" type="hinge" axis="0 1 0"/>'

@@ -41,9 +41,9 @@ FRICTION_TIERS = ("m1", "m6")
 def log_evals() -> list[str]:
     origins = []
     for entry in list_evaluations():
-        run = entry["run"]
+        run = entry["evaluation"]
         detail = describe_evaluation(run)
-        for file, data in detail["files"].items():
+        for file, data in detail.get("files", {}).items():  # episode records only
             milestones = data["milestones"]
             for policy, counts in data["funnel"].items():
                 origin = f"evals/{run}/{policy}"

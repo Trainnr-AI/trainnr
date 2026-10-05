@@ -2,11 +2,14 @@
 
 <!-- mcp-name: io.github.trainnr-ai/trainnr -->
 
-The Python package behind the end-to-end robotics platform: identify a
-robot's dynamics from its telemetry, generate datasets, train policies,
-evaluate them with exact confidence intervals, gate and deploy them, and
-watch the deployment's telemetry for drift. Every step is an MCP tool
-and every result is a hash-stamped record the next step cites.
+The Python package of trainnr, **the physical AI platform for robot
+learning, run from your coding agent.** It identifies a robot's dynamics
+from its telemetry, generates datasets, trains policies, evaluates them
+with exact confidence intervals, exports and gates them for deployment in
+simulation, and checks new telemetry for drift. Every step is an MCP tool
+and every result is a hash-stamped record the next step cites. What runs
+today, and where, is in the repository's
+[README](../README.md#status).
 
 The premise: **the robot is an artifact, not an import.** A robot enters
 as a bundle `name@hash` (canonical MJCF or a USD asset read by Newton,
@@ -98,24 +101,34 @@ uv run python -m unittest discover -s tests   # the suite; heavy parts skip with
 uvx ruff format --check . && uvx ruff check . # the same gate pre-commit runs
 ```
 
-The base install is dependency-light on purpose: the statistics and bundle
-layers must be recomputable anywhere a report is audited. The stages that
-need more are extras:
+The base install is light on purpose: onnx and ONNX Runtime, which the
+deployment tools (export, gate, pre-flight) need with nothing else
+installed, and no more. The statistics and bundle layers are standard
+library only, so they are recomputable anywhere a report is audited. The
+stages that need more are extras (`pyproject.toml`,
+`[project.optional-dependencies]`):
 
 | Extra | What it brings |
 |---|---|
-| `sim` | MuJoCo (compatible-release pinned: the engine version is part of the identified artifact) and gymnasium |
+| `sim` | MuJoCo with its `sysid` module (compatible-release pinned to 3.11: the engine version is part of the identified artifact) and gymnasium |
 | `train` | LeRobot with dataset, SmolVLA and training support; Python 3.12 or newer |
 | `mjx` | MJX with the Warp implementation, the batched second engine; CPU anywhere, fast on NVIDIA |
-| `gpu` | MuJoCo Warp itself; NVIDIA only |
+| `gpu` | MuJoCo Warp itself; skipped on macOS |
 | `viz` | the Rerun SDK and TensorBoard's event reader (the presenter reads the file the trainer writes) |
 | `viz-query` | reading a saved viewer recording back as columns (Rerun with DataFusion) |
 | `scene` | Open3D and CoACD for captured scenes: the surface-to-proxy audit and collision proxies |
-| `deploy` | ONNX Runtime and onnx for the manifest-driven runtime and the gate |
+| `deploy` | nothing: kept as a name for commands that pass `--extra deploy`; onnx and ONNX Runtime are in the base install |
 | `mcp` | the MCP SDK and psutil (the Studio's process liveness) |
-| `remote` | openpi's websocket client, pinned to a commit; not on PyPI |
-| `dds` | cyclonedds, evdev and unitree_sdk2py for the DDS gate against Unitree's simulator |
 | `usd` | Newton's importers for USD assets |
+
+Two more sets are dependency groups, not extras: their sources are a git
+URL or not on PyPI, so they are not published with the package and are
+installed from a checkout only (`[dependency-groups]`):
+
+| Group | What it brings | Install |
+|---|---|---|
+| `remote` | openpi's websocket client, pinned to a commit | `uv sync --group remote` |
+| `dds` | cyclonedds, evdev and Unitree's `unitree_sdk2py`, for the DDS gate against Unitree's simulator (Linux) | `CYCLONEDDS_HOME=/usr/local uv sync --group dds` |
 
 `mjx` and `usd` conflict (Newton's release and our engine pin disagree on
 mujoco-warp); a USD import happens once, at onboarding, and the bundle it

@@ -27,7 +27,7 @@ stage_after() { # true when $from is at or before the named stage
 
 if stage_after press; then
 say "dagger round: student $student drives $episodes episodes, teacher labels"
-cd "$repo/trainnr_mjlab"
+cd "$repo/trainnr-mjlab"
 .venv/bin/python -m trainnr_mjlab.walk_press "$repo/$teacher" --out "$root/demos" \
   --episodes "$episodes" --worlds 48 --seed 5000 --frame-every 1 --no-studio \
   --student "$repo/$student" --horizon 2 --stride 1
@@ -62,7 +62,7 @@ say "train the next student on the union ($steps steps)"
 fi
 
 say "certify the new student (40 trials, seed 1000)"
-cd "$repo/trainnr_mjlab"
+cd "$repo/trainnr-mjlab"
 .venv/bin/python -m trainnr_mjlab.walk_verdict "$repo/$teacher" --trials 40 --seed 1000 \
   --device cuda:0 --student "$root/student/checkpoints/last/pretrained_model" \
   --horizon 2 --stride 1 --no-studio

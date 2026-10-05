@@ -2,7 +2,7 @@
  "id": "go2-legged-fit-synthetic-2026-09-24",
  "claim": "The legged-joints method recovers what it is given: on the Go2 model with a per-joint truth table of armature, damping and Coulomb friction, a 20 s chirp under a motor-side PD law at 250 Hz through a 2^14-count encoder and 0.05 N*m torque noise, the torque-balance fit returns every one of the 36 terms within 3 % of the truth with the base fixed in the air (36/36) and 33/36 with the base floating and shaken by an external wrench through the recorded base state; the estimator choices that made it so are measured on the way: a centred difference at the tick reads armature 10 % high (forward difference over the tick with mid-tick states: within 1 %), an unsmoothed encoder velocity reads armature 20 % low (40 ms Savitzky-Golay: within 1 %), a hard sign column under a low-pass reads friction 16-23 % low (tanh(dq/0.45): within 1 %), a 6 Hz balance bandwidth reads armature 9 % high (15 Hz: within 3 %), and a 0.1 rad/s velocity gate reads friction 13 % high (1 rad/s: within 3 %).",
  "date": "2026-09-24",
- "repo_commit": "de88d06-dirty",
+ "repo_commit": "7e79574-dirty",
  "argv": [
   "python -m unittest tests.test_torque_balance (SyntheticRecovery, both postures)",
   "scratch synth_scan.py over cutoff {0, 15, 6} Hz x window {40, 80} ms x gate {0.1, 1.0} rad/s"

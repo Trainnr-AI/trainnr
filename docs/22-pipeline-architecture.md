@@ -139,7 +139,7 @@ per stage ② of the research design: MJCF triage → interface capability censu
 `mujoco.sysid` fit → **a robot-bundle whose parameters carry intervals and
 whose validity scope is written down**. Every later stage consumes that bundle
 blind to what the robot is. The 2025–26 rig (camera, two motors, three
-servos on a Pico; now in the archive repository Trainnr-AI/rig) was
+servos on a Pico; its code is now in a private archive) was
 deliberately the first stranger: if the pipeline's abstractions could not
 swallow the hardware twenty centimetres away, they could not swallow
 anyone's arm either. The second stranger was the Unitree Go2 (docs/77).

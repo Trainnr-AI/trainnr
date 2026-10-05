@@ -436,3 +436,30 @@ class WslGpuEnvironment(unittest.TestCase):
     def test_elsewhere_the_environment_is_untouched(self) -> None:
         with mock.patch.object(control, "on_wsl", return_value=False):
             self.assertEqual(control.wsl_gpu_environment({"A": "b"}), {"A": "b"})
+
+
+class APlantedStateFile(unittest.TestCase):
+    """A shared project's studio-state.json named a pid with a heartbeat in
+    the future, and quit_studio signalled that process (security review,
+    2026-10-04)."""
+
+    def test_a_heartbeat_from_the_future_is_not_alive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            _write_state(project, age_s=-3600.0)
+            self.assertFalse(control.state(project)["alive"])
+
+    def test_quit_signals_only_a_studio(self) -> None:
+        import subprocess  # noqa: PLC0415
+        import sys  # noqa: PLC0415
+
+        victim = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(victim.kill)
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            _write_state(project, pid=victim.pid)
+            with mock.patch.object(control, "command", return_value={}):
+                out = control.quit(project, timeout_s=0.1)
+            self.assertEqual(out["status"], "failed", out)
+            self.assertIn("not a Studio", out["reason"])
+            self.assertIsNone(victim.poll(), "the process was not signalled")

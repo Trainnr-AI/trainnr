@@ -30,7 +30,7 @@
   },
   {
    "name": "rq_pipeline.scenes",
-   "version": "6112cce",
+   "version": "6e29b33",
    "license": "Apache-2.0",
    "role": "the chain, the alignment, the record"
   }
@@ -141,7 +141,7 @@
  },
  "physics": [],
  "created_utc": "2026-09-23T18:09:31.069330+00:00",
- "code": "6112cce",
+ "code": "6e29b33",
  "schema": "trainnr-scene/1",
  "notes": [
   "captured from <checkout>/runs/datasets/garden/images",

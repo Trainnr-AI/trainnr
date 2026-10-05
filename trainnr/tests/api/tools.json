@@ -1,11 +1,12 @@
 [
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
-    "description": "Test how a staged deployment tolerates scene error: it is gated nine times with the terrain shifted ±20 mm per axis and turned ±5°, and the drop in success is reported. A job.",
+    "description": "Measure how an exported deployment tolerates scene error: it is staged on `scene` nine times (nominal, ±20 mm per axis, ±5° turned) as new deployments named <deployment>-on-<scene>…, each gated at one seed; the drop in success is reported. A job.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "deployment": {
           "type": "string"
@@ -32,11 +33,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Find which parameter breaks a policy first: a passing gate is re-run with one dynamics parameter pushed at a time (latency, friction, payload, gains, noise, slope, pushes), ranked by where it fails. A job.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "deployment": {
           "type": "string"
@@ -46,11 +48,9 @@
           "type": "string"
         },
         "seed": {
-          "default": null,
           "type": "integer"
         },
         "trials": {
-          "default": null,
           "type": "integer"
         }
       },
@@ -63,11 +63,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": true,
-      "read_only_hint": false
+      "destructiveHint": true,
+      "readOnlyHint": false
     },
-    "description": "SIGTERM a job's process group",
+    "description": "Stop a running job and every process it started; refused when it already ended",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "job_id": {
           "type": "string"
@@ -82,18 +83,14 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Turn a phone video or a folder of frames into a scene: frames, camera poses (COLMAP), a Gaussian splat, the floor at z=0, a collision proxy and the measured gap. A job of minutes to an hour.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
-        "brush": {
-          "default": null,
-          "type": "string"
-        },
         "floor_friction": {
-          "default": null,
           "items": {
             "type": "number"
           },
@@ -107,7 +104,6 @@
           "type": "string"
         },
         "scale": {
-          "default": null,
           "type": "number"
         },
         "source": {
@@ -132,22 +128,20 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Drift monitoring: identify fresh telemetry (a recording, by version) without writing a fit record and judge every parameter against the robot's identified intervals; writes a drift record naming what left and recommending re-identification.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "against": {
-          "default": null,
           "type": "string"
         },
         "method": {
-          "default": null,
           "type": "string"
         },
         "name": {
-          "default": null,
           "type": "string"
         },
         "recording": {
@@ -167,11 +161,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk: two training iterations run). Job handle; the verdict lands beside the task.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "task": {
           "type": "string"
@@ -186,11 +181,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Two artifacts side by side in the viewer, a left and b right.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "a": {
           "type": "string"
@@ -209,38 +205,33 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
-    "description": "simulate's Simulation section on the running scene: run/pause, step n, reset (to a keyframe), speed, manual control; follow a world.",
+    "description": "Control the simulation running in the Studio: run or pause, step n, reset to a keyframe, set the speed, drive it by hand, follow one world.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "follow": {
-          "default": null,
+          "description": "a world to follow: w0, w1, …",
           "type": "string"
         },
         "keyframe": {
-          "default": null,
           "type": "string"
         },
         "manual": {
-          "default": null,
           "type": "boolean"
         },
         "play": {
-          "default": null,
           "type": "boolean"
         },
         "reset": {
-          "default": null,
           "type": "boolean"
         },
         "speed": {
-          "default": null,
           "type": "number"
         },
         "step": {
-          "default": null,
           "type": "integer"
         }
       },
@@ -250,11 +241,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Make a project (a bare name lands in ~/trainnr/projects) and make it the current one; never overwrites an existing project.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "description": {
           "default": "",
@@ -272,7 +264,6 @@
         }
       },
       "required": [
-        "path",
         "name"
       ],
       "type": "object"
@@ -281,11 +272,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Declare an environment: a family plus the spec fields you change, built for real and stamped by content. Next: check_task.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "family": {
           "type": "string"
@@ -295,7 +287,6 @@
         },
         "settings": {
           "additionalProperties": true,
-          "default": null,
           "type": "object"
         }
       },
@@ -309,11 +300,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "One actuator at one friction tier (m1..m6): every parameter with provenance, and its certified actuator bundle",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "actuator": {
           "type": "string"
@@ -332,11 +324,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The project's capture state on disk: idle, listening, ingested, failed — readable from any process.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -344,11 +337,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "A generated dataset's datasheet: success-rate bound, versions, randomization ranges",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "dataset": {
           "type": "string"
@@ -363,11 +357,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
-    "description": "One evaluation's episode records (evaluation = the run folder holding them, as list_evaluations names it): successes, milestone funnel, trials",
+    "description": "One evaluation, named as list_evaluations names it: success rate, confidence interval, funnel, every trial's verdict",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "evaluation": {
           "type": "string"
@@ -382,11 +377,32 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "description": "One experiment in full: its training curve, identity, manifests, checkpoints and the evaluations citing it",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "experiment": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "experiment"
+      ],
+      "type": "object"
+    },
+    "name": "describe_experiment"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "An actuator's friction-torque curves over velocity, from its model",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "actuator": {
           "type": "string"
@@ -413,11 +429,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "A robot's fit records: each parameter's estimate and interval, whether it is identified, and how repeated fits agree.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "robot": {
           "type": "string"
@@ -432,14 +449,19 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
-    "description": "A job's state and log tail",
+    "description": "A job's state and log tail; `wait_s` (up to 300) waits for a running job to end first",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "job_id": {
           "type": "string"
+        },
+        "wait_s": {
+          "default": 0,
+          "type": "number"
         }
       },
       "required": [
@@ -451,11 +473,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The current project: artifacts by kind with versions and lineage, the loop map (each state proved or missing), the next move.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "refresh": {
           "default": true,
@@ -468,11 +491,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "One robot in full: its model census, its fit records, and whether repeated fits agree.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "robot": {
           "type": "string"
@@ -487,11 +511,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "A captured scene's record: source, capture, the tool chain with licences, the splat and proxy facts, the alignment, the gap's four numbers, and every physics parameter with its basis (measured with an interval, or declared with a span).",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "scene": {
           "type": "string"
@@ -506,11 +531,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "What the Studio shows now: project, page, selected artifact, viewer recording and time cursor, presenter; with alive/heartbeat.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -518,11 +544,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
-    "description": "One environment built for real: its task spec and version",
+    "description": "One task: a task declared in the project (its family, version, settings, check verdict, reward previews), else a registered task built for real (spec and version)",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "task": {
           "type": "string"
@@ -537,11 +564,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The saved viewer streams an artifact carries (a headless run leaves the same picture a window shows): each file's entity paths, timelines, components and size; with the viz-query extra, the scalar series' count, min, max and last value.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "artifact": {
           "type": "string"
@@ -560,18 +588,19 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Evaluate a walk policy: paired episodes, exact confidence intervals, versions on every row; robot names the walk, else the project's one declared walk. Job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "checkpoint": {
+          "description": "an experiment (its newest checkpoint) or <experiment>/model_N",
           "type": "string"
         },
         "conditions": {
           "additionalProperties": false,
-          "default": null,
           "description": "The world an evaluation judges a policy in, when not its own; the\nfields combine.",
           "properties": {
             "delay": {
@@ -594,7 +623,7 @@
           "type": "object"
         },
         "device": {
-          "default": null,
+          "description": "cuda (default when present) or cpu",
           "type": "string"
         },
         "horizon": {
@@ -602,11 +631,9 @@
           "type": "integer"
         },
         "robot": {
-          "default": null,
           "type": "string"
         },
         "scene": {
-          "default": null,
           "type": "string"
         },
         "seed": {
@@ -614,7 +641,7 @@
           "type": "integer"
         },
         "student": {
-          "default": null,
+          "description": "a distilled student: its folder or a Hugging Face repo",
           "type": "string"
         },
         "trials": {
@@ -631,27 +658,32 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Export a trained walk policy: ONNX with normalization folded in, a manifest of joint orders, gains, observations and control rate, and the scene as MJCF. Cites the checkpoint's evaluation. A job.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "checkpoint": {
+          "description": "model_N (with or without .pt)",
           "type": "string"
         },
         "evaluation": {
-          "default": null,
+          "description": "a stamp from list_evaluations; default the newest own-world one",
           "type": "string"
         },
         "experiment": {
+          "description": "an experiment in the project",
           "type": "string"
         },
         "name": {
+          "description": "the new deployment's name",
           "type": "string"
         },
         "unevaluated": {
           "default": false,
+          "description": "export with no evaluation on purpose; the gate then judges nothing",
           "type": "boolean"
         }
       },
@@ -666,11 +698,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "The sim-to-sim gate: drive the exported policy through its manifest alone by a registered runtime (plain MuJoCo, or Unitree's simulator over DDS), judge it the evaluation's way, pass within a stated tolerance of the cited evaluation. Job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "deployment": {
           "type": "string"
@@ -684,7 +717,6 @@
           "type": "integer"
         },
         "tolerance": {
-          "default": null,
           "type": "number"
         },
         "trials": {
@@ -701,18 +733,18 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Generate kitting demonstrations with the scripted policy; only successful episodes are kept (DR draws recorded). Returns a job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "episodes": {
           "default": 10,
           "type": "integer"
         },
         "out": {
-          "default": null,
           "type": "string"
         },
         "seed": {
@@ -726,11 +758,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Generate demonstrations with a motion planner on a registered task: waypoints solved by inverse kinematics, kept by the task's success criterion, streamed to the Studio. Job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "dr_span": {
           "default": 0.0,
@@ -741,7 +774,6 @@
           "type": "integer"
         },
         "out": {
-          "default": null,
           "type": "string"
         },
         "seed": {
@@ -765,14 +797,14 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Generate demonstrations from a trained walk policy: its rollouts that succeed become a stamped batch with camera frames; failures are logged. Job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "checkpoint": {
-          "default": null,
           "type": "string"
         },
         "episodes": {
@@ -780,7 +812,6 @@
           "type": "integer"
         },
         "frame_size": {
-          "default": null,
           "maxItems": 2,
           "minItems": 2,
           "prefixItems": [
@@ -794,19 +825,12 @@
           "type": "array"
         },
         "out": {
-          "default": null,
-          "type": "string"
-        },
-        "project": {
-          "default": null,
           "type": "string"
         },
         "robot": {
-          "default": null,
           "type": "string"
         },
         "scene": {
-          "default": null,
           "type": "string"
         },
         "seed": {
@@ -824,14 +848,14 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "System identification: fit a robot's dynamics from a recording (both by version); writes the fit record with intervals and verdicts.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "method": {
-          "default": null,
           "type": "string"
         },
         "recording": {
@@ -851,14 +875,14 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Bring a trained trainnr-mjlab experiment into the project: run, policy and one evaluation per verdict, each citing the others by version.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "name": {
-          "default": null,
           "type": "string"
         },
         "path": {
@@ -874,11 +898,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Bring a findings-ledger record into the project by id or path.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "finding": {
           "type": "string"
@@ -893,11 +918,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Bring a captured scene folder into the project: the Gaussian splat placed in the world frame, the collision proxy, the gap between what is seen and what is touched, and the floor's friction.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string"
@@ -916,11 +942,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Fetch a registered public log (size and digest checked) and ingest it with its provenance, as a job; the telemetry stage reads 'public log'.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "accept_unlicensed": {
           "default": false,
@@ -930,7 +957,6 @@
           "type": "string"
         },
         "name": {
-          "default": null,
           "type": "string"
         }
       },
@@ -943,18 +969,17 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap or rosbag2 .db3) into the project as a stamped recording with channels, units, measured rates, census.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "adapter": {
-          "default": null,
           "type": "string"
         },
         "name": {
-          "default": null,
           "type": "string"
         },
         "source": {
@@ -970,11 +995,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
-    "description": "Start the Studio window on the current project; waits for its heartbeat. Refuses when one already runs.",
+    "description": "Open the Studio on the current project and wait for it to start. Without a local build, the first launch downloads the prebuilt Studio (about 72 MB) from the project's GitHub release. Refused when one already runs.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -982,11 +1008,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The actuator library: servos, friction tiers, provenance, and each one's certified actuator bundles with checks and advisories",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -994,11 +1021,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every protocol a live capture listens on (udp, dds), its options, and whether it runs on this machine.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1006,11 +1034,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The physics-engine registry",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1018,11 +1047,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
-    "description": "Every episode-record file under trainnr/runs/",
+    "description": "Every evaluation, each named by `evaluation` (a project's by stamp), with the policy it judged and its success rate",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1030,11 +1060,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
-    "description": "Training-run manifests under trainnr/runs/",
+    "description": "Every experiment in the project, one row each: status, iterations, final reward, robot, task, fit, checkpoints",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1042,11 +1073,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The findings ledger: id, date, claim; optional id prefix.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "prefix": {
           "default": "",
@@ -1059,11 +1091,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every runtime the sim-to-sim gate can drive a policy through, with the platforms each runs on.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1071,11 +1104,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every way a robot's dynamics can be identified from a recording.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1083,11 +1117,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every job on record, newest first",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1095,11 +1130,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every project (the projects home, ~/trainnr/projects by default): name, root, whether it is current, stages proved.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1107,11 +1143,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The public real-robot recordings the registry can fetch: robot, source, recorded date, licence state, fetched or not; and the ones no adapter reads, with why.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1119,11 +1156,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every source format a recording can enter through.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1131,11 +1169,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "Every robot: name@hash, file census",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1143,11 +1182,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The families an environment can be declared over, with every spec field, type and default.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1155,11 +1195,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "The task registry: ids, names, rigs",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1167,11 +1208,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Multiply seed demonstrations under randomization: candidates generated on the GPU, replayed on the CPU, kept by the task's success criterion. Needs a CUDA GPU. Returns a job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "dataset": {
           "type": "string"
@@ -1202,31 +1244,34 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Add a robot from its MJCF file (meshes and includes come along) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "accept_changes": {
           "default": false,
+          "description": "keep the robot although the import changed what the file says",
           "type": "boolean"
         },
         "model_path": {
+          "description": "an MJCF, URDF or USD file",
           "type": "string"
         },
         "name": {
           "type": "string"
         },
         "root": {
-          "default": null,
+          "description": "USD only: \"fixed\" (default) or \"free\"",
           "type": "string"
         },
         "variants": {
           "additionalProperties": {
             "type": "string"
           },
-          "default": null,
+          "description": "USD variant sets, e.g. {\"Physics\": \"Newton_compliant\"}",
           "type": "object"
         }
       },
@@ -1240,34 +1285,29 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Navigate the Studio: a page by name, an artifact by version (its drawer opens), a table of it by title (the modal), or another project.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "artifact": {
-          "default": null,
           "type": "string"
         },
         "project": {
-          "default": null,
           "type": "string"
         },
         "search": {
-          "default": null,
           "type": "string"
         },
         "section": {
-          "default": null,
           "type": "string"
         },
         "table": {
-          "default": null,
           "type": "string"
         },
         "view": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1277,11 +1317,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
-    "description": "Open a checkpoint of an experiment in mjlab's own viewer (viser in the browser, or native), the same rollout streamed into the Studio's Live view. Job handle; the viewer lives until closed.",
+    "description": "Open a checkpoint of an experiment in mjlab's own viewer (viser in the browser on this machine, or native), the same rollout streamed into the Studio's Simulator page. A job; the viewer lives until closed.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "checkpoint": {
           "type": "string"
@@ -1294,7 +1335,6 @@
           "type": "string"
         },
         "scene": {
-          "default": null,
           "type": "string"
         },
         "viewer": {
@@ -1312,11 +1352,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Check a deployment before the first tick on a robot: joint order, gains, a dry run's targets and torques against limits, compute per tick, the robot's state, then the ramp-in and stops measured. A job.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "deployment": {
           "type": "string"
@@ -1326,7 +1367,6 @@
           "type": "string"
         },
         "seed": {
-          "default": null,
           "type": "integer"
         }
       },
@@ -1339,11 +1379,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "See the reward before training: roll the declared walk for a few seconds untrained or standing, every reward term streamed into the Studio, a per-term summary written beside the task. Job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "controller": {
           "default": "untrained",
@@ -1370,11 +1411,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": true,
-      "read_only_hint": false
+      "destructiveHint": true,
+      "readOnlyHint": false
     },
-    "description": "Close the Studio (a quit command, then by pid).",
+    "description": "Close the Studio window: it is asked to quit, then its process is stopped.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1382,11 +1424,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": true
+      "destructiveHint": false,
+      "readOnlyHint": true
     },
     "description": "What the human did in the Studio since a time: pages opened, artifacts selected or shown, project switches, time scrubs.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "limit": {
           "default": 200,
@@ -1403,18 +1446,17 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "The whole chain: generate -> dataset -> train -> paired evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "episodes": {
-          "default": null,
           "type": "integer"
         },
         "from_stage": {
-          "default": null,
           "type": "string"
         },
         "name": {
@@ -1426,11 +1468,9 @@
           "type": "string"
         },
         "steps": {
-          "default": null,
           "type": "integer"
         },
         "until_stage": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1440,14 +1480,14 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
-    "description": "Run a scene in the MuJoCo viewport (a task's preview scene, or walk:<robot> for the newest trained walk) and open the Live view; no scene stops it. State reports viewport_fps.",
+    "description": "Play a scene live in the Studio's MuJoCo view (Simulator page): a task preview (kitting, lift, duck), `walk` (the newest trained walk) or `deploy:<deployment>` (drivable; add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No scene stops it.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "scene": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1457,18 +1497,17 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "See the window: a PNG of the whole Studio (optionally after opening a page or an artifact); read the returned path to look at it.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "artifact": {
-          "default": null,
           "type": "string"
         },
         "section": {
-          "default": null,
           "type": "string"
         },
         "width": {
@@ -1482,26 +1521,24 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "One Control or Joint slider by name: an actuator's control value or a joint's position; takes manual control.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "actuator": {
-          "default": null,
           "type": "string"
         },
         "command": {
-          "default": null,
+          "description": "a walk's twist: vx, vy (m/s) or wz (rad/s); own hands it back",
           "type": "string"
         },
         "joint": {
-          "default": null,
           "type": "string"
         },
         "value": {
-          "default": null,
           "type": "number"
         }
       },
@@ -1511,38 +1548,32 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "What the simulator shows: a MuJoCo flag by name with on, a camera view (front/side/top/reset), the Inspect drawer (control/joints/physics/close).",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "camera": {
-          "default": null,
           "type": "string"
         },
         "flag": {
-          "default": null,
           "type": "string"
         },
         "fullscreen": {
-          "default": null,
           "type": "boolean"
         },
         "group": {
-          "default": null,
           "type": "integer"
         },
         "inspect": {
-          "default": null,
           "type": "string"
         },
         "kind": {
-          "default": null,
           "type": "string"
         },
         "on": {
-          "default": null,
           "type": "boolean"
         }
       },
@@ -1552,18 +1583,17 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Expand or toggle the viewer's blueprint (left) and selection (right) panels.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "blueprint": {
-          "default": null,
           "type": "string"
         },
         "selection": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1573,11 +1603,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "The Studio's theme: light, dark or system; the viewer, the pages and the card pictures follow, and the choice is kept.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "theme": {
           "type": "string"
@@ -1592,46 +1623,38 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Drive the viewer timeline: cursor (seconds or sequence), play/pause, speed, time selection, follow, step. Refused if nothing streams.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "end": {
-          "default": null,
           "type": "number"
         },
         "follow": {
-          "default": null,
           "type": "boolean"
         },
         "play": {
-          "default": null,
           "type": "boolean"
         },
         "seconds": {
-          "default": null,
           "type": "number"
         },
         "sequence": {
-          "default": null,
           "type": "integer"
         },
         "speed": {
-          "default": null,
           "type": "number"
         },
         "start": {
-          "default": null,
           "type": "number"
         },
         "step": {
-          "default": null,
           "type": "integer"
         },
         "timeline": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1641,18 +1664,17 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "To the front of the viewer, exactly one of: an artifact streamed as itself (3D robot, recording, experiment curves, evaluation funnel), or a stream already playing by its application id (the Sources name: the viewport twin, a run, a gate).",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "artifact": {
-          "default": null,
           "type": "string"
         },
         "stream": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1662,32 +1684,29 @@
   },
   {
     "annotations": {
-      "destructive_hint": true,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Copy a deployment onto a captured scene as a new deployment: the flat floor replaced by the scene's collision proxy, the robot placed on the scene's course. gate_deployment then judges it there.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "deployment": {
           "type": "string"
         },
         "heading_deg": {
-          "default": null,
           "type": "number"
         },
         "name": {
-          "default": null,
           "type": "string"
         },
         "scene": {
           "type": "string"
         },
         "start_x": {
-          "default": null,
           "type": "number"
         },
         "start_y": {
-          "default": null,
           "type": "number"
         },
         "terrain": {
@@ -1705,33 +1724,29 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Record a robot's telemetry live into the project, over UDP or Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from the robot or its simulator); stop_capture saves it as a recording.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "basis": {
-          "default": null,
           "type": "string"
         },
         "name": {
           "type": "string"
         },
         "network": {
-          "default": null,
           "type": "string"
         },
         "port": {
-          "default": null,
           "type": "integer"
         },
         "source": {
-          "default": null,
           "type": "string"
         },
         "window_s": {
-          "default": null,
           "type": "number"
         }
       },
@@ -1744,11 +1759,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Stop the project's listener and ingest the capture as a stamped recording; a session with no datagrams fails by name.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {},
       "type": "object"
     },
@@ -1756,17 +1772,17 @@
   },
   {
     "annotations": {
-      "destructive_hint": true,
-      "read_only_hint": false
+      "destructiveHint": true,
+      "readOnlyHint": false
     },
     "description": "Stop a running deployment: writes a STOP file that a guarded run answers with a soft stop (gains blended to damping, never cut).",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "deployment": {
           "type": "string"
         },
         "reason": {
-          "default": null,
           "type": "string"
         }
       },
@@ -1779,30 +1795,25 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
-    "description": "Train a walk policy with trainnr-mjlab on a declared walk task or a registered robot. agent=smoke runs in minutes; agent=g3 is the full walk-training recipe (hours on a GPU). Job handle.",
+    "description": "Train a walk policy (a declared task, or robot go1/go2/microduck). recipe=smoke checks the stack in minutes and saves nothing; recipe=full trains (8000 iterations unless set, hours on a GPU) and saves experiment `name`, never over an existing one.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
-        "agent": {
-          "default": "smoke",
-          "type": "string"
-        },
         "cameras": {
           "default": true,
           "type": "boolean"
         },
         "envs": {
-          "default": null,
           "type": "integer"
         },
         "fit": {
-          "default": null,
+          "description": "fit@<stamp> from describe_identification",
           "type": "string"
         },
         "iterations": {
-          "default": null,
           "type": "integer"
         },
         "lag_dr_ms": {
@@ -1810,23 +1821,24 @@
           "type": "number"
         },
         "name": {
-          "default": null,
+          "type": "string"
+        },
+        "recipe": {
+          "default": "smoke",
+          "description": "smoke (minutes, saves nothing) or full",
           "type": "string"
         },
         "robot": {
-          "default": null,
           "type": "string"
         },
         "scene": {
-          "default": null,
           "type": "string"
         },
         "seed": {
-          "default": null,
           "type": "integer"
         },
         "task": {
-          "default": null,
+          "description": "a walk declared in the project",
           "type": "string"
         }
       },
@@ -1836,11 +1848,12 @@
   },
   {
     "annotations": {
-      "destructive_hint": false,
-      "read_only_hint": false
+      "destructiveHint": false,
+      "readOnlyHint": false
     },
     "description": "Choose the current project by name or path; later calls and later sessions act on it.",
     "inputSchema": {
+      "additionalProperties": false,
       "properties": {
         "project": {
           "type": "string"

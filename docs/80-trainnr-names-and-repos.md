@@ -82,12 +82,12 @@ split would take.*
 
 | Repository | Holds | Why separate |
 |---|---|---|
-| **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the Studio (`crates/trainnr-studio`), the CLI and tools, the actuator library and the five robot bundles, docs, the paper, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
+| **`trainnr`** (public) | the pipeline (`trainnr`), the mjlab plugin (`trainnr-mjlab`), the Studio (`crates/trainnr-studio`), the CLI and tools, the actuator library and the five robot bundles, docs, findings and artifacts, the agent definitions and skills | It ships in lockstep: one version, one tag builds every artifact. |
 | a hosted service (not in this repository) | a control plane: registry, scheduler, organisations | Different owners and cadence; it extends the tool through its plugin seams (`trainnr.mcp_tools`). |
 | the website | trainnr.ai; reads `docs/` from the product repo at a pinned commit, Rerun's `landing` pattern | Its own build and release cadence. |
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
 | **`mjsim`** (public, planned; docs/84) | the MuJoCo simulator window: the egui widget (Rust) and the simulation stream (Python), one version; the Studio and `trainnr` depend on it | its own cadence and its own users (any egui app, any MuJoCo user); the name is free on PyPI and crates.io |
-| a paper repository | not created; the paper lives in `docs/paper/` | Considered so a paper could freeze at submission and be cited by DOI; deferred with the other splits. |
+| a paper repository | planned: the paper moved out of this repository on 2026-10-05 and will be published in its own | A paper freezes at submission and is cited by DOI; the product repository says only that the research is ongoing. |
 | **`rig`** (public archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
 | **`.github`** (public) | the organisation profile README | GitHub's convention. |
 
@@ -110,7 +110,7 @@ trainnr/
     trainnr-studio/     the app; its own Cargo workspace (rerun 0.36) (L2: reads L0's files, spawns L0/L1)
   tools/                the gates and the lab scripts; `trainnr` CLI subcommands over time (L2)
   robots/               the actuator library + the robot bundles (data)
-  docs/  docs/paper/  docs/findings/  docs/artifacts/
+  docs/  docs/findings/  docs/artifacts/
   .claude/agents  .claude/skills  .claude-plugin/  .mcp.json  server.json
   CHANGELOG.md  CITATION.cff  CONTRIBUTING.md  GOVERNANCE.md  LICENSE  NOTICE  SECURITY.md
 ```
@@ -166,7 +166,7 @@ Rules:
 **The one identifier that keeps the old word**: the bundle schema string
 `robotiq-actuator-bundle/1`. It is hashed into every actuator model's stamp
 (`actuator_bundle.py:125`); renaming it re-stamps every actuator bundle
-and breaks the provenance of every finding, the paper's `xl330-m6@e57c2563`
+and breaks the provenance of every finding, `xl330-m6@e57c2563`
 among them. It is an internal constant inside a JSON file, never shown.
 The path out is `trainnr-actuator-bundle/2` at the next change that
 already breaks bundle compatibility, with a migration that re-wraps and
@@ -174,7 +174,7 @@ records old→new stamps. Until then it stays, and the brand doc says so.
 
 ## 6. What stays frozen, and what a user never sees
 
-Frozen (the maintainers' progress log (private) 2026-09-09): kind ids (`certificate`, `deploy`, `batch`…),
+Frozen (decided 2026-09-09): kind ids (`certificate`, `deploy`, `batch`…),
 the `trainnr-*/N` schema strings (several are hashed into stamps), the
 existing dataset ids, the bundle schema string above. Internal words that
 may stay in code: press, referee, presenter, rail, twin (as
@@ -190,7 +190,7 @@ listed as missing (microduck, Robotiq 2F-85, BAM, mjlab, rerun, Newton,
 Unitree Go2, Mip-NeRF 360, Neverwhere). CONTRIBUTING (issues first,
 conventional commit titles, one changelog line per PR), SECURITY (GitHub
 private reporting), CODE_OF_CONDUCT (Contributor Covenant), CITATION.cff
-(the paper), GOVERNANCE (maintainers, decisions), CODEOWNERS.
+(the software), GOVERNANCE (maintainers, decisions), CODEOWNERS.
 
 ## 8. The public edition
 
@@ -199,6 +199,9 @@ filter that keeps the tool, its documents and its records; the rig lives
 in its own archive. A push happens only after the rename has landed,
 `tools/verify.sh` is green on a cold clone, a new user's agent has walked
 the Go2 loop from that clone, and the README is the Go2 path.
+
+Since 2026-10-04 the public repository is the source of truth: changes
+land there by pull request, and the filter is retired.
 
 ## 9. Status
 

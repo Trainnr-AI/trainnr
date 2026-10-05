@@ -2,7 +2,7 @@
  "id": "gate-paired-draw-go2-c2-2026-09-24",
  "claim": "Paired by trial index, go2-c2's plane gate reads 18/20 [0.683, 0.9877] where the count-dependent draw read 20/20 [0.8316, 1.0]: it still passes the gate's own tolerance rule (0.90 against the certificate's 0.95 minus 0.10), but the strict cliff rule can no longer attribute it, because at 20 trials only 20/20 clears the certificate's exact lower bound of 0.8308. The earlier ranking (latency 2 ticks, then kd x4) stands as a reading of the old draw only.",
  "date": "2026-09-24",
- "repo_commit": "7e1181d",
+ "repo_commit": "65fdcfa",
  "argv": [
   "tools/gate-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited",
   "tools/attribute-deployment.py --project projects/go2-walk --name go2-c2-deploy-cited --no-still",

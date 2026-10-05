@@ -6,7 +6,7 @@
 # Ordered cheapest-first, so a broken build fails in seconds rather than
 # after the long Python suites. The firmware builds, the emulator HIL and
 # the wire replays against the rig's crates left with the rig on
-# 2026-10-02 (https://github.com/Trainnr-AI/rig, its own tools/verify.sh).
+# 2026-10-02 (a private archive, with its own tools/verify.sh).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 source "$HOME/.cargo/env" 2>/dev/null || true
@@ -22,6 +22,10 @@ step() {                      # step "name" "command"
 }
 
 PY="${PYTHON:-python3}"  # the repo-level gates' interpreter; override where python3 is not the name
+# The tools run by name are pinned, as in CI (.github/workflows/gates.yml);
+# ruff moves with the ruff-pre-commit rev in .pre-commit-config.yaml.
+RUFF="ruff@0.16.10"
+ZIZMOR="zizmor@1.30.1"
 echo "=== trainnr end-to-end verification ==="
 # the Studio is the one Rust crate left; it is its own workspace (own
 # Cargo.lock, the rerun 0.36 pins), so every cargo step runs inside it.
@@ -31,18 +35,31 @@ step "tests (trainnr-studio)"       "(cd crates/trainnr-studio && cargo test -q)
 step "docs describe real code" "\"$PY\" tools/check-docs.py"
 step "package layers (docs/80)" "\"$PY\" tools/check-layers.py"
 step "unsafe forbidden"        "\"$PY\" tools/check-unsafe-gates.py"
+step "numbers traced to records" "\"$PY\" tools/check-numbers.py"
+step "one version everywhere"  "\"$PY\" tools/release.py check"
+# The required supply-chain and package jobs, locally: the workflows
+# linted for security, the Studio's crates against deny.toml (needs
+# cargo-deny: `cargo install --locked cargo-deny`), and both wheels built
+# with LICENSE and NOTICE inside. The advisory audit (network, a moving
+# database) is `tools/supply-chain.py --advisories`, not a gate here.
+step "workflows linted (zizmor)" "uvx $ZIZMOR --offline --format plain .github/workflows"
+step "the Studio's crates (cargo-deny)" "\"$PY\" tools/supply-chain.py --policy"
+step "wheels carry LICENSE and NOTICE" "\"$PY\" tools/check-package.py"
+# The MCP tools are public API: their names, arguments and descriptions
+# match the snapshot in trainnr/tests/api, or the change is reviewed.
+step "MCP API snapshot"        "\"$PY\" tools/api-snapshot.py"
 # The Python package, under the same roof as the crate. These mirror
 # the pre-commit hook — but verify.sh is the "prove EVERYTHING" command
 # and until 2026-08-26 it proved everything except the Python half.
-step "ruff format (trainnr)"   "(cd trainnr && uvx ruff format --check .)"
-step "ruff lint (trainnr)"     "(cd trainnr && uvx ruff check .)"
+step "ruff format (trainnr)"   "(cd trainnr && uvx $RUFF format --check .)"
+step "ruff lint (trainnr)"     "(cd trainnr && uvx $RUFF check .)"
 # tools/ has its own .ruff.toml (extending trainnr's) and, until
 # 2026-08-27, no gate that ran it — 63 findings had accrued.
-step "ruff format (tools)"     "(cd trainnr && uvx ruff format --check ../tools)"
-step "ruff lint (tools)"       "(cd trainnr && uvx ruff check ../tools)"
+step "ruff format (tools)"     "(cd trainnr && uvx $RUFF format --check ../tools)"
+step "ruff lint (tools)"       "(cd trainnr && uvx $RUFF check ../tools)"
 # trainnr_mjlab had NO Python gate until 2026-09-01 — its lint, types and
 # tests ran only when somebody remembered. Now under the same roof.
-step "ruff lint (trainnr_mjlab)"    "(cd trainnr-mjlab && uvx ruff check src tests)"
+step "ruff lint (trainnr_mjlab)"    "(cd trainnr-mjlab && uvx $RUFF check src tests)"
 # Types, both packages: zero errors is the baseline; the config (and
 # the untyped-C-extension skips) lives in each pyproject. Run INSIDE each
 # project's environment (`uv run --with mypy`), never as an isolated
@@ -71,6 +88,10 @@ step "python tests (trainnr_mjlab)" "(cd trainnr-mjlab && uv run --extra viz pyt
 step "python tests (USD import, Newton)" \
      "(cd trainnr && UV_PROJECT_ENVIRONMENT=.venv-usd uv sync -q --extra usd --extra sim --extra gpu \
       && TRAINNR_FETCH_TEST_ASSETS=1 .venv-usd/bin/python -m unittest tests.test_usd_import tests.test_import_audit 2>&1 | tee /dev/stderr | grep -x OK >/dev/null)"
+# Last, once the steps above have installed them: every environment
+# here (trainnr, its usd venv, trainnr-mjlab) against the licence
+# allow-list and its written exceptions (tools/supply-chain.py).
+step "Python licences (installed envs)" "\"$PY\" tools/supply-chain.py --licences"
 
 echo
 echo "$pass passed, $fail failed"

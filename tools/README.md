@@ -1,7 +1,7 @@
 # tools/
 
-The lab bench: the gates, the scripts the MCP tools spawn, the studies
-behind the paper, and the paper build. Shell tools run from the repository
+The lab bench: the gates, the scripts the MCP tools spawn, and the
+studies behind the findings records. Shell tools run from the repository
 root; Python tools run from `trainnr/` so uv picks up its environment:
 
 ```sh
@@ -19,18 +19,20 @@ page says what each one is for.
 
 | Tool | What it proves |
 |---|---|
-| `verify.sh` | Everything, one command: the Studio crate's fmt, clippy and tests; the doc, layer, number and unsafe gates; the Python packages (ruff, mypy, both unit suites); the USD import suite. Nothing here needs hardware. |
+| `verify.sh` | Everything, one command, and the one list of the gates (AGENTS.md points here): the Studio crate's fmt, clippy and tests; the doc, layer, number, unsafe and version gates; the workflows' security lint (zizmor), the crate policy (cargo-deny) and the wheels' licence files; the Python packages (ruff, mypy, both unit suites); the USD import suite; the installed environments' licences. Nothing here needs hardware; the trainer's suite needs its 6 GB environment. |
 | `check-docs.py` | No document names a path that no longer exists; every link resolves. |
 | `check-layers.py` | A lower layer never imports a higher one (`trainnr` ← `trainnr-mjlab` ← the Studio), lazy imports included. |
-| `check-numbers.py` | Every k/n success figure in the manuscript and the ledgers exists in a finding record under `docs/findings/`. |
+| `check-numbers.py` | Every success figure the README quotes (k/n or "k of n") exists in a finding record under `docs/findings/`. |
 | `check-unsafe-gates.py` | `unsafe` stays forbidden in the crate's manifest. |
+| `third-party-notices.py` | Completes the Studio's THIRD_PARTY_LICENSES.md after cargo-about: `append` adds the NOTICE files of Apache-2.0 crates and each embedded font's copyright, `check` refuses a missing attribution or an HTML-escaped licence text (the release workflow). |
+| `check-package.py` | Both wheels build and carry LICENSE and NOTICE; the packages' copies of the root LICENSE and NOTICE are identical (the required `package` job). |
 | `findings.py` | Renders `docs/findings/*.json` into `docs/68-findings.md`; `--check` fails when the page is stale. The ledger is generated, never hand-edited. |
 | `coverage.sh` | Rust line coverage for the Studio crate. |
 | `coverage-badge.py` | Turns coverage.py's JSON report into the README's coverage badge (CI, after the tests). |
 | `plugin-prefetch.sh` | The plugin's session-start hook (`hooks/hooks.json`): downloads the prebuilt Studio in the background, once per version, silently. |
 | `agent-e2e.py` | A real Claude Code agent, given only the trainnr server and a plain-language task, does the laptop half of the Quickstart; prints its tool calls, errors, turns, time, cost and PASS/FAIL. A release check (CONTRIBUTING). |
-| `release.py` | One version for the whole product: `check` (CI), `bump X.Y.Z` writes all eleven copies, `show`. |
-| `supply-chain.py` | Known vulnerabilities in every locked Python set (pip-audit) and the Studio's Rust advisories, licences and sources (cargo-deny); documented exceptions only. |
+| `release.py` | One version for the whole product: `check` (CI; it prints the count, 14 copies in 12 files on 2026-10-04, the uv and Cargo lockfiles' own entries among them), `bump X.Y.Z` writes every copy and, for a release, dates the CHANGELOG and the citation's `date-released`; `show`. |
+| `supply-chain.py` | `--policy`: the Studio's crates against deny.toml (licences, bans, sources; required in CI). `--advisories`: known vulnerabilities in every locked Python set (pip-audit, markers stripped so no pin is skipped) and in the crates (not required: the databases move without a commit). `--licences`: the installed Python packages against the licence allow-list. Documented exceptions only. |
 | `github-setup.sh` | Applies the repository's GitHub settings: merges, Actions, labels and, once public, the ruleset on `main` and the security features; lists who can merge. Idempotent. |
 | `loc-report.py` | Line counts by area. |
 
@@ -64,7 +66,7 @@ with its log beside the artifact it writes.
 | `preflight-deployment.py` | Before the first tick on a robot: seven checks refused by name with their numbers (policy widths, joint order, gains, a dry rollout's targets and torques, compute per tick, the robot's state against the SDK's watchdogs), then the ramp-in and the stops measured; `preflight.json` beside the manifest. |
 | `attribute-deployment.py` | Which parameter breaks a deployment first: a passing gate re-run with one dynamics knob at a time up its ladder, the cliff per knob against the certificate's lower bound. |
 | `assay-deployment.py` | The perturbation assay: a deployment on a captured scene, nominal and moved, each stage gated with one seed. |
-| `mcp-server.py` | A forwarder to `trainnr mcp`: the MCP server over stdio, 76 tools, for a client configured before the console script existed. |
+| `mcp-server.py` | A forwarder to `trainnr mcp`: the MCP server over stdio, for a client configured before the console script existed. |
 | `studio-present.py` | The presenter: the one Python process the Studio asks to show things; watches the project's index and streams the chosen artifact into the embedded viewer. |
 | `studio-render-stream.py` | MuJoCo's own render as a subprocess service for the Studio's simulator: frames out on stdout, camera commands in on stdin; a scene is a preview task, a walk, or a deployment. |
 | `studio-instrument-view.py` | The instrument's records into the Studio's viewer with a blueprint: evaluation funnels, fit parameters as estimate and interval series, the friction budget. |
@@ -83,7 +85,7 @@ with its log beside the artifact it writes.
 | `solver-study.py` | A constraint-solver sweep on the kitting scene, judged by the referee, with penetration, iterations, slip and grip force per row. |
 | `determinism-probe.py` | Is MJX-Warp bit-repeatable, at what cost? One subprocess per mode; the verdict needs a CUDA device. |
 
-## Studies and campaigns behind the paper
+## Studies and campaigns
 
 | Tool | What it does |
 |---|---|
@@ -92,8 +94,8 @@ with its log beside the artifact it writes.
 | `walk-c1-refit-pods.sh` | The identified-interval arms of the walk study on six pods in parallel, on the refit bundle. |
 | `walk-c1-fold.py` | Fold the walk arms' certificates into one finding and its figure. |
 | `walk-mismatch-matrix.sh`, `walk-matrix-fold.py` | Every walk policy judged in each mismatched world (the actuator pinned at the fit times a scale, or drawn from a wide span), and the fold into a finding. |
-| `walk-axes-on-box.sh` | The per-axis mismatch matrices where a GPU is free: the nine tracked walk checkpoints judged on each axis at each scale, then one fold per axis. |
-| `walk-refit-rejudge-on-box.sh` | Re-judges the refit arms' certificates with the fixed randomization seam; both folds rewrite their records with a `revised` note so the manuscript's citations keep resolving. |
+| `walk-axes-local.sh` | The per-axis mismatch matrices where a GPU is free: the nine tracked walk checkpoints judged on each axis at each scale, then one fold per axis. |
+| `walk-refit-rejudge-local.sh` | Re-judges the refit arms' certificates with the fixed randomization seam; both folds rewrite their records with a `revised` note so citations of them keep resolving. |
 | `walk-envelope.sh` | One policy certified at a grid of actuator-parameter scales around the fit: where it fails. |
 | `walk-latency-fold.py` | The latency-budget certificates folded into one finding: the same student under an inference budget of n control ticks. |
 | `walk-dagger-round.sh`, `dagger-fold.py` | One DAgger round on the walk on a pod, and its fold: base student versus round student on the same 40 trials. |
@@ -101,16 +103,11 @@ with its log beside the artifact it writes.
 | `bam-bootstrap.py` | A fitted interval for a BAM actuator from Rhoban's public bench logs: refit, bootstrap, the record. |
 | `sts-study.py`, `sts-figure.py` | The STS3215 benchmark ingest and its parameter fits; the study's figure. |
 
-## The paper build
+## Figures
 
 | Tool | What it does |
 |---|---|
-| `paper.py` | Derives `docs/paper/paper-1.md` (the reading copy with figure list and provenance appendix) from `docs/paper/manuscript.md`; `--check` fails when stale. |
-| `paper-tex.py` | The manuscript as LaTeX into `docs/paper/latex/main.tex`, figures copied beside it; `--pdf` compiles with latexmk. |
 | `finding-figure.py` | Draws the figure of one or more finding records into `docs/figures/` and writes the paths onto the record. |
-| `paper-figures.py` | The designed composite figures into `docs/figures/paper/`. |
-| `paper-stills.py`, `paper-lift-stages.py`, `paper-walk-stages.py` | The paper's robot stills from the simulator, never a screenshot: the lift at its stages, the microduck walking and falling. |
-| `paper-figure-sheet.py` | A review sheet: each figure with its title, caption and the paragraphs that cite its record, one HTML page. |
 
 ## Cloud
 
@@ -123,9 +120,8 @@ with its log beside the artifact it writes.
 ## The archived rig
 
 These tools read and replay the recordings of the 2025–26 rig under
-`recordings/`. The rig's firmware and crates live in
-[Trainnr-AI/rig](https://github.com/Trainnr-AI/rig); the live paths need
-that checkout's `hil-host`, the replays run from here.
+`recordings/`. The rig's firmware and crates are in a private archive;
+the live paths need its `hil-host`, and the replays run from here.
 
 | Tool | What it does |
 |---|---|

@@ -546,7 +546,9 @@ class TheBundle(unittest.TestCase):
         self.assertEqual(
             prov["variants"], {"Fingertip": "Standard", "Physics": "Newton_compliant"}
         )
-        self.assertEqual(prov["license"], "CC-BY-4.0")
+        # NVIDIA's CC-BY beside the USD, Robotiq's BSD-3 over the repository
+        # (find_licenses, 2026-10-03); this test runs only in the usd venv
+        self.assertEqual(prov["license"], "CC-BY-4.0 AND BSD-3-Clause")
         self.assertEqual(prov["newton_census"]["joints"], 13)
         self.assertIn("newton", prov["versions"])
         self.assertTrue((self.bundle / "LICENSE").is_file())
@@ -563,7 +565,7 @@ class TheBundle(unittest.TestCase):
 
 @needs_usd
 class TheDoorAudits(unittest.TestCase):
-    """The door's audit of the 2F-85 (docs/e2e-research/78 §1 item 2):
+    """The door's audit of the 2F-85:
     every mass, centre of mass, inertia tensor, joint range and joint
     parameter equal to the USD layer; what differs is explained — the
     two spherical loop closures Newton writes as connect equalities, the

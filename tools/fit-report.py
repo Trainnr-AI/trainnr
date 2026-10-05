@@ -29,7 +29,7 @@ from trainnr.robot.fit_record import (  # noqa: E402
     write_spread_record,
 )
 
-# The foil, cited (docs/e2e-research/30 §3.3-3.4): the SO-101 constants
+# The foil: the SO-101 constants
 # shipped by the field, byte-identical across two companies' repos.
 
 FOIL = (

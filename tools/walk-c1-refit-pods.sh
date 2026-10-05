@@ -6,16 +6,18 @@
 # is at one point. Each pod: launch on the network volume, the resume
 # script, sync HEAD, then tools/walk-c1-arm.sh under BUNDLE=.
 #
-#   tools/walk-c1-refit-pods.sh prepare   # launch + resume six pods (~10 min)
+#   VOLUME=<id> tools/walk-c1-refit-pods.sh prepare   # launch + resume six pods (~10 min)
 #   tools/walk-c1-refit-pods.sh run       # sync HEAD, start the six arms
 #   tools/walk-c1-refit-pods.sh status    # the six stage lines
 #   tools/walk-c1-refit-pods.sh stop      # stop the six pods (keeps the volume)
-# Pod names are walk-refit-<arm>-<k>; doors are read from `machines`.
+# VOLUME is your RunPod network volume id (required by prepare; DC is
+# its datacenter). Pod names are walk-refit-<arm>-<k>; doors are read
+# from `machines`.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 cloud() { uv run --project "$repo/trainnr" python "$repo/tools/cloud-gpu.py" "$@"; }
 GPU="NVIDIA RTX PRO 6000 Blackwell Server Edition"
-VOLUME="${VOLUME:-q51i67dwu8}"; DC="${DC:-US-NC-2}"
+VOLUME="${VOLUME:-}"; DC="${DC:-US-NC-2}"
 BUNDLE="robots/actuator-bundles/xl330-refit.m6.bundle.json"
 ITER="${ITER:-8000}"; TRIALS="${TRIALS:-40}"
 # arm  span        replicate  seed
@@ -33,6 +35,7 @@ say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
 case "${1:-}" in
 prepare)
+  [ -n "$VOLUME" ] || { echo "usage: VOLUME=<network volume id> [DC=<datacenter>] $0 prepare" >&2; exit 2; }
   for spec in "${ARMS[@]}"; do set -- $spec; n="$(name_of "$@")"
     if [ -n "$(door_of "$n")" ]; then say "$n already running"; continue; fi
     say "launch $n"; cloud launch --name "$n" --gpu "$GPU" --volume "$VOLUME" --datacenter "$DC" >/dev/null &

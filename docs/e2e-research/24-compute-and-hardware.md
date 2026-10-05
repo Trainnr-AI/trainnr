@@ -4,7 +4,7 @@
 > 24 GB RTX 3090 Ti under Windows/WSL as the only compute). Prices and
 > availability are of that date. Superseded by what was built: training
 > runs on mjlab and rented GPUs ([docs/34](../34-cloud-gpu.md)), the rig
-> this page would equip lives in [Trainnr-AI/rig](https://github.com/Trainnr-AI/rig). Kept as the record. Still useful:
+> this page would equip is kept in a private archive. Kept as the record. Still useful:
 > §4's servo durability section (211–282), whose numbers are independent of
 > the plan.
 

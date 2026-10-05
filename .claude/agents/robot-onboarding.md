@@ -26,7 +26,7 @@ Rules this repo will hold you to:
 - MuJoCo is pinned `~=3.11.0` — a model that only compiles on newer
   MuJoCo is a finding to report, not a reason to bump the pin.
 - Verify by compiling: `task.spec.compile()` or a viewer launch, and
-  confirm the census (`mcp__trainnr__describe_bundles` or
+  confirm the census (`mcp__trainnr__list_robots` or
   `trainnr.mcp_server.list_robots`) sees the new bundle with a
   stamp before calling the job done.
 

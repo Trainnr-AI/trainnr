@@ -11,7 +11,8 @@ tools: `onboard_robot` (an MJCF or USD file becomes a stamped bundle),
 `identify_system` for the fit, with its intervals and pinned / NOT PINNED
 verdicts written into the bundle. For a legged robot the `legged-joints`
 method (since 2026-09-24) fits per-joint armature, damping and friction
-from the robot's own joint telemetry; the README's Go2 table walks it.
+from the robot's own joint telemetry; the README's Quickstart walks it on a
+Go2 (reference updated 2026-10-04).
 This page is the Python-API path underneath those tools, for a robot
 whose telemetry arrives as a CSV.
 
@@ -24,7 +25,7 @@ cd trainnr && uv sync --extra sim     # mujoco[sysid] and friends
 ```
 
 (Rust is only for the Studio; the Pico toolchain belongs to the original
-rig, which lives in its own archive repository — you need neither to
+rig, which is kept in a private archive — you need neither to
 measure your robot.)
 
 ## 1. Make a bundle
@@ -134,9 +135,9 @@ what it doesn't know is a guess with confidence theater.
 ## The drivetrain shortcut
 
 For the 2025–26 rig's drivetrain (its bundle is `robots/rig-drivetrain`;
-the hardware, the firmware and the recorder live in the archive
-repository Trainnr-AI/rig) the whole chain is one command over a
-recording made there:
+the firmware and the recorder are in a private archive, and its
+recordings are under `recordings/`) the whole chain is one command over
+one of those recordings:
 
 ```sh
 uv run --extra sim python ../tools/fit-report.py ../robots/rig-drivetrain \

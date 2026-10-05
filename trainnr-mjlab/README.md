@@ -51,7 +51,8 @@ they run from a checkout the same way. On WSL2 prefix with
 ```sh
 cd trainnr-mjlab && uv sync --extra viz
 
-# train: agent `smoke` is minutes, `g3` is the full recipe
+# train: agent `smoke` is minutes and saves nothing, `g3` is the full recipe
+# (the train_walk tool's recipe="smoke" and recipe="full")
 uv run python -m trainnr_mjlab.walk_train --agent g3 --robot go2 \
     --project ../projects/<name> --iterations 1500 [--fit <fit@hash>] [--dr-span 0.10]
 
@@ -71,5 +72,7 @@ Extras: `bam` installs Rhoban's own package as the parity reference for the
 kernel's tests (never a runtime dependency); `viz` installs the Rerun SDK
 the recorder streams to, pinned to the Studio's own release line.
 
-Training needs a CUDA GPU. Evaluation of a trained checkpoint runs on the
-CPU, slowly.
+Training needs a CUDA GPU, and so does `reward_preview.py` today (its
+device is `cuda:0`). Evaluation of a trained checkpoint runs on the CPU,
+slowly. The environment is about 6 GB; the first tool job that needs it
+(training, evaluation, export) prepares it.

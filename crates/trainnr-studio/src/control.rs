@@ -25,6 +25,15 @@ pub const STATE_SCHEMA: &str = "trainnr-studio-state/1";
 /// How often the commands directory is read: 20 Hz, cheap (one readdir
 /// of a small directory).
 pub const POLL_EVERY: Duration = Duration::from_millis(50);
+/// A command's id is its file name: letters, digits, `.`, `_` and `-`,
+/// at most this long. Anything else is skipped unanswered; the id is
+/// written into the answer, so a crafted file name must never reach it
+/// (a shared project, 2026-10-04 security review).
+const COMMAND_ID_MAX: usize = 64;
+/// A command file older than this Studio session (less this slack) came
+/// with the project, not from an agent talking to this window; it is
+/// skipped. The Python side writes commands only while a Studio is alive.
+const COMMAND_CLOCK_SLACK: Duration = Duration::from_secs(5);
 /// The state file is rewritten at least this often even when nothing
 /// changed, so a stale heartbeat means a dead Studio.
 const HEARTBEAT_EVERY: Duration = Duration::from_secs(1);
@@ -433,6 +442,18 @@ pub struct Control {
     /// The tip last seen, and whether the cursor's last move rode it.
     observed_tip: Option<i64>,
     following: bool,
+    /// When this session started: older command files are not applied.
+    started: SystemTime,
+}
+
+/// Whether `id` may name a command: see [`COMMAND_ID_MAX`].
+pub fn valid_command_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= COMMAND_ID_MAX
+        && !id.starts_with('.')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 impl Control {
@@ -449,6 +470,7 @@ impl Control {
             commanded_until: None,
             observed_tip: None,
             following: false,
+            started: SystemTime::now(),
         };
         control.forget_answered();
         control
@@ -548,7 +570,14 @@ impl Control {
             .filter_map(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
                 let id = name.strip_suffix(".json")?;
-                if id.ends_with(".ack") || self.seen.contains(id) {
+                if id.ends_with(".ack") || self.seen.contains(id) || !valid_command_id(id) {
+                    return None;
+                }
+                let meta = std::fs::symlink_metadata(entry.path()).ok()?;
+                let written = meta.modified().ok()?;
+                let session = self.started.checked_sub(COMMAND_CLOCK_SLACK)?;
+                if !meta.file_type().is_file() || written < session {
+                    self.seen.insert(id.to_owned()); // came with the project
                     return None;
                 }
                 Some((id.to_owned(), entry.path()))
@@ -580,6 +609,9 @@ impl Control {
         reason: Option<&str>,
         extra: serde_json::Map<String, serde_json::Value>,
     ) {
+        if !valid_command_id(id) {
+            return;
+        }
         let dir = self.root.join(COMMANDS_RELATIVE);
         let _ = std::fs::create_dir_all(&dir);
         let mut body = serde_json::json!({
@@ -619,10 +651,18 @@ impl Control {
         } else {
             image::imageops::resize(&image, width, height, image::imageops::FilterType::Triangle)
         };
+        if !valid_command_id(id) {
+            return Err("not a command id".into());
+        }
         let dir = self.root.join(SCREENSHOTS_RELATIVE);
+        refuse_links(&dir.join(format!("{id}.png")))?;
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let path = dir.join(format!("{id}.png"));
-        scaled.save(&path).map_err(|e| e.to_string())?;
+        let mut png = Vec::new();
+        scaled
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .map_err(|e| e.to_string())?;
+        write_atomic_bytes(&path, &png).map_err(|e| e.to_string())?;
         Ok((path, width, height))
     }
 
@@ -657,6 +697,9 @@ impl Control {
             return;
         };
         let path = self.root.join(EVENTS_RELATIVE);
+        if refuse_links(&path).is_err() {
+            return;
+        }
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
@@ -769,12 +812,62 @@ pub fn entry_name(name: &str) -> String {
 }
 
 pub fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
+    write_atomic_bytes(path, body.as_bytes())
+}
+
+/// Write `body` to `path` through a fresh temporary file and a rename,
+/// never through a link: the temporary is created new (it fails rather
+/// than follow anything already there) and every folder from the
+/// project's `.index` down must be a real folder. A shared project once
+/// carried `<name>.tmp` as a link to the user's shell profile, and the
+/// Studio's next write landed there (2026-10-04 security review).
+pub fn write_atomic_bytes(path: &Path, body: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    refuse_links(path).map_err(std::io::Error::other)?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, body)?;
-    std::fs::rename(tmp, path)
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = path.with_file_name(format!(
+        ".{name}.{}.{}.tmp",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)?;
+    let written = file.write_all(body).and_then(|()| file.sync_all());
+    drop(file);
+    if let Err(e) = written.and_then(|()| std::fs::rename(&tmp, path)) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Refuse a write whose target, or any folder from the project's
+/// `.index` down to it, is a link: such a write could land anywhere.
+pub fn refuse_links(path: &Path) -> Result<(), String> {
+    let mut at = Some(path);
+    while let Some(p) = at {
+        if let Ok(meta) = std::fs::symlink_metadata(p) {
+            if meta.file_type().is_symlink() {
+                return Err(format!(
+                    "{} is a link; refusing to write through it",
+                    p.display()
+                ));
+            }
+        }
+        if p.file_name().is_some_and(|n| n == ".index") {
+            return Ok(());
+        }
+        at = p.parent();
+    }
+    Ok(())
 }
 
 /// Nanoseconds since the epoch as the event line carries them (an f64
@@ -796,6 +889,72 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(COMMANDS_RELATIVE)).expect("mkdir");
         root
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_planted_link_is_never_written_through() {
+        // A shared project carried `<name>.tmp` and `.index/commands` as
+        // links to files outside it (2026-10-04 security review).
+        let root = temp_root("links");
+        let outside = root.join("outside.txt");
+        std::fs::write(&outside, "keep").expect("write");
+        let state = root.join(STATE_RELATIVE);
+        std::os::unix::fs::symlink(&outside, state.with_extension("tmp")).expect("link");
+        std::os::unix::fs::symlink(&outside, &state).expect("link");
+        assert!(write_atomic(&state, "{}").is_err(), "the target is a link");
+        assert_eq!(std::fs::read_to_string(&outside).expect("read"), "keep");
+        std::fs::remove_file(&state).expect("unlink");
+        write_atomic(&state, "{}").expect("a fresh temporary, never the planted one");
+        assert_eq!(std::fs::read_to_string(&outside).expect("read"), "keep");
+        assert_eq!(std::fs::read_to_string(&state).expect("read"), "{}");
+
+        let linked = temp_root("linked-dir");
+        std::fs::remove_dir_all(linked.join(COMMANDS_RELATIVE)).expect("rm");
+        std::os::unix::fs::symlink(&root, linked.join(COMMANDS_RELATIVE)).expect("link");
+        let control = Control::new(linked.clone());
+        control.ack("x", "done", None);
+        assert!(
+            !root.join("x.ack.json").exists(),
+            "an ack through a linked folder"
+        );
+    }
+
+    #[test]
+    fn a_command_id_is_a_plain_name() {
+        for good in ["1791128163841831295-screenshot", "a.b_c-d"] {
+            assert!(valid_command_id(good), "{good}");
+        }
+        for bad in ["", ".hidden", "$(id)", "a/b", "a b", &"x".repeat(65)] {
+            assert!(!valid_command_id(bad), "{bad}");
+        }
+        let root = temp_root("bad-id");
+        let dir = root.join(COMMANDS_RELATIVE);
+        let control = Control::new(root.clone());
+        std::fs::write(
+            dir.join("$(id).json"),
+            r#"{"verb":"open","section":"overview"}"#,
+        )
+        .expect("write");
+        let mut control = control;
+        assert!(control.poll().is_empty(), "a crafted name is skipped");
+        control.ack("$(id)", "done", None);
+        assert!(!dir.join("$(id).ack.json").exists(), "and never answered");
+    }
+
+    #[test]
+    fn a_command_older_than_the_session_is_not_applied() {
+        let root = temp_root("old-command");
+        let path = root.join(COMMANDS_RELATIVE).join("old.json");
+        std::fs::write(&path, r#"{"verb":"open","section":"overview"}"#).expect("write");
+        let an_hour_ago = SystemTime::now() - Duration::from_secs(3600);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .and_then(|f| f.set_modified(an_hour_ago))
+            .expect("set mtime");
+        let mut control = Control::new(root);
+        assert!(control.poll().is_empty(), "it came with the project");
     }
 
     #[test]

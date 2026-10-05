@@ -27,6 +27,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from trainnr_mjlab.checkpoint_guard import require_tensor_only
 from trainnr_mjlab.walks import (
     DEFAULT_ROBOT,
     ROBOTS,
@@ -151,6 +152,7 @@ def _policy_loader(spec: Any, device: str) -> tuple[Any, Any]:
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
 
     def load(checkpoint: Path) -> Any:
+        require_tensor_only(checkpoint)  # before any unpickling
         runner.load(
             str(checkpoint), load_cfg={"actor": True}, strict=True, map_location=device
         )

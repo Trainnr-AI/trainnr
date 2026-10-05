@@ -29,6 +29,27 @@ class _Home(unittest.TestCase):
         none = mock.patch.object(locate, "checkout_projects", return_value=None)
         none.start()
         self.addCleanup(none.stop)
+        session = mock.patch.object(locate, "_session_root", None)
+        session.start()
+        self.addCleanup(session.stop)
+
+
+class OneProcessOneProject(_Home):
+    """Two agent sessions shared the projects home's `.current`: one
+    session's use_project moved the other's work into its own project
+    (review, 2026-10-04). A process keeps the project it chose; `.current`
+    only seeds a new one."""
+
+    def test_another_sessions_choice_does_not_move_this_one(self) -> None:
+        mine = locate.create_project(locate.projects_home() / "mine", "mine")
+        theirs = locate.create_project(locate.projects_home() / "theirs", "theirs")
+        locate.use_project("mine")
+        # another process writes its own choice into the shared file
+        (locate.projects_home() / locate.CURRENT_FILE).write_text(str(theirs.root))
+        self.assertEqual(locate.current_project().root, mine.root.absolute())
+        # a new process (no choice yet) starts from the shared file
+        with mock.patch.object(locate, "_session_root", None):
+            self.assertEqual(locate.current_project().root, theirs.root)
 
 
 class TheProjectsHome(_Home):
@@ -182,3 +203,21 @@ class TheCliWithoutTheMcpExtra(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheCheckoutSample(unittest.TestCase):
+    """The checkout's empty sample is listed only when there is no other
+    project; beside the user's own it read as a broken one (2026-10-04)."""
+
+    def test_the_sample_steps_aside_for_real_projects(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        checkout = tmp / "checkout"
+        locate.create_project(checkout / locate.SAMPLE_PROJECT, "sample")
+        with (
+            mock.patch.dict(os.environ, {"TRAINNR_HOME": str(tmp / "home")}),
+            mock.patch.object(locate, "checkout_projects", return_value=checkout),
+        ):
+            os.environ.pop("TRAINNR_PROJECTS", None)
+            self.assertEqual([p.root.name for p in locate.list_projects()], ["sample"])
+            locate.create_project(locate.projects_home() / "go2", "go2")
+            self.assertEqual([p.root.name for p in locate.list_projects()], ["go2"])

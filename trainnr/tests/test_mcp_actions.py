@@ -1,5 +1,5 @@
 """S2's doors, against a fake spawner — the command lines ARE the
-contract (docs/64 §6: "each with a test that fakes the heavy call"),
+contract (each with a test that fakes the heavy call),
 plus the job manager's lifecycle and the onboarding refusals.
 """
 
@@ -54,17 +54,38 @@ def harness(env_file: Path | None = None) -> Iterator[tuple[Actions, _FakeSpawne
     own wrapping has its own test. The watchers are JOINED before the
     tempdir goes — a fake process exits instantly, and its watcher was
     still writing the exit file while rmtree ran (2026-09-02)."""
+    from unittest import mock  # noqa: PLC0415
+
+    from trainnr.project import locate  # noqa: PLC0415
+
     with TemporaryDirectory() as tmp:
         spawner = _FakeSpawner()
+        # every door writes inside the current project, refused without one
+        project = locate.create_project(Path(tmp) / "project", "project")
+        spawner.root = project.root.resolve()
         jobs = JobManager(Path(tmp), spawner=spawner)
+        env = {locate.PROJECT_ENV: str(project.root)}
         try:
-            yield Actions(jobs, env_file=env_file), spawner
+            with (
+                mock.patch.dict(os.environ, env),
+                mock.patch.object(locate, "_session_root", None),
+            ):
+                yield Actions(jobs, env_file=env_file), spawner
         finally:
             jobs.join()
 
 
 UV_PIPELINE = ["uv", "run", "--no-sync", "--project", str(PIPELINE_DIR)]
-UV_MJLAB = ["uv", "run", "--no-sync", "--project", str(TRAINNR_MJLAB_DIR), "python"]
+UV_MJLAB = [
+    "uv",
+    "run",
+    "--no-sync",
+    "--project",
+    str(TRAINNR_MJLAB_DIR),
+    "--extra",
+    "viz",
+    "python",
+]
 
 
 class TheDoors(unittest.TestCase):
@@ -81,7 +102,7 @@ class TheDoors(unittest.TestCase):
                     "python",
                     str(TOOLS_DIR / "kitting-demos.py"),
                     "3",
-                    "runs/x",
+                    str(spawner.root / "runs" / "x"),
                     "--seed",
                     "7",
                 ],
@@ -108,7 +129,7 @@ class TheDoors(unittest.TestCase):
                 ],
             )
             self.assertEqual(cwd, PIPELINE_DIR)
-            self.assertTrue(str(handle["job_id"]).startswith("accept-task-"))
+            self.assertTrue(str(handle["job_id"]).startswith("check-task-"))
             with self.assertRaises(ValueError):
                 actions.check_task("a/b", "/p")
 
@@ -127,6 +148,7 @@ class TheDoors(unittest.TestCase):
                     "python",
                     str(TOOLS_DIR / "planner-demos.py"),
                     "block_stack",
+                    str(spawner.root / "runs" / "planner-demos-block_stack"),
                     "--episodes",
                     "4",
                     "--seed",
@@ -158,6 +180,23 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(argv[1], str(TOOLS_DIR / "e2e-smoke.py"))
             self.assertIn("--from", argv)
             self.assertEqual(argv[argv.index("--name") + 1], "demo")
+            self.assertEqual(argv[argv.index("--runs") + 1], str(spawner.root / "runs"))
+            with self.assertRaisesRegex(ValueError, "plain word"):
+                actions.run_chain(name="../../x")
+
+    def test_a_door_never_writes_outside_the_project(self) -> None:
+        """`out` and `dataset` took any path the user could write; a
+        checkout or plugin folder got data (reviews, 2026-10-04)."""
+        with harness() as (actions, spawner):
+            for call in (
+                lambda: actions.generate_kitting_demos(out="/tmp/elsewhere"),
+                lambda: actions.generate_kitting_demos(out="../../elsewhere"),
+                lambda: actions.multiply_demos("seeds", "/etc/x"),
+                lambda: actions.generate_walk_demos(checkpoint="/tmp/evil.pt"),
+            ):
+                with self.assertRaisesRegex(ValueError, "outside the current project"):
+                    call()
+            self.assertEqual(spawner.calls, [])
 
     def test_the_walk_trains_and_certifies_in_the_rq_mjlab_venv(self) -> None:
         with harness() as (actions, spawner):
@@ -230,6 +269,8 @@ class TheDoors(unittest.TestCase):
                 *UV_MJLAB[:5],
                 "--env-file",
                 "/box/wsl.env",
+                "--extra",
+                "viz",
                 "python",
                 "-m",
                 "trainnr_mjlab.walk_train",
@@ -370,17 +411,18 @@ class TheWalkDemosDoor(unittest.TestCase):
                 out="runs/w",
                 robot="go2",
                 scene="/p/scenes/hurdle",
-                project="/p",
                 frame_size=(160, 120),
             )
             [(argv, _cwd)] = spawner.calls
             press = argv[
                 argv.index("trainnr_mjlab.walk_press") :
             ]  # after uv's own flags
-            self.assertEqual(press[1], "runs/c/model_9.pt")
+            self.assertEqual(press[1], str(spawner.root / "runs/c/model_9.pt"))
             self.assertEqual(press[press.index("--robot") + 1], "go2")
             self.assertEqual(press[press.index("--scene") + 1], "/p/scenes/hurdle")
-            self.assertEqual(press[press.index("--project") + 1], "/p")
+            self.assertEqual(
+                Path(press[press.index("--project") + 1]).resolve(), spawner.root
+            )
             self.assertEqual(
                 press[press.index("--width") + 1 : press.index("--width") + 4],
                 ["160", "--height", "120"],
@@ -400,13 +442,15 @@ class TheWalkDemosDoor(unittest.TestCase):
                     "trainnr_mjlab.walk_press",
                     "--latest",
                     "--out",
-                    "runs/w",
+                    str(spawner.root / "runs" / "w"),
                     "--episodes",
                     "4",
                     "--worlds",
                     "3",
                     "--seed",
                     "9",
+                    "--project",
+                    argv[-1],
                 ],
             )
             self.assertEqual(cwd, TRAINNR_MJLAB_DIR)
@@ -418,7 +462,7 @@ class TheJobLifecycle(unittest.TestCase):
             handle = actions.train_walk(robot="microduck")
             # The fake process exits 0 instantly; join the watcher rather
             # than poll (a poll saw "ended (unrecorded)" first whenever
-            # the fake pid was dead on the box, 2026-09-02).
+            # the fake pid was dead on the WSL machine, 2026-09-02).
             actions.jobs.join()
             status = actions.describe_job(str(handle["job_id"]))
             self.assertEqual(status["state"], "done")

@@ -14,7 +14,7 @@ another.
         ../tools/e2e-smoke.py --episodes 2 --steps 300
     # macOS: none of the GL variables; the policy device is picked for you:
     cd trainnr && .venv-train/bin/python ../tools/e2e-smoke.py --episodes 2 --steps 300
-    # the cloud GPU, on a dataset the box converted and pushed:
+    # the cloud GPU, on a dataset this machine converted and pushed:
     cd trainnr && MUJOCO_GL=egl .venv-train/bin/python \\
         ../tools/e2e-smoke.py --scale cloud --name t5-cloud --from train
 

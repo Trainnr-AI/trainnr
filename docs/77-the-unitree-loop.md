@@ -189,7 +189,7 @@ read differently, and the window must say so rather than show a gap.
    from the start, as a content hash should be.
 
 8. **A run training in the project was invisible in the Studio** (found
-   and fixed 2026-09-10, the box). The Studio polls the index file every
+   and fixed 2026-09-10, the WSL machine). The Studio polls the index file every
    second, but nothing rewrote the index while a run trained, and the
    experiment card's curve came only from a console log an imported
    study arm carries - a door-launched run has neither. Fixed three
@@ -204,7 +204,7 @@ read differently, and the window must say so rather than show a gap.
    `train_walk`.
 
 9. **A certificate judged inside the project never became an
-   evaluation** (found and fixed 2026-09-10, the box). `certify_walk`
+   evaluation** (found and fixed 2026-09-10, the WSL machine). `certify_walk`
    on `model_1400` of the training run wrote its 40/40 verdict where
    trainnr_mjlab writes one - `runs/go2-c1/verdict/walk-verdict-cuda.json`
    beside the checkpoint - and the Evaluations page stayed at zero: the
@@ -221,7 +221,7 @@ read differently, and the window must say so rather than show a gap.
    at 4 of 8 stages (asset, environment, policy, evaluation).
 
 10. **A run's version moved every time a checkpoint landed** (found and
-    fixed 2026-09-10, the box). A run was stamped like a bundle, by
+    fixed 2026-09-10, the WSL machine). A run was stamped like a bundle, by
     hashing its folder, so the card read `go2-c1@b7630dc54e54` one tick
     and `go2-c1@a8300622d290` the next, and the policy written a minute
     earlier cited a run version that no longer existed - the lineage
@@ -230,7 +230,7 @@ read differently, and the window must say so rather than show a gap.
     `run.json`), the rule tasks already followed; the index, the
     importer and the live loop share it. The policy's and the
     certificate's `run` now resolve to the run card. Closed for runs
-    trained by the door (2026-09-11, the box, friction 18): `train_walk`
+    trained by the door (2026-09-11, the WSL machine, friction 18): `train_walk`
     hands the project's task stamp to the trainer, the run's identity
     carries it, and the verdict cites it, so the environment card is
     cited by its evaluation. A run launched by hand still cites the
@@ -258,7 +258,7 @@ read differently, and the window must say so rather than show a gap.
     not a judgment; the certificate remains the judgment.
 
 12. **Two finished certificates showed as running for an hour** (found
-    and fixed 2026-09-10, the box). The job manager's exit-code watcher
+    and fixed 2026-09-10, the WSL machine). The job manager's exit-code watcher
     is a thread in the process that opened the door; called from a
     script that returned, no `.exit` file ever landed, and the Studio
     counted a job running while no exit was recorded. Fixed twice: the
@@ -345,13 +345,13 @@ onboarded into `projects/go2-walk` (the reference's `go2.xml`,
 `go2@b6170cf88b09`); the walk declared as `go2-flat`
 (`go2-walk@0e7e123a7de7`, span 0.10, flat, 20 s episodes, 40 trials)
 and accepted by the learnability smoke; the train door taking the
-declared task. The box needs what a pod needed: the trainnr_mjlab venv
+declared task. The WSL machine needs what a pod needed: the trainnr_mjlab venv
 (mjlab 1.6, mujoco-warp, torch with CUDA — `cd trainnr-mjlab && uv sync --extra viz`; `viz` is the Rerun recorder the Studio watches, and its tests)
 and the project directory (gitignored; copy `projects/go2-walk`, the
 bundle is 24 MB of meshes). Then, with `TRAINNR_PROJECT` set to the
 project, by the door:
 
-    train_walk(agent="g3", task="go2-flat", name="go2-c1", seed=42)
+    train_walk(recipe="full", task="go2-flat", name="go2-c1", seed=42)
 
 which the trainer receives as `--robot go2 --project <root> --dr-span
 0.1 --task-stamp go2-walk@0e7e… --log-dir <root>/runs/go2-c1 --seed 42`;
@@ -416,7 +416,7 @@ takes one observation at a time; 17, the scene namespaces the entity's
 names (`robot/FL_hip_joint`) — the manifest keeps the robot's own.
 
 What the real Go2 deployment needs next: the certified `model_7999.pt`
-from the box (with its verdicts) so the export cites `go2-c1`'s
+from the WSL machine (with its verdicts) so the export cites `go2-c1`'s
 evaluation and the gate judges against 40/40; then the reference's DDS
 simulator on a Linux box as a second, independent gate; then A7.
 
@@ -447,7 +447,7 @@ stamp to the task registry, which knows families by id
 through the environment card the index holds (its spec records the
 family id); a run naming the family id directly is taken as is.
 
-Friction 20 (fixed, 2026-09-11, the box): **the certificate and the
+Friction 20 (fixed, 2026-09-11, the WSL machine): **the certificate and the
 manifest described the curriculum's first stage, whatever the
 checkpoint had trained on.** The reward curve's step at iteration
 5000 (86.5 to 73.2; entropy 1.76 to 4.45; episode length unchanged at
@@ -980,7 +980,7 @@ stops as per-tick series; `preflight-handover.png` is the robot at the
 end of the ramp. Door `preflight_deployment` (a job),
 `tools/preflight-deployment.py`.
 
-**Measured on go2-c2** (plain MuJoCo 3.11.0, the box):
+**Measured on go2-c2** (plain MuJoCo 3.11.0, the WSL machine):
 
 | check | measured | limit |
 |---|---|---|
@@ -1146,7 +1146,7 @@ frame), not to the app; the measurement to take if it returns is the
 X server's pointer position against the user's, in one
 "park the mouse" round trip.
 
-Friction 19, resolved (2026-09-12, the box): the pointer offset and
+Friction 19, resolved (2026-09-12, the WSL machine): the pointer offset and
 the window that would not move had one cause, read off the X server
 this time: WSLg's window manager had the Studio **maximized** on both
 axes, its frame 32 px above the screen and wider than the monitor,

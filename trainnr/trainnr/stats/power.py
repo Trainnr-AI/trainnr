@@ -6,7 +6,7 @@ verdict actually uses — `effects.fisher_exact`, two-sided, at the
 protocol's declared alpha — so the power is the power of OUR verdict,
 not of a textbook approximation. Everything here is standard library
 on purpose: the sizing recomputes on an auditor's laptop, the same
-rule as the statistics it sizes (docs/33 "stdlib-pure core").
+rule as the statistics it sizes (a stdlib-pure core).
 """
 
 from __future__ import annotations

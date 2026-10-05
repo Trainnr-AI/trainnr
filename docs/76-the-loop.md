@@ -10,7 +10,8 @@ involved.*
 2026-09-08. Where a section was built, a **Built** note follows it with
 the date; passages headed *Build notes (date)* are the diary of that
 build and can be skipped. Counts in the text are dated; the README's
-"What is in the box" table is the current map of the tree. The build
+"What is in the repository" table is the current map of the tree
+(reference updated 2026-10-04). The build
 sequence itself is recorded in docs/77 (the Go2 loop) and docs/78 (the
 scene loop). The machines named below are the GPU workstation (an RTX
 3090 Ti on WSL2) and a Mac (M1 Pro). The build phases A0–A8 are: A0 the
@@ -291,7 +292,7 @@ critical path:
 1. **replay** — a recorded fixture. This is the one that makes every
    later phase testable with no robot in the room; the repo already has
    twenty-five real recordings.
-2. **wire** — the archived rig (Trainnr-AI/rig), wrapping the existing reader.
+2. **wire** — the archived rig's format (its code is in a private archive), wrapping the existing reader.
 3. **mcap** — the ROS 2 path. Since the Iron release (2023-05-23),
    `ros2 bag record` writes MCAP by default, and an MCAP file carries the
    message schemas inside it, so an offline reader needs no ROS

@@ -31,7 +31,7 @@ repos:
         entry: python3 tools/release.py check
         language: system
         pass_filenames: false
-        files: (pyproject\.toml|__init__\.py|Cargo\.toml|plugin\.json|marketplace\.json|server\.json|CITATION\.cff)$
+        files: (pyproject\.toml|__init__\.py|Cargo\.toml|Cargo\.lock|uv\.lock|plugin\.json|marketplace\.json|server\.json|CITATION\.cff|CHANGELOG\.md)$
       - id: docs-describe-real-code
         name: docs describe real code
         entry: python3 tools/check-docs.py

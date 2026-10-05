@@ -36,7 +36,7 @@ class ScaleServoDynamics(unittest.TestCase):
         self.assertEqual(spec.joints[1].damping[0], 0.0)  # the free joint: untouched
         self.assertAlmostEqual(spec.actuators[0].gainprm[0], kp * 0.8)
         # biasprm[1] is -kp for a position servo; scaled TOGETHER or the
-        # "gain" becomes a setpoint (the log 2026-08-26).
+        # "gain" becomes a setpoint (2026-08-26).
         self.assertAlmostEqual(spec.actuators[0].biasprm[1], -kp * 0.8)
         model = spec.compile()
         self.assertAlmostEqual(model.actuator_gainprm[0][0], kp * 0.8)

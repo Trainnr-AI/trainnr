@@ -212,7 +212,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         choices=("free", "pinned"),
         default="free",
         help="pinned takes the four head joints out of the action space - their "
-        "servos hold neutral (docs/07 2026-09-05: free heads park at their "
+        "servos hold neutral (measured 2026-09-05: free heads park at their "
         "limits and pass through the shoulders); recorded in the identity",
     )
     parser.add_argument("--envs", type=int, default=None)

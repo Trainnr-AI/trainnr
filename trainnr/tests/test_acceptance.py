@@ -41,7 +41,7 @@ class TheCriticLoop(unittest.TestCase):
         the expert's closing plane was IK-nullspace-random there, and
         the right arm's retreat pose blocked the left arm's path; the
         closing-plane objective and the park beat fixed both the same
-        day (docs/07). Measured on mujoco 3.11.0 and 3.12.0 alike."""
+        day. Measured on mujoco 3.11.0 and 3.12.0 alike."""
         from trainnr.tasks.aloha2 import KITTING_SPEC  # noqa: PLC0415
 
         task, verdict = self._accept(KITTING_SPEC)

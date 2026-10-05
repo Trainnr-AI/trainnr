@@ -8,18 +8,29 @@ name: scorecard
 on:
   push:
     branches: ["main"]
+  # A change to branch protection re-scores the Branch-Protection check.
+  branch_protection_rule:
   schedule:
     - cron: "30 5 * * 1"
   workflow_dispatch:
 
-permissions: read-all
+# Nothing at the top; the one job asks for exactly what it uses. (When
+# publishing results, Scorecard's API refuses a workflow with top-level
+# write permissions, env or defaults.)
+permissions: {}
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analysis:
     if: github.event.repository.private == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
+      contents: read           # check out the repository
+      actions: read            # read the workflow runs some checks score
       security-events: write   # upload the findings to the Security tab
       id-token: write          # publish the result for the badge
     steps:

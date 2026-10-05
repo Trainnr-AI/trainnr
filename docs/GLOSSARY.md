@@ -9,7 +9,7 @@ document that defines it.
 |---|---|---|
 | bundle | A robot or actuator as a directory with its model, its assets and a record of where it came from; the unit everything else cites | [76 §1](76-the-loop.md) |
 | `name@hash`, stamp | An artifact's identity: its name and the hash of its content; nothing is nameable without it | [76 §1](76-the-loop.md) |
-| record | The JSON file an evaluation, a gate or a drift check leaves behind; every number in the paper resolves to one | [findings/](findings/README.md) |
+| record | The JSON file an evaluation, a gate or a drift check leaves behind; a finding record is one measured result, and `tools/check-numbers.py` refuses a success ratio the README quotes that no finding record carries | [findings/](findings/README.md) |
 | datasheet | The provenance sheet beside a generated dataset: what produced it, under which draws, kept by which criterion | [e2e-research/60](e2e-research/60-the-data-press.md) |
 | manifest | The deployment's description read from the built environment: joint and actuator orders, gains, home pose, action scale, observations, control rate | [77 §6](77-the-unitree-loop.md) |
 
@@ -22,26 +22,26 @@ document that defines it.
 | CP95 | The exact 95 % confidence interval on a success rate (Clopper-Pearson), printed as `CP95 [low, high]`; gates read the low end | [32 §3](32-evaluation-layer.md) |
 | survived, tracked | A walk episode survived when the robot did not fall; it tracked when it also followed the commanded velocity within the task's error bound. Success is tracked | [77 §5](77-the-unitree-loop.md) |
 | learnability check | What `check_task` runs on a walk task: the trainer for two iterations on two environments, which proves the task builds and trains before hours are spent on it | [77 §3](77-the-unitree-loop.md) |
-| g3 | The full walk-training recipe in trainnr-mjlab (`train_walk(agent="g3")`), hours on a GPU; `smoke` is the minutes-long check | [trainnr-mjlab](../trainnr-mjlab/README.md) |
-| pinned / NOT PINNED | A fitted parameter whose interval is narrow enough to use (half-width within a tenth of its allowed range), or not | [26](26-sts3215-synthetic-identifiability.md) |
-| basis | Where a randomization range comes from: `identified` (the fit's interval), `declared` (a stated range around nominal constants), `pinned` (a point) | [paper §4](paper/manuscript.md) |
-| world | The simulator a policy is judged in: the `identified` (fit) world or the `declared` world | [77 §8](77-the-unitree-loop.md) |
+| recipe, g3 | How `train_walk` trains: `recipe="smoke"` checks the stack in minutes and saves nothing; `recipe="full"` (the trainer's own name for it is `g3`, `--agent g3`) trains 8000 iterations unless `iterations` says otherwise, hours on a GPU, and saves an experiment | [trainnr-mjlab](../trainnr-mjlab/README.md) |
+| pinned / not pinned | A fitted parameter whose interval is narrow enough to use (half-width within a tenth of its allowed range), or not. The identification reply prints `pinned` / `NOT PINNED`; its `identified` field and the Studio's identified / unidentified column say the same thing | [26](26-sts3215-synthetic-identifiability.md) |
+| basis | Where a randomization range comes from: `identified` (the fit's interval), `declared` (a stated range around nominal constants), `pinned` (a point) | [findings](findings/README.md) |
+| world, declared world | The simulator a policy is judged in: the `identified` world, built on a fit's estimates, or the `declared` world, built on the vendor's published constants (Unitree's gains and armature for the Go2) | [77 §8](77-the-unitree-loop.md) |
 | certificate, evaluation | Paired, seed-matched trials with an exact confidence interval and a milestone funnel; the verdict gates on the lower bound | [32 §3](32-evaluation-layer.md) |
 | funnel, milestones | The ordered stages an episode passes before success (reached, grasped, lifted); each counted | [32 §3](32-evaluation-layer.md) |
 | referee, success criterion | The task's judge of an episode, run on simulator state, never on pixels | [76 §7](76-the-loop.md) |
-| cliff | The demonstrator's edge: the hardest truth condition the scripted expert still passes; studies are run at it | [paper §5](paper/manuscript.md) |
-| truth | The test condition a policy is judged under, as opposed to the range it trained on | [paper §5](paper/manuscript.md) |
+| cliff | The demonstrator's edge: the hardest truth condition the scripted expert still passes; studies are run at it | [findings](findings/README.md) |
+| truth | The test condition a policy is judged under, as opposed to the range it trained on | [findings](findings/README.md) |
 | SENSITIVE / INSENSITIVE / UNRESOLVED | A parameter's verdict in a sensitivity or drift check: it matters, it does not, or the data cannot say | [77 §8](77-the-unitree-loop.md) |
 
 ## Deploying
 
 | Word | Meaning | Defined in |
 |---|---|---|
-| gate | The sim-to-sim check: the exported policy driven through its manifest alone by a registered runtime, judged the evaluation's way, passed within a tolerance of the cited certificate | [77 §6](77-the-unitree-loop.md) |
+| gate | The sim-to-sim check: the exported policy driven through its manifest alone by a registered runtime, judged the evaluation's way, passed when its success rate is at least the cited evaluation's minus a tolerance (0.1 by default). It checks that the export reproduces its evaluation, not that the policy is good | [77 §6](77-the-unitree-loop.md) |
 | runtime | What drives the exported policy at the gate: plain MuJoCo, or Unitree's own simulator over DDS | [77 §7](77-the-unitree-loop.md) |
 | attribution | When a gate fails, which difference between the two runtimes caused it, latency first | [77 §9](77-the-unitree-loop.md) |
 | pre-flight | The checks before the first tick on a robot: widths, joint order, gains, a dry rollout against ranges, compute per tick, the ramp-in and the stops measured | [77 §10](77-the-unitree-loop.md) |
-| drift | A fresh recording identified against the robot's fitted intervals, naming what left | [76 §8](76-the-loop.md) |
+| drift | A fresh recording identified against the robot's fitted intervals, naming what left; the recording a fit came from is refused, since it can only say "within" | [76 §8](76-the-loop.md) |
 | door, tool | An MCP tool of the server; "door" is the older word in the record | [76 §6](76-the-loop.md) |
 
 ## Runs and campaigns

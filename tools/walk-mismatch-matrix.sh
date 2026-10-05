@@ -30,7 +30,7 @@ if [ -n "${BUNDLE:-}" ]; then b="$BUNDLE"; [[ "$b" = /* ]] || b="$repo/$b"; bund
 export MUJOCO_GL=egl PYTHONUNBUFFERED=1
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
-cd "$repo/trainnr_mjlab"
+cd "$repo/trainnr-mjlab"
 certify() { # <ckpt> <certificate file> <verdict args...>
   local ckpt="$1" cert="$2"; shift 2
   if [ -f "$(dirname "$ckpt")/verdict/$cert" ]; then say "have $cert for $ckpt"; return 0; fi

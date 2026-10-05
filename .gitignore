@@ -44,9 +44,6 @@ docs/paper/latex/*.synctex.gz
 # The Studio log the launch line redirects to when started by hand.
 scratchpad/
 
-# The maintainers private session notes: never tracked again (filtered from history at the public export).
-claude-sync/
-
 # uv build / setuptools output
 trainnr/build/
 trainnr/dist/
@@ -58,3 +55,7 @@ trainnr-mjlab/dist/
 coverage.json
 badge-coverage.json
 htmlcov/
+
+# The microduck's meshes are fetched from Pollen Robotics on first use
+# (robots/microduck/FETCH.json): their licence keeps them out of this repository.
+robots/microduck/assets/

@@ -1,5 +1,5 @@
-"""The press's Studio feed — docs/66 §0: everything that happens
-streams to the Studio.
+"""The press's Studio feed: everything that happens streams to the
+Studio.
 
 `press.PressFeed` is the loop's seam; this module is the Studio
 implementation: keep counters as series on an `attempt` timeline, every
@@ -60,13 +60,13 @@ class StudioPressFeed:
         cls, run_name: str, say: Say = print, file: Path | None = None
     ) -> StudioPressFeed | None:
         """The feed, or None with ONE loud line when rerun-sdk is not in
-        this venv — pressing continues unwatched (docs/66 §0)."""
+        this venv — pressing continues unwatched."""
         try:
             return cls(run_name, file)
         except ImportError:
             say(
                 "no rerun-sdk in this venv — pressing continues UNWATCHED "
-                "(docs/66 §0; `uv sync --extra viz` to stream to the Studio)"
+                "(`uv sync --extra viz` to stream to the Studio)"
             )
             return None
 
@@ -87,7 +87,7 @@ class StudioPressFeed:
         # operator can scrub the episode; the attempt timeline stays
         # set, so scrubbing attempts shows each keeper's last frame.
         # JPEG-compressed: raw RGB at 50 Hz over three cameras would
-        # sit on the viewer's throat (the log 2026-09-03).
+        # sit on the viewer's throat (2026-09-03).
         cameras = dict(result.camera_frames or {})
         if result.frames:  # the single-camera path (kitting's layout)
             cameras.setdefault("camera", result.frames)

@@ -209,7 +209,7 @@ class ImportDoorsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             os.environ[PROJECT_ENV] = str(Path(tmp) / "p")
             try:
-                server.create_project_dir(str(Path(tmp) / "p"), "p")
+                server.create_project_dir("p", str(Path(tmp) / "p"))
                 out = server.import_experiment(str(Path(tmp) / "nowhere"))
                 self.assertEqual(out["status"], "refused")
                 self.assertIn("identity.json", out["reason"])

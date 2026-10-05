@@ -8,7 +8,7 @@
         --seed=1000 --eval.n_episodes=4 --eval.batch_size=1 \\
         --eval.use_async_envs=false
     # on WSL, under trainnr/wsl.env (tools/wsl-run.sh): llvmpipe otherwise
-    # renders at 317 ms a frame (the log 2026-08-26)
+    # renders at 317 ms a frame (measured 2026-08-26)
 
 `--env.discover_packages_path` (lerobot/configs/parser.py) imports every
 module of the named PACKAGE before the CLI is parsed — a module path is

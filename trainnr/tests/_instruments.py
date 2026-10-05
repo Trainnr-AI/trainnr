@@ -5,7 +5,7 @@ venvs run different MuJoCo versions, and on 2026-08-26 the same
 scripted stacker and inserter, the same task, the same four paired
 starts, scored 4/4 on the locked sim venv's MuJoCo 3.11.0 and 3/4 on
 the train venv's 3.12.0 (both fail trial 3 under 3.12; lift clears
-both). And the same 3.11.0 on the Mac's arm64 and this box's x86_64
+both). And the same 3.11.0 on the Mac's arm64 and the WSL machine's x86_64
 disagree on the kitting solver sweep (docs/e2e-research/47 §7.1), so
 the stamp names the architecture too. That is why every record
 carries `instrument`. The pins below

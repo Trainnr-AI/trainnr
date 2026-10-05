@@ -7,7 +7,7 @@ calibration protocol: put these beside real frames from the released
 dataset videos and iterate camera placement until a squint can't tell
 the viewpoint apart — a vision policy failing on COSMETICS must never
 be read as a dynamics gap. (Real-frame extraction needs a video
-decoder; run that half on the WSL box where torchcodec works.)
+decoder; run that half on the WSL machine where torchcodec works.)
 """
 
 import sys

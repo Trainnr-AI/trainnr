@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """What the importer changed: a bundle's compiled model against the
-description it came from (robot/import_audit; docs/e2e-research/78 §1).
+description it came from (robot/import_audit).
 The same audit every onboarding door runs, for a bundle already on
 disk — one onboarded before the audit existed, or one whose source has
 moved:

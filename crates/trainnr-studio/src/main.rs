@@ -141,6 +141,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fails loudly if another viewer already holds the port — close the
     // standalone viewer rather than silently split streams.
     let bind = std::env::var(GRPC_BIND_ENV).unwrap_or_else(|_| GRPC_BIND.to_owned());
+    if !bind.starts_with("127.") && !bind.starts_with("[::1]") && !bind.starts_with("localhost") {
+        // the viewer port takes data from, and replays it to, whoever
+        // connects, and can drive the window: say so when it is opened
+        eprintln!(
+            "trainnr-studio: the viewer server listens on {bind} ({GRPC_BIND_ENV}); \
+             anyone who can reach it can stream into this window and read what it shows"
+        );
+    }
     let (rx, _grpc_server_handle) = re_grpc_server::spawn_with_recv(
         bind.parse()?,
         Default::default(),

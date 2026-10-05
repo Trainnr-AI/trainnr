@@ -41,24 +41,51 @@ body:
     id: happened
     attributes:
       label: What happened
-      description: The reply or error, and the job log tail if a job failed (projects/<name>/mcp-jobs/<job>.log).
+      description: "The reply or error. If a job failed, `describe_job(job_id)` gives its `error`, and the whole log is ~/trainnr/projects/<project>/mcp-jobs/<job>.log: paste its tail."
       render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed trainnr
+      options:
+        - The Claude Code plugin
+        - A checkout (git clone)
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Version or commit
-      description: "`trainnr version`, or `git rev-parse --short HEAD`"
+      label: Plugin version or commit
+      description: "With the plugin: the version `/plugin` lists for trainnr, and the `gitCommitSha` of `trainnr@trainnr` in ~/.claude/plugins/installed_plugins.json. From a checkout: `git rev-parse --short HEAD`."
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Agent client
+      options:
+        - Claude Code
+        - Cursor
+        - Codex
+        - Other MCP client
+        - None (the trainnr command or Python directly)
     validations:
       required: true
   - type: input
     id: platform
     attributes:
       label: Platform
-      placeholder: "Ubuntu 24.04, RTX 4090 / macOS 15, M3 / Windows 11 + WSL2"
+      placeholder: "Ubuntu 24.04 / macOS 15 on an M3 / Windows 11 + WSL2 (Ubuntu 24.04)"
     validations:
       required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      description: "For training, evaluation on CUDA or the Studio: the GPU and driver version (`nvidia-smi` prints both), or \"none\"."
+      placeholder: "RTX 4090, driver 570.86 / Apple M3 / none"
   - type: textarea
     id: more
     attributes:

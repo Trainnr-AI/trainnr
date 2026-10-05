@@ -73,7 +73,7 @@ def bam_param_dr_event(  # noqa: PLR0913 - every knob of the draw, named
 
     `pin_scale` replaces the region with a DEGENERATE one — every law
     parameter at exactly fit x pin_scale, no draw — the envelope probe
-    (docs/paper/manuscript.md §5.3 on the walk): judge a policy at a known
+    (the walk's mismatch matrix): judge a policy at a known
     offset from the measured fit and read where it fails. The basis
     says "pinned", never "identified" or "declared". `pin_only` names the
     law parameters the pin moves; the rest sit at the fit exactly — one

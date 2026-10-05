@@ -1,5 +1,5 @@
-"""Every k/n success figure quoted in the paper drafts and the goals
-ledger must exist in a finding record — the traceability gate.
+"""Every success figure the README quotes, as k/n or "k of n", must
+exist in a finding record — the traceability gate.
 
     python3 tools/check-numbers.py
 
@@ -23,19 +23,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 FINDINGS = REPO / "docs" / "findings"
-# The prose whose numbers must trace: the paper drafts and the ledgers.
-PROSE = (
-    "docs/e2e-research/68-paper-section-4.md",
-    "docs/e2e-research/69-paper-sections-1-3.md",
-    "docs/e2e-research/70-paper-sections-5-9.md",
-    "docs/70-goals-ledger.md",
-    "docs/33-what-we-say.md",
-    "docs/paper/reading.md",
-    "docs/paper/manuscript.md",
-)
+# The prose whose numbers must trace: the README, where a reader meets the
+# results first. (The draft paper's prose was checked until it moved to
+# its own repository, 2026-10-05.)
+PROSE = ("README.md",)
 # A trailing "." is a sentence's end, not a decimal: "90/120." must
 # match (the matrix record's claim ends on one, 2026-09-04); ".5" must not.
 RATIO = re.compile(r"(?<![\d.])(\d{1,3})/(\d{1,3})(?!\d|\.\d)")
+# The README writes a result in words: "38 of 40".
+SPOKEN = re.compile(r"(?<![\d.])(\d{1,3}) of (\d{1,3})(?!\d|\.\d)")
 # Ratios that are not success counts, by denominator: dates are never
 # quoted as k/n here, but doc references ("docs 11/12") and pages are.
 NOT_A_SCORE = {"1/2", "11/12", "2/3"}
@@ -84,10 +80,8 @@ def main() -> int:
     problems: list[str] = []
     for rel in PROSE:
         if not (REPO / rel).is_file():
-            # The public edition ships without the maintainers' ledgers
-            # (tools/export/private-paths.txt); their numbers are checked
-            # on the private checkout.
-            print(f"skipped (not in this edition): {rel}")
+            # A gate that skips a missing file passes vacuously: refuse.
+            problems.append(f"{rel}: listed prose file does not exist")
             continue
         text = (REPO / rel).read_text()
         for lineno, line in enumerate(text.splitlines(), 1):
@@ -97,7 +91,7 @@ def main() -> int:
                 for m in SPAN_DATE.finditer(line)
                 for pos in range(m.start(), m.end())
             }
-            for m in RATIO.finditer(line):
+            for m in [*RATIO.finditer(line), *SPOKEN.finditer(line)]:
                 token = f"{m.group(1)}/{m.group(2)}"
                 if (
                     token in NOT_A_SCORE

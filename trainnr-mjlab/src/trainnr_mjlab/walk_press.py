@@ -245,7 +245,7 @@ def teacher_labeler(policy: Any, device: str) -> Any:
     actor's observation group (`walk_verdict.ACTOR_OBS_GROUP`), and the
     actor indexes a TensorDict of groups — handing it the bare tensor
     is the IndexError that killed DAgger round 1's first launch
-    (docs/07 2026-09-04)."""
+    (2026-09-04)."""
     import numpy as np  # noqa: PLC0415
     import torch  # noqa: PLC0415
     from tensordict import TensorDict  # noqa: PLC0415
@@ -299,7 +299,7 @@ def press_walk(  # noqa: PLR0913, PLR0915 - every knob of the press, named; one 
     DAgger: the student visits its own states, the teacher says what
     to do there, the referee keeps the episodes where the student's
     walk passed, and the dataset grows exactly where the student is
-    weak (docs/66 §6; Ross et al. 2011)."""
+    weak (DAgger, Ross et al. 2011)."""
     import numpy as np  # noqa: PLC0415
 
     from trainnr_mjlab.walk_view import load_walk  # noqa: PLC0415

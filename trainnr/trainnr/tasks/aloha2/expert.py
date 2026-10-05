@@ -44,7 +44,7 @@ class KittingChoreography:
     GRASP_TILT = (0.7, 0.0, -0.71)
     # The fingers close along world y: the parts are axis-aligned boxes,
     # so the pads meet their y faces squarely. Without it the closing
-    # plane pitched 19 degrees at the near-base corners (the log 2026-08-27).
+    # plane pitched 19 degrees at the near-base corners (2026-08-27).
     GRASP_CLOSING_AXIS = (0.0, 1.0, 0.0)
     # Where the closing plane is pinned: the GRASP beats, where the pads
     # must meet the part's faces squarely. Not the hovers (pinned there,

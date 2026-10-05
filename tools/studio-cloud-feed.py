@@ -17,7 +17,7 @@ streams them to :9876:
     cloud/status                            a live card: which arm, the
                                             step, throughput, ETA, GPU
 
-The ssh door is e.g. `root@216.243.220.136:13337` (`cloud-gpu.py
+The ssh door is e.g. `root@203.0.113.7:13337` (`cloud-gpu.py
 machines` prints it). The feed is read-only and reconnects on drops.
 """
 

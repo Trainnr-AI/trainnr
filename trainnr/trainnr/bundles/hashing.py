@@ -76,7 +76,16 @@ LICENSES_DIR = "LICENSES"
 # 2026-09-25 a fit or an audit written into the bundle moved its stamp,
 # and every checkpoint certified on the old stamp was refused by the
 # identity gate (go2@5003bf617b5f -> go2@c699dc1b0772 on 2026-09-24).
-BUNDLE_RECORDS: tuple[str, ...] = (f"{FITS_DIR}/*", AUDIT_FILE, f"{LICENSES_DIR}/*")
+# A bundle's fetch manifest (`bundles.fetch`) names files it does not carry;
+# it is a record about the bundle, so a stamp is the same with the fetched
+# files in place as it was when they were carried.
+FETCH_MANIFEST = "FETCH.json"
+BUNDLE_RECORDS: tuple[str, ...] = (
+    f"{FITS_DIR}/*",
+    AUDIT_FILE,
+    f"{LICENSES_DIR}/*",
+    FETCH_MANIFEST,
+)
 
 
 def stamp(name: str, root: Path) -> str:

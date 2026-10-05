@@ -1,7 +1,8 @@
-# Its own workspace, deliberately not a member of the repo root's — see the
-# root Cargo.toml's `exclude` comment for why (rerun 0.35 vs re_ui 0.36.x
-# wasm-bindgen conflict). Own Cargo.lock, same fix `firmware/Cargo.toml`
-# already uses for an analogous reason.
+# Its own workspace, with its own Cargo.lock: the Studio is the only Rust
+# crate in this repository, and cargo runs inside this directory. (It was
+# kept apart from the rig's root workspace over a rerun 0.35 against
+# re_ui 0.36 wasm-bindgen conflict; the rig's crates and firmware moved to
+# a private archive on 2026-10-02.)
 [workspace]
 
 [package]
@@ -9,6 +10,11 @@ name = "trainnr-studio"
 version = "0.1.0"
 edition = "2021"
 license = "FSL-1.1-ALv2"
+description = "The trainnr Studio: the desktop app with the embedded Rerun viewer and the MuJoCo simulator"
+repository = "https://github.com/Trainnr-AI/trainnr"
+# Released as prebuilt archives on the GitHub release (studio-release.yml),
+# never to crates.io.
+publish = false
 
 # The Studio (docs/35; chat-free since docs/80, 2026-09-02; code-free
 # since 2026-09-09): the window on the loop (docs/76). A project panel
@@ -52,9 +58,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 winit = { version = "0.30", default-features = false, features = ["x11"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
-# This standalone workspace has no [workspace.lints] to inherit from (see
-# firmware/Cargo.toml — same shape, same absence). Restated directly instead
-# of silently dropped: no unsafe code in this crate, `forbid` so it can't be
-# switched off locally with an `#[allow]`.
+# This standalone workspace has no [workspace.lints] to inherit from, so
+# the lint is stated here: no unsafe code in this crate, `forbid` so it
+# can't be switched off locally with an `#[allow]`
+# (tools/check-unsafe-gates.py checks this line stays).
 [lints.rust]
 unsafe_code = "forbid"

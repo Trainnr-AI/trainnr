@@ -57,7 +57,7 @@ from trainnr.envs.rsl_rl_log import (
     COL_STEPS_PER_SECOND,
     TRAINING_FILE,
 )
-from trainnr.evaluate.commands import TWIST_LABEL
+from trainnr.evaluate.commands import TWIST_LABEL, describe_twist
 from trainnr.project.files import read_json, read_text, write_json
 from trainnr.project.index import (
     UNRECORDED,
@@ -228,9 +228,21 @@ def _kv(
     return {
         "title": title,
         "kind": "kv",
-        "rows": [[k, v] for k, v in rows],
+        # numbers as the tables show them: 68.817, not 68.81702423095703
+        # (the README's drawer screenshots, 2026-10-04 review)
+        "rows": [[k, _shown(v)] for k, v in rows],
         "note": note,
     }
+
+
+def _shown(value: Any) -> Any:
+    """A row's value as shown: a number rounded by `_f`; anything else,
+    a flag included, as it is."""
+    if isinstance(value, float) or (
+        isinstance(value, int) and not isinstance(value, bool)
+    ):
+        return _f(value)
+    return value
 
 
 def _table(
@@ -246,6 +258,11 @@ def _table(
     }
 
 
+# Below this magnitude a shown number is "≈0": far under any physical
+# quantity the drawers show (the smallest real ones are around 1e-6).
+EFFECTIVELY_ZERO = 1e-12
+
+
 def _f(x: Any, digits: int = 4) -> Any:
     try:
         v = float(x)
@@ -253,6 +270,10 @@ def _f(x: Any, digits: int = 4) -> Any:
         return x
     if v == 0:
         return 0
+    if abs(v) < EFFECTIVELY_ZERO:
+        # an estimate the data pushed to its bound reads 3.74e-20; a reader
+        # took such numbers for noise (the README's drift screenshot)
+        return "≈0"
     if v.is_integer() and isinstance(x, (int, float)) and not isinstance(x, bool):
         return int(v)  # 8000, not 8000.0
     if abs(v) >= SMALL:
@@ -518,7 +539,7 @@ def _fit_table(fits: Path) -> dict[str, Any]:
                     parameter.name,
                     _f(parameter.estimate, 6),
                     interval,
-                    "identified" if parameter.pinned else "unidentified",
+                    "pinned" if parameter.pinned else "not pinned",
                     units.get(parameter.name, ""),
                 ]
             )
@@ -540,8 +561,9 @@ def _fit_table(fits: Path) -> dict[str, Any]:
         "System identification",
         ["record", "parameter", "estimate", "confidence interval", "status", "unit"],
         rows,
-        note="From telemetry recorded on the real robot. 'identified': the confidence "
-        "half-width is within 10 % of the parameter's allowed range. SPREAD rows: "
+        note="From the recording each row names: the robot's own telemetry, or a "
+        "public log. 'pinned': the confidence half-width is within 10 % of the "
+        "parameter's allowed range, the word the identify tool prints. SPREAD rows: "
         "the estimate's span across records against the mean interval; 'trust the "
         "spread' means the runs disagree by more than their intervals claim.",
     )
@@ -1132,7 +1154,12 @@ def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Secti
                 ("domain randomization", protocol.get("dr_basis")),
                 ("judged at", protocol.get("judged_at")),
                 *[
-                    (k2, jsonable(v))
+                    (
+                        k2.replace("_", " "),
+                        (describe_twist(v) or jsonable(v))
+                        if k2 == "commands"
+                        else jsonable(v),
+                    )
                     for k2, v in protocol.items()
                     if k2 not in PROTOCOL_KEYS
                 ],
@@ -1416,7 +1443,10 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
                     )
                 )
         protocol = g.get("protocol") or {}
-        rows.append(("commands", protocol.get("commands", UNRECORDED)))
+        commands = protocol.get("commands", UNRECORDED)
+        # the envelope in words, as the card says it, not raw JSON with pi
+        # to fifteen digits (the README's drawer screenshot, 2026-10-04)
+        rows.append(("commands", describe_twist(commands) or commands))
         steer = protocol.get("steer") or {}
         if steer:
             rows.append(

@@ -1,6 +1,6 @@
 """Variations as data: what an evaluation sweeps, drawn by trial index.
 
-Written 2026-08-26 (docs/30 §7 row 41, docs/32). Arena's shape — a named
+Written 2026-08-26 (docs/e2e-research/41, docs/32). Arena's shape — a named
 knob on a scene host with a sampler, a dotted key `host.name`, off by
 default, listable before a trial is spent — with one change that
 matters: **the draw takes the trial index, never an RNG.** Arena's

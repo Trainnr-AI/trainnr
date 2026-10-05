@@ -57,7 +57,7 @@ def write_bundle_record(  # noqa: PLR0913 - the record's fields, each named
         # The source's last three path components, never the machine's
         # absolute path: the record is inside the bundle the stamp hashes,
         # so an absolute path gave one robot two stamps on two machines
-        # (go2 onboarded from the same clone on the Mac and the WSL box,
+        # (go2 onboarded from the same clone on the Mac and the WSL machine,
         # 2026-09-10).
         "source": source_locator(Path(source)),
         "census": {
@@ -149,8 +149,14 @@ def read_bundle_record(bundle_dir: Path) -> dict[str, Any]:
 def model_file_of(bundle_dir: Path) -> Path | None:
     """The MJCF a bundle names: `bundle.json` first, then the rig
     profile's `model_file`, else the largest XML at the root; None for a
-    bundle with no XML at all."""
+    bundle with no XML at all. Every caller compiles what this returns,
+    so the files the bundle does not carry (`bundles.fetch`) are fetched
+    first."""
+    from trainnr.bundles.fetch import ensure_fetched  # noqa: PLC0415
+
     bundle_dir = Path(bundle_dir)
+    if bundle_dir.is_dir():
+        ensure_fetched(bundle_dir)
     named = read_bundle_record(bundle_dir).get("model_file")
     if not named:
         profile = bundle_dir / "profile.json"

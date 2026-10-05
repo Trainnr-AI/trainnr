@@ -122,7 +122,17 @@ def refresh_training(folder: Path) -> dict[str, Any] | None:
     text = read_text(log, errors="replace") if log.is_file() else ""
     parsed = parse_rsl_rl_log(text) if text else None
     events = events_file(folder)
-    record = record_from_events(events, facts=parsed) if events else None
+    record = None
+    if events:
+        try:
+            record = record_from_events(events, facts=parsed)
+        except ImportError:
+            # TensorBoard reads the event file and lives in the `viz`
+            # extra; the plugin's server runs without it, and reading a
+            # trained run crashed every list and describe tool there (a
+            # stranger's install, 2026-10-04). The console log carries
+            # the reward per iteration, so the record is that one.
+            record = None
     record = record or parsed
     if record is None:
         return None

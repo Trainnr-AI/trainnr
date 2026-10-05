@@ -25,6 +25,7 @@ refuses it by name elsewhere.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -80,6 +81,15 @@ def reference_dir(explicit: Path | None = None) -> Path:
 def facts_of(manifest: Manifest) -> UnitreeFacts:
     """The manifest's Unitree block, or a refusal naming the deployment."""
     facts = manifest.unitree
+    if facts is not None:
+        # these become a program's path: a manifest naming /any/binary ran
+        # it (security review, 2026-10-04)
+        for what, value in (("controller", facts.controller), ("robot", facts.robot)):
+            if not PROGRAM_NAME.fullmatch(value):
+                raise ValueError(
+                    f"{manifest.root}: the manifest's {what} {value!r} is not a "
+                    "plain name (letters, digits, '.', '_', '-')"
+                )
     if facts is None:
         raise ValueError(
             f"{manifest.root}: the manifest names no Unitree stack for this robot "
@@ -90,6 +100,8 @@ def facts_of(manifest: Manifest) -> UnitreeFacts:
 
 
 BUILD_DIR = "build"  # where their CMake puts a binary, in every folder of theirs
+# A manifest's controller and robot name a program and a folder of theirs.
+PROGRAM_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")
 
 
 def robot_dir(reference: Path, facts: UnitreeFacts) -> Path:

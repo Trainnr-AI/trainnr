@@ -422,7 +422,7 @@ def _push(runtime: Runtime, level: float, seed: int) -> Runtime:
 # record all read it. Each ladder's source is stated in the record: the
 # reference's DR tables (unitree_rl_mjlab src/tasks/velocity/
 # velocity_env_cfg.py, read 2026-09-24), the deploy configs that went wrong
-# in the field's trackers (docs/e2e-research/78 §1), our own findings, and
+# in the field's trackers, our own findings, and
 # where none exists, "declared (ours)".
 REFERENCE_DR = (
     "unitree_rl_mjlab velocity_env_cfg.py DR table (friction (0.3, 1.6), "
@@ -461,16 +461,16 @@ KNOBS: tuple[Knob, ...] = (
         "x",
         (0.8, 0.6, 0.4, 0.3),
         "the servos' stiffness scaled",
-        "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57; "
-        "docs/e2e-research/78 §1); rungs declared (ours)",
+        "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57); "
+        "rungs declared (ours)",
     ),
     Knob(
         "kd",
         "x",
         (2, 4, 8, 16),
         "the servos' damping scaled",
-        "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57; "
-        "docs/e2e-research/78 §1); rungs declared (ours)",
+        "hand-written deploy configs gone wrong (unitree_rl_mjlab #32, #57); "
+        "rungs declared (ours)",
     ),
     Knob(
         "joint_pos_noise",

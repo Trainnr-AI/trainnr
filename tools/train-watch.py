@@ -29,7 +29,7 @@ harness's job, with all trials, after training ends — and
 `lerobot-train --env.type=trainnr` evaluates in-loop through the same
 env without this tool at all.
 
-    # a run that is ALREADY going — this box's chain, or a rented card's
+    # a run that is ALREADY going — this machine's chain, or a rented card's
     # run mirrored here by `cloud-gpu follow` — as a dashboard, no torch needed:
     cd trainnr && uv run --extra sim --extra viz python ../tools/train-watch.py \\
         --follow runs/t5-cloud-act

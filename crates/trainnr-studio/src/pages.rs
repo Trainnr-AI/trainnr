@@ -968,7 +968,9 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 });
             }
             None => {
-                ui.success_label("All stages complete.");
+                // Every stage has a result; whether the policy is good is
+                // the evaluation's rate, not this line (2026-10-04 review).
+                ui.label("Every stage has a result. The evaluation's success rate says how good the policy is.");
             }
         }
     });

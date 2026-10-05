@@ -117,7 +117,7 @@ class VolumeDoor:
 
     def client(self) -> Any:
         try:
-            import boto3  # noqa: PLC0415 - optional, the box's own
+            import boto3  # noqa: PLC0415 - optional, the machine's own
         except ImportError as error:
             raise ImportError(
                 "the volume door needs boto3 (pip install boto3, or run under "

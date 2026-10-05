@@ -26,7 +26,7 @@ mkdir -p "$root"
 say() { echo "== $(date -u +%H:%M:%S) $*"; }
 
 say "walk-c1 arm $arm${replicate:+ replicate $replicate} on $robot: span $span, $iterations iterations${seed:+, seed $seed}"
-cd "$repo/trainnr_mjlab"
+cd "$repo/trainnr-mjlab"
 .venv/bin/python -m trainnr_mjlab.walk_train --robot "$robot" --agent g3 --iterations "$iterations" \
   --dr-span "$span" --log-dir "$root/train" --no-recorder $seed_flag $bundle_flag
 

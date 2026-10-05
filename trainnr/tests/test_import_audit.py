@@ -1,4 +1,4 @@
-"""What the importer changed (robot/import_audit; docs/e2e-research/78 §1):
+"""What the importer changed (robot/import_audit):
 a bundle's compiled model against the description it came from.
 
 The URDF fixture is written here: a root link with mass, a link with a

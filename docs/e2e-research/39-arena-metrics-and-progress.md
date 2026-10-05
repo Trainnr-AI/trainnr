@@ -285,7 +285,7 @@ failure is attributed to an arm. The verdict stays the AND.
    certificate.
 2. **Real-side milestones.** Sim milestones read privileged state; on
    the rig the only referee is a human label. A sub-question for the
-   span paper (docs/paper/manuscript.md): does sim `progress` rank policies the way real success
+   span paper (in preparation): does sim `progress` rank policies the way real success
    does — a cheaper early signal?
 3. **Progress inside the recipe engine.** `mean_progress` could order
    candidates before any policy succeeds (the zero-row problem) — a

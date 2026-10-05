@@ -161,13 +161,13 @@ class TheRunpodMapping(unittest.TestCase):
                 gpu=GPU_4090,
                 image=IMAGE,
                 data_centers=("US-NC-2",),
-                network_volume="q51i67dwu8",
+                network_volume="vol-example-0001",
             )
         )
         sent = json.loads(transport.calls[0][3])
         self.assertEqual(
             sent["mounts"],
-            {"network": [{"volumeId": "q51i67dwu8", "path": "/workspace"}]},
+            {"network": [{"volumeId": "vol-example-0001", "path": "/workspace"}]},
         )
 
     def test_a_running_machine_carries_both_ssh_doors(self) -> None:

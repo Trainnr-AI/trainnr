@@ -36,7 +36,7 @@ class TheCriterion(unittest.TestCase):
 
 
 class TheBlankedCamera(unittest.TestCase):
-    """The campaign 3 control (docs/07 2026-09-03): the student judged
+    """The campaign 3 control (2026-09-03): the student judged
     with its image zeroed, the row and the file saying so."""
 
     def test_blanked_keeps_shape_and_dtype_and_zeroes_every_pixel(self) -> None:

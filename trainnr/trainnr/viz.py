@@ -132,7 +132,7 @@ def sinks(
     `studio_listening`). With neither, no sink at all: the server sink
     that stayed there filled its queue and blocked the next log call, so
     a smoke train started with the Studio closed never finished
-    (2026-09-22, E0 on the box); `open_stream` then opens the recording
+    (2026-09-22, E0 on the WSL machine); `open_stream` then opens the recording
     switched off. `wanted` overrides the environment knob: a file the
     operator named on a command line is written whatever the knob says."""
     saving = viewer_file_wanted() if wanted is None else wanted

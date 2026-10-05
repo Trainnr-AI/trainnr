@@ -244,7 +244,7 @@ budget-splitting. First factor set, centred on identified values (the
 show-many rule, never a guess): `damping_scale`, `gain_scale` within
 the sysid interval, `cube.mass`, `cube.pose_xy`, `top.cam_offset`
 (±3 cm, Arena's workflow range), `light.diffuse`. The dynamics factors
-are the ones Arena lacks and the span paper (docs/paper/manuscript.md)
+are the ones Arena lacks and the span paper (in preparation)
 turns on.
 
 ### 3.2 ADOPT — the per-trial record

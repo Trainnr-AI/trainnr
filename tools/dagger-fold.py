@@ -30,7 +30,7 @@ from trainnr.evaluate.records import read_records  # noqa: E402
 from trainnr.stats.effects import main_effect  # noqa: E402
 
 RECORDS = "records-student-cuda.jsonl"
-PROTOCOL = "docs/66 §6 (DAgger on the walk: tools/walk-dagger-round.sh)"
+PROTOCOL = "DAgger on the walk: tools/walk-dagger-round.sh"
 
 
 def rows_for(verdict_dir: Path, policy: str) -> list[Any]:

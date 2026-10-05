@@ -2,7 +2,7 @@
 
 *Historical (2026-08-31). Both runs below predate the harness cadence
 fix; superseded by the c1-competent-lift records in `docs/findings/`
-and docs/paper/manuscript.md §5.1. Kept as the protocol's record.*
+and the paper in preparation §5.1. Kept as the protocol's record.*
 
 *2026-08-31. The protocol for the first campaign, C1 (identified
 versus guessed randomization on the lift) — "the number the

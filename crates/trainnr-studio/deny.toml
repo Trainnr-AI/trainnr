@@ -13,13 +13,17 @@ all-features = false
 version = 2
 yanked = "deny"
 ignore = [
-  # quick-xml 0.36 reaches the Studio only through Rerun 0.36's URDF and
-  # COLLADA readers (urdf-rs, minidom via dae-parser); the fix is in
-  # quick-xml 0.41, which Rerun 0.37 takes (Dependabot's rerun group).
+  # quick-xml 0.36.2 reaches the Studio only through Rerun's URDF and
+  # COLLADA readers: urdf-rs 0.9.0 (re_importer) and minidom-14 0.17.0
+  # (dae-parser 0.11.0, re_renderer). The fix is quick-xml 0.41.0, which
+  # the lock already has through wayland-scanner, but neither reader takes
+  # it yet, and Rerun 0.37.2 keeps both (checked on Dependabot's rerun
+  # branch, 2026-10-04): the update does not clear these. They clear when
+  # urdf-rs and dae-parser move to quick-xml 0.41 and Rerun takes them.
   # Exposure: a slow or memory-hungry parse of a robot file the user
-  # opens. 2026-10-03.
-  { id = "RUSTSEC-2026-0194", reason = "held by Rerun 0.36; cleared by the Rerun 0.37 update" },
-  { id = "RUSTSEC-2026-0195", reason = "held by Rerun 0.36; cleared by the Rerun 0.37 update" },
+  # opens. 2026-10-04.
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.36 via urdf-rs and dae-parser (Rerun 0.36 and 0.37); no release of either takes 0.41" },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.36 via urdf-rs and dae-parser (Rerun 0.36 and 0.37); no release of either takes 0.41" },
   # Unmaintained, not vulnerable: both reach the Studio through Rerun.
   { id = "RUSTSEC-2025-0141", reason = "bincode, unmaintained, via Rerun; no advisory against its code" },
   { id = "RUSTSEC-2024-0436", reason = "paste, unmaintained, via Rerun; a build-time macro" },

@@ -23,6 +23,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from trainnr_mjlab.checkpoint_guard import require_tensor_only
 from trainnr_mjlab.walk_view import (
     fit_of,
     require_same_identity,
@@ -36,6 +37,9 @@ from trainnr_mjlab.walks import (
     use_project,
     walk_spec,
 )
+
+# The browser viewer serves this machine only.
+VISER_HOST = "127.0.0.1"
 
 
 def main() -> None:
@@ -117,6 +121,7 @@ def main() -> None:
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
+    require_tensor_only(args.checkpoint)  # before any unpickling
     runner.load(
         str(args.checkpoint),
         load_cfg={"actor": True},
@@ -132,7 +137,15 @@ def main() -> None:
     )
     if args.scene is not None:
         viewer = showing_the_ground(viewer)
-    viewer(env, policy).run()
+    if args.viewer == "viser":
+        import viser  # noqa: PLC0415
+
+        # mjlab's default binds every interface (0.0.0.0:8080): anyone on
+        # the network could watch and drive it (security review, 2026-10-04)
+        server = viser.ViserServer(host=VISER_HOST, label="mjlab")
+        viewer(env, policy, viser_server=server).run()
+    else:
+        viewer(env, policy).run()
     env.close()
 
 

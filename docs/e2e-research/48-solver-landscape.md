@@ -71,7 +71,7 @@ independently (every other solver/cone fails the kitting referee).
 We run Euler at 500 Hz in both rigs, and nobody chose it — it is the
 inherited default (now pinned deliberately). Flipping to implicitfast
 is measured-equivalent on kitting (docs/e2e-research/47 §7) but **changes the
-nominal condition the span paper (docs/paper/manuscript.md) defines** — a measured decision to schedule,
+nominal condition the span paper (in preparation) defines** — a measured decision to schedule,
 not a hygiene commit.
 
 **mujoco_warp gaps** (README, 2026-08-27): "IMPLICITFAST midpoint

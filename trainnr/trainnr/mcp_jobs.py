@@ -1,6 +1,6 @@
 """Job handles for the MCP surface's long-running tools.
 
-The pattern docs/64 §5.2 picked from the MCP spec's own blessing:
+The pattern the MCP specification itself blesses:
 a `*_start` tool returns a job id immediately, `describe_job` polls it,
 and the artifacts land under `runs/` exactly as the wrapped CLI always
 put them. The manager is deliberately dumb: spawn the command with its
@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any
 
 # pydantic (the MCP surface) reads these signatures; on Python < 3.12 it
-# accepts only typing_extensions' TypedDict (the box's 3.11 venv, 2026-09-12).
+# accepts only typing_extensions' TypedDict (a Python 3.11 environment, 2026-09-12).
 if sys.version_info >= (3, 12):
     from typing import TypedDict
 else:
@@ -116,6 +116,40 @@ class JobStatus(TypedDict):
     done: int
     total: int
     unit: str
+    error: str
+
+
+# How much of a job's log a status reads: its end, never the whole file
+# (a long training log is tens of megabytes).
+LOG_TAIL_BYTES = 256 * 1024
+# A Python exception's last line (`ImportError: ...`, `KeyboardInterrupt`):
+# what a failed job reports as its error. The traceback sat 100 lines above
+# the tail once and the agent guessed a CUDA problem (2026-10-04).
+EXCEPTION_LINE = re.compile(
+    r"^[A-Za-z_][\w.]*(Error|Exception|Exit|Interrupt)\b(:.*)?$"
+)
+
+
+def log_tail_lines(path: Path) -> list[str]:
+    """The last `LOG_TAIL_BYTES` of a log as lines; [] when it is absent."""
+    try:
+        with path.open("rb") as log:
+            log.seek(0, os.SEEK_END)
+            size = log.tell()
+            log.seek(max(0, size - LOG_TAIL_BYTES))
+            text = log.read().decode(errors="replace")
+    except OSError:
+        return []
+    lines = text.splitlines()
+    return lines[1:] if size > LOG_TAIL_BYTES else lines  # the first is cut
+
+
+def last_error(lines: list[str]) -> str:
+    """The last exception line in `lines`, or ""."""
+    for line in reversed(lines):
+        if EXCEPTION_LINE.match(line.strip()):
+            return line.strip()
+    return ""
 
 
 STATE_RUNNING = "running"
@@ -240,7 +274,7 @@ def read_status(path: Path) -> RunStatus | None:
 def record_exit(exit_path: Path, code: int) -> None:
     """Atomic: a reader that sees the file sees the code. The
     create-then-write of write_text let status() read an EMPTY file
-    mid-write (int('') - the lifecycle test, on the GPU box's faster
+    mid-write (int('') - the lifecycle test, on a GPU workstation's faster
     fake exit, 2026-09-02)."""
     staged = exit_path.with_suffix(".exit.tmp")
     staged.write_text(str(code))
@@ -258,6 +292,11 @@ def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
     # The child adopts this job in `track()`: its stages land in the
     # door's own record (the job id is the log's stem).
     env = {**os.environ, JOB_ID_ENV: log_path.stem, JOBS_DIR_ENV: str(log_path.parent)}
+    from trainnr.project.locate import PROJECT_ENV, session_project  # noqa: PLC0415
+
+    session = session_project()
+    if session is not None and not env.get(PROJECT_ENV, "").strip():
+        env[PROJECT_ENV] = str(session)  # a job works in its session's project
     try:
         return subprocess.Popen(
             runner_argv(argv, exit_path_for(log_path)),
@@ -488,19 +527,19 @@ class JobManager:
             state = STATE_RUNNING
         else:
             state = STATE_DIED
-        log_path = Path(record.log)
-        lines = (
-            log_path.read_text(errors="replace").splitlines()
-            if log_path.exists()
-            else []
-        )
+        # the log beside the record, never the path the record names: a
+        # record that came with a shared project could name any file
+        # (security review, 2026-10-04)
+        log_path = self.jobs_dir / f"{job_id}.log"
+        lines = log_tail_lines(log_path)
         live = read_status(self.jobs_dir / f"{job_id}{STATUS_SUFFIX}") or RunStatus()
+        failed = state not in (STATE_RUNNING, "done")
         return {
             "job_id": job_id,
             "tool": record.tool,
             "state": state,
             "argv": record.argv,
-            "log": record.log,
+            "log": str(log_path),
             "log_tail": lines[-tail:],
             "source": record.source,
             "name": record.name,
@@ -508,6 +547,7 @@ class JobManager:
             "done": live.done,
             "total": live.total,
             "unit": live.unit,
+            "error": last_error(lines) if failed else "",
         }
 
     def cancel(self, job_id: str) -> Cancelled | Refusal:
@@ -548,9 +588,26 @@ class JobManager:
             raise ValueError(f"not a job id: {job_id!r}")
         path = self._record_path(job_id)
         if not path.exists():
+            owner = self._owning_project(job_id)
+            if owner:
+                raise KeyError(
+                    f"job {job_id!r} belongs to project {owner!r}; "
+                    f"use_project({owner!r}) first"
+                )
             known = sorted(p.stem for p in self.jobs_dir.glob("*.json"))
             raise KeyError(f"no job {job_id!r}; known: {known}")
         return JobRecord.read(path)
+
+    def _owning_project(self, job_id: str) -> str:
+        """The sibling project whose job table holds `job_id`, when this
+        table is a project's: a job keeps running after `use_project`
+        switches away, and the reply should say where it went."""
+        if self.jobs_dir.name != JOBS_DIR_NAME:
+            return ""
+        projects = self.jobs_dir.parent.parent
+        for other in sorted(projects.glob(f"*/{JOBS_DIR_NAME}/{job_id}.json")):
+            return other.parent.parent.name
+        return ""
 
 
 class Tracker:

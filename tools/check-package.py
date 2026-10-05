@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""The wheels a user installs from PyPI carry the licence and the notices.
+
+    python3 tools/check-package.py
+
+Apache-2.0 4(a) and 4(d): a redistribution carries the licence and the
+NOTICE. Each package's pyproject lists `LICENSE` and `NOTICE` as licence
+files; trainnr-mjlab's NOTICE is a copy of the root one (trainnr's is a
+short pointer to it) and both packages' LICENSE are copies of the root's.
+This checks the copies are identical, then builds both wheels with
+`uv build` into a scratch directory and refuses one without LICENSE or
+NOTICE under its `.dist-info/licenses/`. CI runs it as the required
+`package` job (gates.yml); tools/verify.sh runs it too.
+"""
+
+from __future__ import annotations
+
+import filecmp
+import subprocess
+import sys
+import tempfile
+import zipfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+PACKAGES = ("trainnr", "trainnr-mjlab")
+# (copy, original): files that must be byte-identical.
+COPIES = (
+    ("trainnr-mjlab/NOTICE", "NOTICE"),
+    ("trainnr/LICENSE", "LICENSE"),
+    ("trainnr-mjlab/LICENSE", "LICENSE"),
+)
+LICENCE_FILES = ("LICENSE", "NOTICE")
+
+
+def main() -> int:
+    failed = 0
+    for copy, original in COPIES:
+        if not filecmp.cmp(REPO / copy, REPO / original, shallow=False):
+            print(f"{copy} differs from {original}: copy it again")
+            failed = 1
+    with tempfile.TemporaryDirectory() as dist:
+        for package in PACKAGES:
+            build = subprocess.run(
+                ["uv", "build", "-q", "--out-dir", dist],
+                cwd=REPO / package,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if build.returncode != 0:
+                print(f"{package}: the wheel did not build\n{build.stderr}")
+                failed = 1
+        wheels = sorted(Path(dist).glob("*.whl"))
+        for wheel in wheels:
+            names = zipfile.ZipFile(wheel).namelist()
+            missing = [
+                f
+                for f in LICENCE_FILES
+                if not any(n.endswith(".dist-info/licenses/" + f) for n in names)
+            ]
+            if missing:
+                print(f"{wheel.name}: no {' or '.join(missing)}")
+                failed = 1
+            else:
+                print(f"{wheel.name}: LICENSE and NOTICE present")
+        if len(wheels) != len(PACKAGES):
+            print(f"expected {len(PACKAGES)} wheels, built {len(wheels)}")
+            failed = 1
+    return failed
+
+
+if __name__ == "__main__":
+    sys.exit(main())

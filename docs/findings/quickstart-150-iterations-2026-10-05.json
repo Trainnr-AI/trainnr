@@ -1,0 +1,28 @@
+{
+ "id": "quickstart-150-iterations-2026-10-05",
+ "claim": "The README's GPU quickstart trains the Go2 walk for 150 iterations so the session ends in minutes, and 150 iterations do not learn to walk: an agent driving the whole loop through the plugin trained go2-walk-150 at the IIT chirp fit (reward 65.6 at the end), and the policy survived 8/8 trials and tracked 0/8, exact 95 % CI [0.00, 0.37]; the earlier runs of the same session on 2026-10-04 also tracked 0/8.",
+ "date": "2026-10-05",
+ "repo_commit": "e2de9f9",
+ "argv": [
+  "claude -p <the whole-loop request> --plugin-dir <checkout> [the agent's calls: train_walk(task='go2-walk', recipe='full', fit=<the identified fit>, iterations=150); evaluate_walk(checkpoint='go2-walk-150', trials=8)]"
+ ],
+ "instrument": "mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda on the WSL machine (RTX 3090 Ti)",
+ "outcome": {
+  "policy": "go2-walk-150-model_149, 150 iterations of the full recipe at fit@3a80294c6688 (the IIT chirp fit, 31/36 parameters pinned), 259 s",
+  "arms": {
+   "150_iterations": {
+    "successes": 0,
+    "trials": 8,
+    "ci95": [0.0, 0.3694],
+    "survived": 8,
+    "tracked": 0
+   }
+  },
+  "repeats": "the same session's runs on 2026-10-04 (two projects) also tracked 0/8"
+ },
+ "protocol": "evaluate_walk: paired seeded episodes, success = survived and error ratio < 0.5",
+ "caveats": [
+  "a smoke-scale run for a quickstart: the full recipe trains 8000 iterations by default; the Go2 walker that tracks 38/40 trained 1500",
+  "eight trials bound the success rate only to [0.00, 0.37]"
+ ]
+}

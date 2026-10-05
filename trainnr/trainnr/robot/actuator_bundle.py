@@ -371,7 +371,7 @@ def declared_span_ranges(
     """A caller-declared span around the bundle's POINT (its params),
     whatever interval the bundle carries, and the basis that says so -
     spelled once: `declared_ranges` takes it when there is no interval,
-    and mjlab's DR event takes it for any declared span (docs/07
+    and mjlab's DR event takes it for any declared span (measured
     2026-09-06: preferring the interval over a declared span judged
     the refit arms in the wrong world). Rig and firmware parameters
     are not part of the region."""

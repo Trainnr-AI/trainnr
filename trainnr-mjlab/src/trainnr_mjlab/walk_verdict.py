@@ -52,6 +52,7 @@ from trainnr.mcp_jobs import (
 from trainnr.paths import checkout
 from trainnr.viz import viewer_file
 
+from trainnr_mjlab.checkpoint_guard import require_tensor_only
 from trainnr_mjlab.envelope import (
     COMMAND_TERM,
     checkpoint_iteration,
@@ -240,7 +241,7 @@ def rollout_outcomes(env, policy, trials: int) -> list[EpisodeOutcome]:
 
 
 class VerdictFeed:
-    """The certificate, watched (docs/66 §0): world 0's chase view while
+    """The certificate, watched: world 0's chase view while
     a student is judged, every trial's verdict as it lands, the fold at
     the end - into the Studio's one ingest address. Best-effort: no
     rerun-sdk means one loud line and an unwatched verdict."""
@@ -297,7 +298,7 @@ class VerdictFeed:
 
 def blanked(images: Any) -> Any:
     """The camera, blanked: zeros of the frames' own shape and dtype.
-    The control the campaign 3 plan asks first (the log 2026-09-03):
+    The control the campaign 3 plan asks first (2026-09-03):
     a student judged WITHOUT its image, with the full state still in
     hand — if the score holds, the image was never used, and the next
     distill trains without the privileged state."""
@@ -708,6 +709,20 @@ def main() -> None:
         viewer="" if args.no_studio else str(verdict_viewer(args.checkpoint)),
     ) as run:
         judge(args, run)
+    if args.project:
+        # The evaluation, its policy and the run's record land in the
+        # project as the job ends, so the list and describe tools only
+        # read (they created these on first call, under a read-only
+        # annotation: tool review, 2026-10-04).
+        from trainnr.project.live import (  # noqa: PLC0415
+            refresh_project,
+            refresh_verdicts,
+        )
+        from trainnr.project.locate import Project  # noqa: PLC0415
+
+        project = Project(Path(args.project))
+        refresh_project(project)
+        refresh_verdicts(project)
 
 
 def judge(args: argparse.Namespace, run: Tracker) -> None:  # noqa: PLR0912, PLR0915 - the certificate's whole procedure, in order
@@ -829,6 +844,7 @@ def judge(args: argparse.Namespace, run: Tracker) -> None:  # noqa: PLR0912, PLR
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
     )
     runner = MjlabOnPolicyRunner(env, asdict(agent), log_dir=None, device=device)
+    require_tensor_only(args.checkpoint)  # before any unpickling
     runner.load(
         str(args.checkpoint),
         load_cfg={"actor": True},

@@ -1,6 +1,6 @@
 """Command lag as a training randomization, on any walk.
 
-The cliff grid of 2026-09-25 (the log) found no walk trained so far keeps
+The cliff grid of 2026-09-25 found no walk trained so far keeps
 walking when its action arrives 2 control ticks late, except the one
 trained on a measured fit, and that one only 18/40: no run had ever SEEN
 a late command. This draws one: every actuator's target reaches the

@@ -81,6 +81,10 @@ def bundle_file(bundle: str, filename: str) -> Path:
 
 
 def require_bundle_file(path: Path) -> Path:
+    from trainnr.bundles.fetch import ensure_fetched  # noqa: PLC0415
+
+    if Path(path).parent.is_dir():
+        ensure_fetched(Path(path).parent)  # files the bundle does not carry
     if not Path(path).is_file():
         raise FileNotFoundError(
             f"bundle file {path} does not exist — set {ROBOTS_DIR_ENV} to the "

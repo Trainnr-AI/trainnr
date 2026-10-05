@@ -6,7 +6,7 @@ provenance and a version — the repo commit that produced it, the exact
 command line, the instrument stamp, the stamps of every dataset and
 bundle it consumed, the certificate and datasheet files it rests on,
 and, for an audit of someone else's code, the version or hash that was
-read. Findings live in `docs/findings/<id>.json`, TRACKED, so the paper's
+read. Findings live in `docs/findings/<id>.json`, TRACKED, so the quoted
 numbers are in the repository even when the runs that produced them are
 on a rented machine's volume; `tools/findings.py` renders the ledger.
 
@@ -122,8 +122,12 @@ FORMER_NAMES: tuple[tuple[str, str], ...] = (
     ("`--env.type=robotiq`", "`--env.type=trainnr`"),
     ("`/workspace/robotiq/…`", "a rented GPU pod's checkout, not a path in this tree"),
     ("`robotiq/<task>`", "the task ids `trainnr/<task>`"),
+    ('"the box", "WSL box"', "the WSL machine: an RTX 3090 Ti workstation on WSL2"),
+    ("tools/walk-refit-rejudge-on-box.sh", "`tools/walk-refit-rejudge-local.sh`"),
 )
-LOG_POINTER = "docs/07"  # the maintainers' log: not part of the public edition
+# A record whose commit reads "see <a dated log entry>" was measured
+# before the ledger stamped commits; its commit is not public.
+UNSTAMPED_COMMIT = "see "
 SESSION_WORDS = ("scratchpad", "scratch ")
 CLAIM_WIDTH = 110
 
@@ -133,14 +137,14 @@ def _not_public(f: Finding) -> str:
 
 
 def _commit(f: Finding) -> str:
-    if LOG_POINTER in f.repo_commit or f.repo_commit.startswith("see "):
+    if f.repo_commit.startswith(UNSTAMPED_COMMIT):
         return _not_public(f)
     return f"`{f.repo_commit}`"
 
 
 def _protocol(f: Finding) -> str:
     text = f.protocol.strip()
-    if not text or LOG_POINTER in text:
+    if not text:
         return _not_public(f)
     return text
 
@@ -204,7 +208,7 @@ def render_ledger(findings: list[Finding]) -> str:
     lines += [
         "",
         "A commit or protocol marked *not public* lives only in the",
-        "maintainers' working log, which is not part of this edition; the",
+        "maintainers' working log, which is not in this repository; the",
         "record's numbers, command and artifacts stand on their own.",
         "`projects/…` paths are local project directories, untracked by",
         "design; where a copy ships it is named first.",

@@ -1,4 +1,4 @@
-"""Visual DR in the press (docs/66 §4) and the press's feed seam
+"""Visual DR in the press and the press's feed seam
 (a note): draws through the REAL appliers on a compiled model,
 the refusals at the adapter door, the manifest and datasheet carrying
 the draws, the multi-camera episode layout, and the loop reporting
@@ -299,7 +299,7 @@ class VisualDrawsRideTheBatch(unittest.TestCase):
                 seed=9,
                 frame_every=0,
                 visuals=visuals,
-                visual_basis="test-declared visual span (docs/66 §4)",
+                visual_basis="test-declared visual span",
                 say=lambda _line: None,
             )
             self.assertTrue(batch.complete)
@@ -313,9 +313,7 @@ class VisualDrawsRideTheBatch(unittest.TestCase):
                 DIFFUSE_LO <= manifest.visuals["lights.diffuse_scale"] <= DIFFUSE_HI
             )
             self.assertEqual(len(manifest.visuals["cam_a.offset_m"]), XYZ)
-            self.assertEqual(
-                manifest.visual_basis, "test-declared visual span (docs/66 §4)"
-            )
+            self.assertEqual(manifest.visual_basis, "test-declared visual span")
         # Two episodes, two draws — the randomiser randomises visuals too.
         self.assertNotEqual(
             manifests[0].visuals["lights.diffuse_scale"],
@@ -323,9 +321,7 @@ class VisualDrawsRideTheBatch(unittest.TestCase):
         )
         self.assertIn("lights.diffuse_scale", summary.visuals)
         self.assertIn("cam_a.offset_m[2]", summary.visuals)
-        self.assertEqual(
-            summary.visual_bases, ("test-declared visual span (docs/66 §4)",)
-        )
+        self.assertEqual(summary.visual_bases, ("test-declared visual span",))
         spread = summary.visuals["lights.diffuse_scale"]
         self.assertTrue(DIFFUSE_LO <= spread.low <= spread.high <= DIFFUSE_HI)
         self.assertIn("## Visual draws", render(summary))

@@ -5,9 +5,9 @@ Every onboarding door converts something — MuJoCo's URDF loader makes
 the root link the world body and, before 3.13.0, dropped every mimic
 without a word; Newton's bridge writes hulls for meshes and prim paths
 for names; an MJCF include can resolve differently in a copy. Nobody in
-the field checks a converted asset against its source (docs/e2e-research/78
-§1 item 2: IsaacSim #841, an NVIDIA-confirmed silent loss across three
-backends; mujoco #3559, an inertial frame lost for years). This module
+the field checks a converted asset against its source (IsaacSim #841,
+an NVIDIA-confirmed silent loss across three backends; mujoco #3559,
+an inertial frame lost for years). This module
 does: a SOURCE READER per format (a registry by suffix, the way the
 onboarding door dispatches) reads the description as authored into a
 `Snapshot`; the bundle's compiled model reads into the same shape; the

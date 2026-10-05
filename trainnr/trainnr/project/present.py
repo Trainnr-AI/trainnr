@@ -199,7 +199,7 @@ def serve(project: Project, *, once: bool = False) -> None:
     """The presenter loop: watch the intent file, present, clear - and
     every LIVE_REFRESH_S, turn the console log of any run training in
     the project into its training record and re-index, so the Studio's
-    experiment card follows the run (docs/77, the box, 2026-09-10)."""
+    experiment card follows the run (docs/77, the WSL machine, 2026-09-10)."""
     from trainnr.project.index import index_project, write_index  # noqa: PLC0415
     from trainnr.project.live import (  # noqa: PLC0415
         index_stale,

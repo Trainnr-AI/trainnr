@@ -579,6 +579,18 @@ impl Model {
             .filter(|p| p.join(MANIFEST_FILE).is_file())
             .filter(|p| seen.insert(p.canonicalize().unwrap_or_else(|_| p.clone())))
             .collect();
+        // The checkout's empty sample is for a fresh clone with nothing
+        // else; beside the user's own projects it read as a broken one
+        // (2026-10-04 review).
+        let sample = crate::spawn::repo_root()
+            .join(PROJECTS_HOME)
+            .join(SAMPLE_PROJECT_NAME);
+        let is_sample = |p: &PathBuf| p.canonicalize().ok() == sample.canonicalize().ok();
+        let others = roots.iter().filter(|p| !is_sample(p)).count();
+        let roots: Vec<PathBuf> = roots
+            .into_iter()
+            .filter(|p| others == 0 || !is_sample(p))
+            .collect();
         let mut found: Vec<ProjectSummary> = roots
             .into_iter()
             .map(|root| {

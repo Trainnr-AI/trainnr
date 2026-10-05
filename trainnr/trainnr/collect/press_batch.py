@@ -29,7 +29,7 @@ from typing import Any
 from trainnr.collect.kitting_export import DemoLayout
 
 # The batched engine's sizing for busy scenes: the kitting bundle's
-# measured pair (the log 2026-08-27); a small scene ignores them.
+# measured pair (2026-08-27); a small scene ignores them.
 KITTING_SIZING = {"naconmax": 4096, "njmax": 8192}
 
 

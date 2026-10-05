@@ -144,7 +144,11 @@ def _read_state(root: Path) -> dict[str, Any]:
         }
     pid = int(raw.get("pid") or 0)
     age = time.time() - float(raw.get("heartbeat") or 0.0)
-    alive = pid > 0 and pid_alive(pid) and age < STALE_S and not raw.get(MOVED_TO)
+    # a heartbeat from the future is a planted file, not a live window
+    # (a shared project's state file once made quit_studio signal any pid:
+    # security review, 2026-10-04)
+    fresh = -HEARTBEAT_FUTURE_SLACK_S <= age < STALE_S
+    alive = pid > 0 and pid_alive(pid) and fresh and not raw.get(MOVED_TO)
     raw["alive"] = alive
     raw["heartbeat_age_s"] = round(age, 3)
     if alive:
@@ -477,15 +481,33 @@ def viewer_port_free(port: int | None = None) -> bool:
     import socket  # noqa: PLC0415
 
     port = VIEWER_PORT if port is None else port
-
-    # No SO_REUSEADDR: on macOS it lets the probe bind beside a live
-    # listener, which is the one case the check exists for.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        # On Linux, SO_REUSEADDR still refuses a live listener but ignores
+        # connections closing in TIME_WAIT, as the Studio's own server
+        # does; without it a job retrying its stream kept the probe
+        # refusing an empty port (2026-10-04). Not on macOS, where it
+        # binds beside a live listener, nor Windows, where it can steal one.
+        if sys.platform.startswith("linux"):
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            probe.bind(("0.0.0.0", port))
+            probe.bind((viewer_bind_host(), port))
         except OSError:
             return False
     return True
+
+
+# The Studio's viewer server binds this host unless TRAINNR_VIEWER_BIND
+# says otherwise (crates/trainnr-studio/src/main.rs, GRPC_BIND); the probe
+# checks the same address the server will take.
+VIEWER_BIND_ENV = "TRAINNR_VIEWER_BIND"
+VIEWER_BIND_HOST = "127.0.0.1"
+
+
+def viewer_bind_host() -> str:
+    """The host the Studio's viewer server binds: `$TRAINNR_VIEWER_BIND`'s
+    host part (`0.0.0.0:9876` opens it), else this machine only."""
+    host = os.environ.get(VIEWER_BIND_ENV, "").rsplit(":", 1)[0]
+    return host or VIEWER_BIND_HOST
 
 
 # Studios this process launched, by pid: a child that has exited stays a
@@ -621,8 +643,26 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
     }
 
 
+# A heartbeat this far ahead of the clock is accepted (clock skew between
+# the Studio and this process); further ahead, the state file is not trusted.
+HEARTBEAT_FUTURE_SLACK_S = 5.0
+# The Studio's process name, as the OS reports it.
+STUDIO_PROCESS = "trainnr-studio"
+
+
+def is_studio_process(pid: int) -> bool:
+    """Whether `pid` is a Studio: only then may quit signal it."""
+    psutil = _psutil()
+    try:
+        name = psutil.Process(pid).name()
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+    return name.removesuffix(".exe").startswith(STUDIO_PROCESS)
+
+
 def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
-    """Ask the Studio to close; past the timeout, terminate it by pid."""
+    """Ask the Studio to close; past the timeout, terminate it by pid, and
+    only a process that is a Studio."""
     current = state(project)
     pid = int(current.get("pid") or 0)
     if not current.get("alive"):
@@ -633,6 +673,12 @@ def quit(project: Project, timeout_s: float = QUIT_TIMEOUT_S) -> dict[str, Any]:
         if not pid_alive(pid):
             return {"status": "done", "pid": pid, "answer": answer.get("status")}
         time.sleep(0.1)
+    if not is_studio_process(pid):
+        return {
+            "status": "failed",
+            "reason": f"pid {pid} is not a Studio process; it was not signalled",
+            "pid": pid,
+        }
     try:
         note = terminate_group(pid)
     except OSError as why:

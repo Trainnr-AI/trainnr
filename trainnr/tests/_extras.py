@@ -25,7 +25,7 @@ SIM = installed("mujoco")
 ENVS = installed("mujoco", "gymnasium")
 MJX = installed("mujoco", "mujoco.mjx")
 # The MJX tests compile their scenes through XLA. On an accelerator
-# (the WSL box's CUDA jax — detected by the plugin package, no jax
+# (the WSL machine's CUDA jax — detected by the plugin package, no jax
 # import needed) that is seconds; on CPU jax the microduck bundle's
 # mesh-heavy scene measured 10+ MINUTES on the Mac (2026-09-01, the
 # commit gate's mystery hang). The instrument doctrine applies: mjx

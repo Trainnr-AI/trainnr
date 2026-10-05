@@ -19,7 +19,7 @@ byte range so 48 MB is fetched out of 3.5 GB (`zip-members`, the offsets
 read once from the zip's central directory and dated here; a changed
 archive fails the digest, never silently), or one file (`file`).
 
-The finds of 2026-09-24 (docs/e2e-research/78 and the log): three are
+The finds of 2026-09-24: three are
 entries — the leg-odometry walk bag, DFKI's field201 bag, IIT's in-air
 chirp. Three more are real Go2 or Go1 logs no adapter here reads (ROS 1
 bags); they are listed in `UNREADABLE` so a request for one is refused by

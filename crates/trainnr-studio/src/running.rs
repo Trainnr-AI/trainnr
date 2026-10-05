@@ -201,6 +201,34 @@ pub fn panel_rows(jobs: &[Job], now: f64, kept: Duration) -> Vec<&Job> {
     running
 }
 
+/// A process holding a job's pid that started this long after the job
+/// is another process (the pid was reused); `cancel_job` keeps the same
+/// rule in Python with the start time psutil reports.
+const PID_REUSE_SLACK_S: f64 = 2.0;
+/// Linux reports a process's start in these ticks since boot (USER_HZ,
+/// fixed at 100 for user space on every architecture Linux ships).
+const LINUX_TICKS_PER_S: f64 = 100.0;
+
+/// When process `pid` started, in seconds since the epoch: Linux reads
+/// it from `/proc`; elsewhere `None` (only the pid guard applies).
+pub fn process_started_epoch(pid: u32) -> Option<f64> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // Field 22 (starttime) counts from the field after the command's ")".
+    let after = &stat[stat.rfind(')')? + 1..];
+    let ticks: f64 = after.split_whitespace().nth(19)?.parse().ok()?;
+    let boot: f64 = std::fs::read_to_string("/proc/stat")
+        .ok()?
+        .lines()
+        .find_map(|line| line.strip_prefix("btime "))?
+        .trim()
+        .parse()
+        .ok()?;
+    Some(boot + ticks / LINUX_TICKS_PER_S)
+}
+
 /// Whether a process id is alive. Linux answers through `/proc`; any
 /// other unix (macOS) through `kill -0`, the same binary `spawn.rs`
 /// signals with; Windows has no dependency-free check here and answers
@@ -233,8 +261,16 @@ pub fn pid_alive(pid: u32) -> bool {
 /// same gesture as `project.control.terminate_group`; the run's own
 /// tracker records the exit it ends with.
 pub fn stop(job: &Job) -> std::io::Result<()> {
-    if job.pid == 0 {
-        return Err(std::io::Error::other("no pid recorded"));
+    // pid 1 as a group is `kill -TERM -- -1`: every process the user
+    // owns. A job record comes from the project folder, which may have
+    // come from someone else (2026-10-04 security review).
+    if job.pid <= 1 {
+        return Err(std::io::Error::other("no usable pid recorded"));
+    }
+    if process_started_epoch(job.pid).is_some_and(|t| t > job.started + PID_REUSE_SLACK_S) {
+        return Err(std::io::Error::other(
+            "that pid now belongs to a process started after the job; not signalled",
+        ));
     }
     #[cfg(unix)]
     {
@@ -834,6 +870,21 @@ pub fn log_tail(ui: &mut egui::Ui, lines: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stop_refuses_pid_one_and_a_reused_pid() {
+        let mut planted = job("planted", 1.0);
+        planted.pid = 1;
+        assert!(stop(&planted).is_err(), "pid 1 is every process as a group");
+        if cfg!(target_os = "linux") {
+            let mine = process_started_epoch(std::process::id()).expect("own start");
+            let now = crate::model::now_epoch();
+            assert!(mine <= now + 1.0 && mine > now - 86_400.0 * 365.0, "{mine}");
+            let mut reused = job("reused", mine - 3600.0);
+            reused.pid = std::process::id();
+            assert!(stop(&reused).is_err(), "a pid that started after its job");
+        }
+    }
 
     fn job(id: &str, started: f64) -> Job {
         Job {

@@ -154,7 +154,7 @@ artifact; `previews/light/` keyed by a palette stamp); the simulator's
 own renders and the batches' frames are theme-free and shared; the app
 picks the set of its theme, so a switch is instant. Under WSLg the app
 takes winit's own window path (Wayland) since 2026-10-03; the X11 path
-(`TRAINNR_X11=1`) presents a frame in half a second there (the maintainers' progress log (private)).
+(`TRAINNR_X11=1`) presents a frame in half a second there (measured 2026-10-03).
 
 ## 6. Performance lessons, all measured
 

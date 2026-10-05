@@ -137,7 +137,7 @@ legitimate foundation, not a science project.**
 
 For the archived rig specifically: MCAP is the obvious eventual replacement
 for the two bespoke formats behind its hil-host wire recorder (crates/hil-host/src/wire.rs) and the
-perception recorder ([Trainnr-AI/rig](https://github.com/Trainnr-AI/rig)). It keeps replay-as-regression-test, and gains Foxglove, Rerun and
+perception recorder (both in the rig's private archive). It keeps replay-as-regression-test, and gains Foxglove, Rerun and
 rosbag2 compatibility **without adopting ROS 2**.
 
 ### Volume and cost

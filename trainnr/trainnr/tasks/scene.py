@@ -1,4 +1,4 @@
-"""Scene facts every builder shares — spelled once (docs/24's rule).
+"""Scene facts every builder shares — each spelled once.
 
 Until 2026-08-26 the offscreen framebuffer size, the shadow-map budget,
 the contact options MuJoCo drops on `attach`, and the geom groups tools
@@ -39,7 +39,7 @@ class NominalOptions:
     elliptic + impratio 10 + the Newton solver is MuJoCo's own documented
     anti-slip recipe for pinch grasps — and measured (tools/solver-study,
     docs/e2e-research/47 §7): the only configuration that passes the
-    kitting referee on BOTH the Mac (arm64) and the WSL box (x86_64); CG
+    kitting referee on BOTH the Mac (arm64) and the WSL machine (x86_64); CG
     and the pyramidal cone fail on both, PGS passes only on x86_64, at
     28x the solver iterations. (mjSOL_NEWTON is MuJoCo's constraint
     solver, unrelated to the NVIDIA Newton engine.) Short names —

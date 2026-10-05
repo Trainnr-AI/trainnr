@@ -36,7 +36,7 @@ class TheWalkCfg(unittest.TestCase):
         self.assertEqual(self.cfg.actions["joint_pos"].actuator_names, (".*",))
 
     def test_a_pinned_head_leaves_the_action_space(self) -> None:
-        # the log 2026-09-05: free heads park at their limits and pass
+        # measured 2026-09-05: free heads park at their limits and pass
         # through the shoulders; pinned, the policy commands legs only.
         cfg, stamps = microduck_walk_env_cfg(head=HEAD_PINNED)
         self.assertEqual(cfg.actions["joint_pos"].actuator_names, LEG_ACTUATORS)

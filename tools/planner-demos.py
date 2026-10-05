@@ -1,4 +1,4 @@
-"""Press planner demonstrations on an SO-101 task (docs/66 D3).
+"""Press planner demonstrations on an SO-101 task.
 
     cd trainnr && uv run --env-file wsl.env --extra sim --extra viz \\
         python ../tools/planner-demos.py TASK [out] [--episodes 8] [--seed S] \\
@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         "--shards",
         type=int,
         default=1,
-        help="press in N runs with disjoint ranges and seeds (docs/66 D4), merged",
+        help="press in N runs with disjoint ranges and seeds, merged",
     )
     parser.add_argument(
         "--parallel",
@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-studio",
         action="store_true",
-        help="do not stream this run to the Studio (docs/66 §0 streams by default)",
+        help="do not stream this run to the Studio (a run streams by default)",
     )
     return parser.parse_args()
 

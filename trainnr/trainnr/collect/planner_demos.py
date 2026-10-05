@@ -1,4 +1,4 @@
-"""Demonstrations from the planner expert (docs/66 §3 source 2, D3).
+"""Demonstrations from the planner expert.
 
 One episode: seat the scene at its paired start, read the object's pose
 and size off the live model (privileged - demo generation may), let

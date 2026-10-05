@@ -42,7 +42,7 @@ bookkeeping (AnnotationContext, Clear, RecordingInfo).
 Three entries earn a note against earlier research: `GaussianSplats3D`
 is first-class now (the splat capture layer of the scene loop, docs/78-the-scene-loop.md,
 has a native display path waiting); the MCAP archetypes land exactly
-where a maintainers' strategy review (private) pointed for fleet logging; and
+where fleet logging needs them; and
 `StateTimeline` is purpose-built for the stage/milestone bands the
 funnel already produces.
 
@@ -71,7 +71,7 @@ beside the simulator and agent panel:
 - scalar readouts (tokens, steps/s, GPU util) — plain `re_ui` labels
 
 **Delegated to the Rerun viewer** (spawn `rerun` beside the app — the
-launcher pattern docs/54 recommended; the data is already logged there
+launcher pattern; the data is already logged there
 by the existing tools):
 
 - the full training dashboard (train-watch's 88-entity blueprint —

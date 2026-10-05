@@ -69,6 +69,22 @@ class TheLiveRecord(unittest.TestCase):
         self.assertIsNotNone(record)
         self.assertEqual(record["status"], "done")
 
+    def test_without_tensorboard_the_console_log_is_the_record(self) -> None:
+        """The plugin's server has no TensorBoard (the `viz` extra); an
+        event file beside the log crashed every list and describe tool
+        there (a stranger's install, 2026-10-04)."""
+        from unittest import mock  # noqa: PLC0415
+
+        _, run = self._project(LOG)
+        (run / "events.out.tfevents.1.host").write_bytes(b"")
+        with mock.patch(
+            "trainnr.project.live.record_from_events",
+            side_effect=ImportError("No module named 'tensorboard'"),
+        ):
+            record = refresh_training(run)
+        self.assertIsNotNone(record)
+        self.assertEqual(record["final"]["reward"], 12.5)
+
     def test_a_log_with_no_iteration_writes_nothing(self) -> None:
         _, run = self._project("[g3] identity: {}\n")
         self.assertIsNone(refresh_training(run))

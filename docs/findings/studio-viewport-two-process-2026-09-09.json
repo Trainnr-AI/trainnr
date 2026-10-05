@@ -2,7 +2,7 @@
  "id": "studio-viewport-two-process-2026-09-09",
  "claim": "Splitting the Studio's MuJoCo stream into a physics process and a render process joined by a shared-memory state ring, with shadows judged by measured frame time, raises the kitting scene from 32.6 fps at the pipe and ~33 on screen to 53.7 fps at the pipe (p50 18.4 ms, p90 21.4 ms) and 60-70 fps on screen; the physics paces itself at real time regardless of render. The 20-duck flock stays at 4.6-9 fps because its render alone is 109 ms/frame on this M1 Mac (Apple M1 Pro, GL 2.1 over Metal, CGL offscreen). With the physics paced against a drift-free deadline and the narration on a 25 % budget, kitting runs at RTF 1.00 (50 ticks/s) with 66.7 fps on screen; the flock's physics is cheap (0.73 ms/step for 20 ducks) but its narration cost the whole budget (RTF 0.06 with, 1.00 without) and its render is asset weight (431,750 faces per microduck), so the preview flock is four ducks: 37 fps on screen, RTF 0.82-0.90.",
  "date": "2026-09-09",
- "repo_commit": "5b29d93",
+ "repo_commit": "3e81b3f",
  "argv": [
   "tools/studio-render-stream.py kitting --shm=<ring> | token-rate reader (15 s)",
   "simulate_in_studio('kitting'); describe_studio()['viewport_fps'] sampled 12 x 1 s",

@@ -1,4 +1,4 @@
-"""The policy bridge (docs/66 D2): a LeRobot student in one venv, an
+"""The policy bridge: a LeRobot student in one venv, an
 mjlab env in another, talking over a pipe. The framing round-trips,
 the server answers one action per world, and a world's reset reaches
 the per-world policy - all through in-memory pipes, no LeRobot."""

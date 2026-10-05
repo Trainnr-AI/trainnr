@@ -333,7 +333,7 @@ for step 3's checkpoint.
   the row; the variation space's description enters the protocol
   fields, so its hash — and every draw — changes when a knob does.
   `--env.variations='["joints.damping_scale=0.7:1.3", …]'` on
-  `lerobot-eval`. Found on the way, and retracted in the log: the
+  `lerobot-eval`. Found on the way, and retracted: the
   demo generator's one-sided gain scale was a setpoint scale.
 - Done on screen: `train-watch --play … --task kitting` on the T5
   checkpoint, both viewers (the train venv needs `.venv/bin` on `PATH`

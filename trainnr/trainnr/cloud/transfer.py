@@ -5,7 +5,7 @@ The rules are subtle enough to deserve a test: rsync reads include
 patterns before the final `--exclude=*`, a directory needs both
 `name/` and `name/**` to travel, `-a` is avoided because the machine's
 volume refuses `chown` (exit 23, measured 2026-08-27), and what must
-never leave the box (`.env`) is named here and nowhere else. Standard
+never leave this machine (`.env`) is named here and nowhere else. Standard
 library only.
 """
 
@@ -27,10 +27,8 @@ class Rsync:
     EXCLUDES = (
         ".env",  # the credentials — never
         ".git",
-        "claude-sync",  # memory and transcripts: not the machine's business
         ".venv*",  # every venv, every package (trainnr_mjlab's alone is gigabytes)
         "runs",  # datasets and checkpoints live on the machine's volume, not the push
-        "docs/photos",
         "target",
         "node_modules",
         "__pycache__",

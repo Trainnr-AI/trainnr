@@ -1,17 +1,25 @@
 # Weekly update pull requests, grouped so they are few: the CI actions
 # (pinned to commit SHAs in the workflow), the Python lockfiles and the
 # Studio's Cargo lockfile. Each goes through the same gates as any PR.
+# Commit messages (and so the pull requests' titles) follow Conventional
+# Commits, as the pr-title check asks: chore(deps) for the packages, ci
+# for the actions. A release must be a week old before an update to it
+# is proposed (cooldown), so a compromised or broken release has time to
+# be yanked first; security updates are not delayed.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     labels: ["dependencies"]
+    commit-message: { prefix: "ci" }
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       actions: { patterns: ["*"] }
   - package-ecosystem: uv
     directory: /trainnr
     labels: ["dependencies", "area: mcp"]
+    commit-message: { prefix: "chore(deps)" }
     ignore:
       # The simulator is the measuring instrument: its version changes
       # the numbers the records carry, so it moves by a deliberate commit
@@ -19,13 +27,24 @@ updates:
       - dependency-name: "mujoco*"
       - dependency-name: "mjlab"
       - dependency-name: "warp-lang"
+      # The Rerun SDK moves with the Studio's rerun crate (the viewer
+      # embedded in the Studio reads what the SDK writes), in one
+      # deliberate commit with Dependabot's cargo rerun group.
+      - dependency-name: "rerun-sdk"
+      # Not resolvable by an update bot: openpi-client is a git source
+      # pinned to a commit, and cyclonedds builds against the C library
+      # Unitree's SDK installs (the dds group).
+      - dependency-name: "openpi-client"
+      - dependency-name: "cyclonedds"
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     open-pull-requests-limit: 3
     groups:
       python: { patterns: ["*"], update-types: ["minor", "patch"] }
   - package-ecosystem: uv
     directory: /trainnr-mjlab
     labels: ["dependencies", "area: train"]
+    commit-message: { prefix: "chore(deps)" }
     ignore:
       # The simulator is the measuring instrument: its version changes
       # the numbers the records carry, so it moves by a deliberate commit
@@ -33,14 +52,19 @@ updates:
       - dependency-name: "mujoco*"
       - dependency-name: "mjlab"
       - dependency-name: "warp-lang"
+      # Pinned to the Studio's Rerun (0.36.x); moves with its rerun crate.
+      - dependency-name: "rerun-sdk"
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     open-pull-requests-limit: 3
     groups:
       python: { patterns: ["*"], update-types: ["minor", "patch"] }
   - package-ecosystem: cargo
     directory: /crates/trainnr-studio
     labels: ["dependencies", "area: studio"]
+    commit-message: { prefix: "chore(deps)" }
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     open-pull-requests-limit: 3
     groups:
       # Rerun's crates version together (the viewer is embedded); a lone

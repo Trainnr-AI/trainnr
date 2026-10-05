@@ -38,6 +38,14 @@ tools/setup-hooks.sh                                                  # the pre-
 # or the standard tool: pip install pre-commit && pre-commit install
 ```
 
+You need [uv](https://docs.astral.sh/uv/), git and
+[rustup](https://rustup.rs). The Studio's Rust toolchain is pinned in
+`crates/trainnr-studio/rust-toolchain.toml`, and rustup installs it on the
+first `cargo` command there; on Linux the build needs the system libraries
+the README lists ([The Studio](README.md#the-studio)), and a cold build
+takes about 3.5 GB of disk and 4 to 6 minutes. trainnr-mjlab's environment
+is about 6 GB, and training in it needs an NVIDIA GPU with CUDA.
+
 The layers (docs/80 §4): `trainnr` never imports `trainnr-mjlab` or
 the Studio; `trainnr-mjlab` imports `trainnr`; the Studio talks to the
 packages through files and processes only. `tools/check-layers.py` enforces
@@ -48,14 +56,19 @@ it.
 - One pull request, one change. Keep refactors and behaviour changes apart.
 - **Sign off every commit** (`git commit -s`), which adds
   `Signed-off-by: Your Name <you@example.com>` and certifies the
-  [Developer Certificate of Origin](https://developercertificate.org/):
-  that you wrote the change or have the right to submit it under the
-  Apache License 2.0. Unsigned commits are not merged. The history before
-  the public launch is the maintainer's own work and predates this rule.
+  [Developer Certificate of Origin 1.1](DCO) (the text is in `DCO`, from
+  https://developercertificate.org/): that you wrote the change or have
+  the right to submit it under the Apache License 2.0. Unsigned commits
+  are not merged; a squash merge keeps every commit's sign-off. The
+  history before the public launch is the maintainer's own work and
+  predates this rule.
 - **Pull request titles** follow Conventional Commits
-  (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), with a scope
-  where it helps (`feat(studio): ...`, `fix(mjlab): ...`). The body says
-  why, what the alternative was, and how you verified it.
+  (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`,
+  `chore:`), with a scope where it helps (`feat(studio): ...`,
+  `fix(mjlab): ...`) and a `!` before the colon for a breaking change; a
+  squash merge makes the title the commit's title on main, and a check
+  reads it. The body says why, what the alternative was, and how you
+  verified it.
 - **One changelog line** under *Unreleased* in `CHANGELOG.md` for anything a
   user would notice.
 - **Docs in the same commit.** A changed contract changes its document; a
@@ -69,8 +82,11 @@ it.
 
 ## Before you push
 
-`tools/verify.sh` is the whole gate; the pre-commit hook runs the fast
-subset. Both must be green:
+Run the gates for what you touched (`AGENTS.md` says which);
+`tools/verify.sh` runs every one of them and is the one list, the
+pre-commit hook runs the fast subset, and CI runs them all on your pull
+request. trainnr-mjlab's suite needs its 6 GB CUDA environment; CI runs
+it when `trainnr-mjlab/` changes. What they check:
 
 - `ruff format --check` and `ruff check` for `trainnr` and `tools`, `ruff
   check` for `trainnr-mjlab`; `mypy` for both packages (zero errors is the
@@ -78,9 +94,14 @@ subset. Both must be green:
 - `python -m unittest discover -s tests` in each package. Tests that need a
   GPU, a trained checkpoint or a project skip with a reason and say so.
 - `cargo fmt --check`, `cargo clippy` and `cargo test` for the Studio.
-- `tools/check-docs.py` (docs describe real code), `tools/check-layers.py`
-  and `tools/check-numbers.py` (every number in the docs resolves to a
-  record): in CI, in the pre-commit hook and in `tools/verify.sh`.
+- `tools/check-docs.py` (docs describe real code), `tools/check-layers.py`,
+  `tools/check-numbers.py` (every success ratio the README quotes
+  resolves to a finding record): in CI, in the pre-commit hook and in
+  `tools/verify.sh`.
+- `tools/release.py check` (one version everywhere), zizmor over the
+  workflows, `tools/supply-chain.py --policy` (the Studio's crates
+  against `deny.toml`) and `tools/check-package.py` (both wheels carry
+  LICENSE and NOTICE).
 
 Before a release, and in any pull request that changes a tool's name,
 arguments or description, run the agent test: a real Claude Code session
@@ -93,8 +114,8 @@ python3 tools/agent-e2e.py --go2 <unitree_rl_mjlab>/src/assets/robots/unitree_go
 
 It prints the tools the agent called, the errors it hit, its turns, time
 and cost, and PASS or FAIL. Paste that block into the pull request. CI
-cannot run it (it needs a logged-in Claude account and costs about $0.25
-a run).
+cannot run it (it needs a logged-in Claude account and costs about $0.20
+to $0.40 a run).
 
 A screen you changed is verified by looking at it: launch the Studio,
 read every label as a user would, and attach the screenshot to the pull
@@ -113,10 +134,14 @@ request.
   maintainers' own work arrives through pull requests like anyone's.
   Only maintainers merge, by squash or rebase.
 - Dependabot opens weekly update pull requests; they go through the same
-  gates. A supply-chain job audits every locked dependency set for known
-  vulnerabilities and the Studio's crates for advisories and licences
-  (`tools/supply-chain.py`); a new advisory fails the build unless its
-  exception is written down with a reason.
+  gates. The required supply-chain job checks the Studio's crates against
+  their licence, source and ban policy; a separate `advisories` job,
+  which is not required, audits every locked dependency set and the
+  crates for known vulnerabilities (`tools/supply-chain.py`), so an
+  advisory published today does not block your pull request: a
+  maintainer answers it with an update or a written exception. The
+  installed Python packages are checked against a licence allow-list
+  with written exceptions.
 
 ## Licence
 

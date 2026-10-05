@@ -15,7 +15,9 @@ are no maintained older lines.
 Please do not open a public issue for a security problem. Use GitHub's
 private vulnerability reporting on this repository ("Report a
 vulnerability" under the Security tab), which reaches the maintainers
-directly. Include the version or commit, the steps to reproduce, and
+directly. If you cannot use it, email trainnrai@gmail.com with
+"security" in the subject and no details; a maintainer replies with a
+private channel. Include the version or commit, the steps to reproduce, and
 what an attacker gains. You will get an acknowledgement within a week and
 a fix or a decision within thirty days for anything confirmed; we credit
 reporters in the release notes unless they prefer otherwise.
@@ -32,10 +34,13 @@ reporters in the release notes unless they prefer otherwise.
 
 ## Things to know
 
-- The MCP server executes actions on the machine that runs it (training
-  runs, simulators, the Studio) in the project directory it is
-  given. Treat it like any local developer tool: run it for projects you
-  trust, and do not expose its stdio to untrusted agents.
+- The MCP server acts on the machine that runs it, as the user who runs
+  it: it starts training runs, simulators and the Studio. Run it for
+  projects you trust, and do not hand its stdio to an agent you do not.
+- A project is data, and some of it is code. A checkpoint (`.pt`) is a
+  Python pickle; trainnr reads every checkpoint in PyTorch's weights-only
+  mode before the trainer loads it, and refuses one that carries code,
+  but open other people's projects with the care you give their code.
 - `tools/cloud-gpu.py` provisions rented machines with an API key read
   from the environment. Keys are never written into the repository; a
   report that one has been is a security report.
@@ -47,10 +52,45 @@ what it does not, and what guards each boundary:
 
 | Boundary | What could go wrong | What guards it |
 |---|---|---|
-| The agent calling the MCP server | An agent, or a prompt injected into what it reads, asks for an action the user did not intend: a training run, a deployment to a robot, a deletion | Tools act only inside the open project directory; acting tools run as visible background jobs the user can list and cancel (`list_jobs`, `cancel_job`); nothing is deleted by a tool; deploying to hardware is the vendor's runtime, started by the user, after a pre-flight that refuses by name |
-| Files the user opens | A crafted robot model, scene, recording or dataset exploits a parser (MuJoCo, USD, URDF, rosbag2, MCAP) | Inputs are the user's own or named public sources with a recorded digest; the parsers are the upstream libraries, kept current by Dependabot and audited weekly (`tools/supply-chain.py`, `cargo-deny`) |
-| Downloads | A tampered Studio binary or public log | The Studio comes from this repository's GitHub release over HTTPS and is refused unless its SHA-256 matches; registered public logs are checked against their recorded size and digest |
-| Network | Data leaving the machine | The server listens on no network port; the Studio's viewer server binds to the local machine; cloud GPUs are used only when the user asks, with their key read from the environment and never written to the repository |
-| The repository | A malicious pull request reaches a release | Only maintainers merge; CI runs a pull request's code with a read-only token and no secrets; every action is pinned to a commit; release builds never restore a build cache; Dependabot and the weekly supply-chain job flag known advisories |
+| The agent calling the MCP server | An agent, or a prompt injected into what it reads, asks for an action the user did not intend | Paths a tool reads or writes (outputs, datasets, checkpoints) must resolve inside the open project, and a call with no project is refused; artifacts are named by plain names (no separators, drive marks or device names); an argument a tool does not take is refused; acting tools run as visible background jobs (`list_jobs`, `cancel_job`); no tool deletes an artifact or overwrites an experiment, deployment, task or project; a robot is never commanded over the network by a tool: the DDS gate and pre-flight run against a simulator on this machine's loopback. Some tools read a file the user names outside the project on purpose: `onboard_robot` (the model's folder, refused when it links outside itself or exceeds 2 GB), `import_experiment`, `capture_scene` (a video), `ingest_recording` |
+| A project from someone else | Files in its `.index/`, `mcp-jobs/` or `deploy/` steer the Studio or the server | The Studio writes through no link a project carries and applies no command file older than its own session; a command's id must be a plain name; job status reads the log beside the job's record, never the path the record names; `quit_studio` signals only a process that is a Studio, and the Studio's Stop button refuses pid 1 and a reused pid; a deployment manifest's program names must be plain names; checkpoints are read weights-only first |
+| Files the user opens | A crafted robot model, scene, recording or dataset exploits a parser (MuJoCo, USD, URDF, rosbag2, MCAP) | Inputs are the user's own or named public sources with a recorded digest; the parsers are the upstream libraries, kept current by Dependabot and audited (`tools/supply-chain.py`, `cargo-deny`) |
+| Downloads | A tampered Studio binary, trainer environment or public log | See *Network* below for every download. The Studio comes from this repository's GitHub release over HTTPS, checked against the SHA-256 published beside it (this catches a corrupted download; a replaced release is guarded by GitHub's immutable releases and the build provenance attestation, `gh attestation verify`); Python packages come from PyPI pinned by hash in the lock files; a robot's fetched files are checked against the git blob ids its `FETCH.json` pins; registered public logs are checked against their recorded size and digest, and one that states no licence needs `accept_unlicensed` |
+| The repository | A malicious pull request reaches a release | Only the maintainer merges (rulesets, CODEOWNERS); CI runs a pull request's code with a read-only token and no secrets; every action is pinned to a commit; release builds never restore a build cache; Dependabot and the advisory job flag known vulnerabilities |
 
-A report that any row's guard can be bypassed is a security report.
+### Network
+
+What trainnr sends or receives, and when:
+
+| When | What |
+|---|---|
+| The Claude Code plugin's session start (`hooks/hooks.json`; off with `TRAINNR_NO_PREFETCH=1`) | `uv sync` of the server's environment from PyPI (about 0.6 GB the first time; uv may download a Python), and the prebuilt Studio from this repository's GitHub release (about 72 MB) |
+| The first job of a kind (training, evaluation, export) | `uv` builds the trainer's environment from PyPI (about 6 GB the first time) |
+| `launch_studio` or `trainnr studio --install` without a local build | The prebuilt Studio from the GitHub release |
+| The first use of a robot whose bundle has a `FETCH.json` (today the microduck; off with `TRAINNR_NO_ROBOT_FETCH=1`) | The files it names from their publisher's GitHub repository at a pinned commit, each checked against its git blob id: the microduck's 38 meshes, about 22 MB, from `pollen-robotics/microduck_rl`. `python -m trainnr.bundles.fetch robots/microduck` fetches them ahead |
+| `ingest_public_log` | The named public dataset from its publisher (GitHub, Zenodo) |
+| `evaluate_walk(student=…)` naming a Hugging Face repository | That model from the Hugging Face Hub |
+| `tools/cloud-gpu.py` and the cloud tools | The RunPod API, with the user's key |
+
+What listens:
+
+| Listener | Address |
+|---|---|
+| The Studio's viewer server (Rerun gRPC) | `127.0.0.1:9876`; `TRAINNR_VIEWER_BIND` opens it wider, and the Studio warns when it does. Anyone who can reach it can stream into the window, read what it shows, and drive it |
+| `play_walk`'s browser viewer (viser) | `127.0.0.1:8080` |
+| `start_capture` over UDP | Every interface, because the robot sends from the network; at most an hour per capture; anything that reaches the port is recorded |
+| The MCP server | None: it speaks over stdio |
+
+Nothing phones home: there is no telemetry or update check, and Rerun's
+analytics are compiled out of the Studio.
+
+### Files outside a project
+
+The projects home (`~/trainnr`, or `TRAINNR_HOME`) holds the projects and
+`.current`, the project a new session starts on; the user's cache
+folder (`~/.cache/trainnr/studio` on Linux, `~/Library/Caches` on macOS,
+`%LOCALAPPDATA%` on Windows) holds the downloaded Studio; `uv` keeps its cache; the Studio keeps its
+window state and Rerun's blueprints in the OS's application-data folder.
+
+A report that any guard above can be bypassed, or that the tables leave
+out a call, a listener or a file, is a security report.

@@ -156,4 +156,4 @@ the deploy.yaml/sim2sim contract as the shape of the sim-to-real seam
 (built since: `trainnr/deploy`), and the reward vocabulary + curricula
 as the adoption list for trainnr_mjlab when the walk grows terrain.
 The manuscript's §8 re-reads this repository at commit 1425b15
-(docs/paper/manuscript.md).
+(in preparation).

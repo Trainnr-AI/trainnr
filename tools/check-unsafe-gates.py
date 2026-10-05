@@ -8,9 +8,8 @@ be switched off locally by an `#[allow]`.
 That protection is only as durable as the line declaring it, and deleting
 a line from a manifest is silent. This checks the guard rather than
 grepping for the thing the guard already prevents. The rig's crates and
-firmware, which this gate used to cover too, moved to their own
-repository with the same gate (https://github.com/Trainnr-AI/rig,
-2026-10-02).
+firmware, which this gate used to cover too, moved to a private archive
+with the same gate (2026-10-02).
 """
 
 import re

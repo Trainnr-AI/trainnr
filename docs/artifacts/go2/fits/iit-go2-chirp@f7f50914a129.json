@@ -296,7 +296,7 @@
   "created_utc": "2026-09-25T10:00:58.656654+00:00",
   "profile": null,
   "model": "go2.xml@2965117f44c2",
-  "code": "c0e3dc9",
+  "code": "c0dbd6c",
   "units": {
     "FL_hip_joint.armature": "kg*m^2",
     "FL_hip_joint.damping": "N*m*s/rad",

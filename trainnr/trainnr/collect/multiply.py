@@ -10,7 +10,7 @@ issues the shipping verdict in the same pass. A candidate the device
 keeps and the CPU refuses is a FILTER FALSE-POSITIVE: counted in the
 result, never written to disk.
 
-What this core does NOT do (recorded in the log): Arena-style
+What this core does NOT do: Arena-style
 retargeting — transforming the action segment by the object's pose
 delta. B3.1 measured open-loop kitting replay surviving ±5 mm of spawn
 jitter and dying at ±30 mm, so a task adapter's `variant_fn` must vary

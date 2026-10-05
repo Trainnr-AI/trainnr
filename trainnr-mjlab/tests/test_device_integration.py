@@ -16,7 +16,7 @@ the pipeline's CpuServo discipline in thirty local lines. Pins:
   prevent would fail this.
 
 Runs on CUDA when Warp sees the card (`LD_LIBRARY_PATH=/usr/lib/wsl/lib`
-on this box, docs/07 2026-08-27) and on Warp's CPU device otherwise —
+under WSL2, measured 2026-08-27) and on Warp's CPU device otherwise —
 the pin is engine-vs-reference either way; the device name is printed
 into the assertion message so a skipped card is visible in a failure.
 """

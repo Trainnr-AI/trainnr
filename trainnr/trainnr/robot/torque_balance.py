@@ -54,7 +54,7 @@ class TermBounds:
     The Go2's declared values are armature 0.01-0.02 kg*m^2 and damping
     0.5-2 N*m*s/rad (unitree_rl_mjlab's actuator table, its vendor DR
     tables), Coulomb friction under 1 N*m in every published quadruped
-    fit read (docs/e2e-research/78). Each box is 2-3 times the largest
+    fit read (2026-09-24). Each box is 2-3 times the largest
     declared value: wide enough that a bound hit is information about
     the data, never a clamp that flatters the fit, and narrow enough that
     the range-relative pinned rule (a tenth of the box) still means

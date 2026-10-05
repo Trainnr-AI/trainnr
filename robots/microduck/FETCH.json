@@ -1,0 +1,161 @@
+{
+ "schema": "trainnr-bundle-fetch/1",
+ "repository": "pollen-robotics/microduck_rl",
+ "commit": "d424a0c899f6b33cbd3daeb279913134349c0b63",
+ "licence": "Creative Commons BY-SA-NC, as Pollen Robotics' README states for its 3D model files",
+ "why": "the meshes' licence does not let this Apache-2.0 repository redistribute them; they are fetched from their publisher on first use, byte-identical to the files the bundle's stamp was taken over",
+ "files": {
+  "assets/ankle_left.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/ankle_left.stl",
+   "blob": "712488c2707191e5b0a35551eae10bc04c2e06df"
+  },
+  "assets/ankle_right.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/ankle_right.stl",
+   "blob": "e60bbf205af71d224bcb89cefc3646117238c51f"
+  },
+  "assets/banana_pcb_locker.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/banana_pcb_locker.stl",
+   "blob": "b7b521560dd5c345fdae427e61dfb71158c1aa87"
+  },
+  "assets/bearing_roll.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/bearing_roll.stl",
+   "blob": "a814312ea6b0921ab28e97238f1c7bee6cb646be"
+  },
+  "assets/bottom_head_shell.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/bottom_head_shell.stl",
+   "blob": "643f11092df7f9f7c55e55c9c3e71d4e4c6cb27f"
+  },
+  "assets/elec_rpi_robot_hat_pcb.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/elec_rpi_robot_hat_pcb.stl",
+   "blob": "09048bcf69bac09c72fb834b45161b9aaf2ec21f"
+  },
+  "assets/face_part.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/face_part.stl",
+   "blob": "0a27859ff2337baf9131c71f302667d8f6195da1"
+  },
+  "assets/foot_left.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/foot_left.stl",
+   "blob": "43155ba3d9b1e40f6d8e6a4df7d30157ff202f75"
+  },
+  "assets/foot_right.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/foot_right.stl",
+   "blob": "6971bbccdcfe1bf088f8ac618e772144d3a444fd"
+  },
+  "assets/hip_l.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/hip_l.stl",
+   "blob": "516223995f17415282cade51e3383d058dc7fc8d"
+  },
+  "assets/jaw.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/jaw.stl",
+   "blob": "d7b0e12b5aae0b482a0bf7ca36e97f93f435637d"
+  },
+  "assets/jaw_soft.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/jaw_soft.stl",
+   "blob": "3c8bb13ec4028a479378d8cf0bfd6c5e5283655d"
+  },
+  "assets/left_shell.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/left_shell.stl",
+   "blob": "9cb1656883bf27581c93479865a57d2be4956982"
+  },
+  "assets/leg.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/leg.stl",
+   "blob": "cc46130821755719727a27ebaea4e319b8303e01"
+  },
+  "assets/lens.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/lens.stl",
+   "blob": "beff90540f3bebf4c43dfdfec8dba373e335e5ca"
+  },
+  "assets/m12_lens_holder.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/m12_lens_holder.stl",
+   "blob": "23a01435a6bbd30ce4dd9d31a39402df4829d538"
+  },
+  "assets/motor_support.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/motor_support.stl",
+   "blob": "810f089cf1ba3322678123a86dd648de83fd06b8"
+  },
+  "assets/neck.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/neck.stl",
+   "blob": "ce34b0be3d7712548200dcf12111f709fd499aff"
+  },
+  "assets/neck_pitch.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/neck_pitch.stl",
+   "blob": "1fd0ce0ec7e31e3f6cde20edf08f90a78554b8a9"
+  },
+  "assets/noenoeil.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/noenoeil.stl",
+   "blob": "40ef4d074244dd8e1eef792a76c075f6b4f725fc"
+  },
+  "assets/np_f970.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/np_f970.stl",
+   "blob": "1ba95ee33747dc61cfcc17e54f8dc776cc342a1b"
+  },
+  "assets/pcb__raspberry_pi_zero_2_w.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/pcb__raspberry_pi_zero_2_w.stl",
+   "blob": "83ad4e5343ac9ac4010f68634cca270b0247f86f"
+  },
+  "assets/power_support.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/power_support.stl",
+   "blob": "981bd2088b381691ac1b004c7b664d2af410ca63"
+  },
+  "assets/right_shell.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/right_shell.stl",
+   "blob": "5879c3c7253fb9b2814227697ce6eb775d38df5a"
+  },
+  "assets/seeed_bearing__configuration__22x16x4.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration__22x16x4.stl",
+   "blob": "56ab78aca4c937d65ce3effb9b6b71b6581b1671"
+  },
+  "assets/seeed_bearing__configuration_default.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/seeed_bearing__configuration_default.stl",
+   "blob": "4baeca23b342d5355fa43186f36ddba1be7ad597"
+  },
+  "assets/soft_mouth_top.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/soft_mouth_top.stl",
+   "blob": "43e95157dc9527478d9ad5bea4571bdce18e4a8b"
+  },
+  "assets/sole_left.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/sole_left.stl",
+   "blob": "1fe55aac746723d2f2181d5f7aaa5aa1bfedcb73"
+  },
+  "assets/sole_right.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/sole_right.stl",
+   "blob": "7d22f5cddcb7af58dff8f6deb356279e00b68485"
+  },
+  "assets/speaker.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/speaker.stl",
+   "blob": "1f4de82900f5a13ef397d39a61b0b8985fb5c956"
+  },
+  "assets/top_head_shell.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/top_head_shell.stl",
+   "blob": "f446053309fc01ca0ddf866091995c173d9e1814"
+  },
+  "assets/trunk_base.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/trunk_base.stl",
+   "blob": "1fc5ea02be9583d292fc8c661095c9c76abbef87"
+  },
+  "assets/upper_leg_left.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/upper_leg_left.stl",
+   "blob": "b02cccbc748e925bbb33a98f9dfce7346581e730"
+  },
+  "assets/upper_leg_right.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/upper_leg_right.stl",
+   "blob": "8427f7e7ac30e0f93d226ef5f87766e66eb6f868"
+  },
+  "assets/upper_leg_rigidity_plate.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/upper_leg_rigidity_plate.stl",
+   "blob": "8b00e8ed3e2c62909ca8c0dab30252e22e90179c"
+  },
+  "assets/xl330.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/xl330.stl",
+   "blob": "0ea8d4fa34037b0987a64a22a104bea0ff80a8b6"
+  },
+  "assets/yaw2roll.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/yaw2roll.stl",
+   "blob": "4354d0ccc1acafe547b4fb9df34a8b612252521a"
+  },
+  "assets/yaw_roll_motion.stl": {
+   "upstream": "src/mjlab_microduck/robot/microduck/assets/yaw_roll_motion.stl",
+   "blob": "a69ce50c08ff5139171bddd80f6994b89d42cf66"
+  }
+ }
+}

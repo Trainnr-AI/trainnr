@@ -31,17 +31,17 @@ from trainnr.tasks.yellow import (
 )
 
 REPO = Path(__file__).resolve().parents[2]
-# The firmware moved with the rig to its own repository on 2026-10-02
-# (https://github.com/Trainnr-AI/rig). The firmware halves of these mirrors
-# run when a checkout of it is named; without one they skip by name, so
-# the Python-only halves still hold on every machine.
+# The firmware moved with the rig to a private archive on 2026-10-02. The
+# firmware halves of these mirrors run when a checkout of it is named;
+# without one they skip by name, so the Python-only halves still hold on
+# every machine.
 RIG = Path(os.environ.get("TRAINNR_RIG_DIR", REPO))
 _PICO_ODOM = RIG / "firmware" / "pico-odom" / "src"
 HAVE_FIRMWARE = (_PICO_ODOM / "servo.rs").exists()
 needs_firmware = unittest.skipUnless(
     HAVE_FIRMWARE,
     "the rig firmware is not checked out here "
-    "(TRAINNR_RIG_DIR=<a Trainnr-AI/rig clone>)",
+    "(TRAINNR_RIG_DIR=<a checkout of the rig's archive>)",
 )
 SERVO_RS = (
     (_PICO_ODOM / "servo.rs").read_text(encoding="utf-8") if HAVE_FIRMWARE else ""

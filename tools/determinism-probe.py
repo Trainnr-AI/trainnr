@@ -16,10 +16,10 @@ keeps its setting for the life of the process.
 
 On a CPU device both modes should already be bit-equal (Warp CPU is
 sequential) — the Mac run is a plumbing smoke. Budget: a COLD kernel
-compile for this scene is ~10 minutes on the WSL box (2026-08-27), and
+compile for this scene is ~10 minutes on the WSL machine (2026-08-27), and
 each mode compiles its own build; run it under `timeout` and in the
 background. The verdict that
-matters comes from the WSL box's CUDA device, where NOT_GUARANTEED is
+matters comes from the WSL machine's CUDA device, where NOT_GUARANTEED is
 expected to differ across runs and RUN_TO_RUN to match; the wall-time
 column prices the mode (their 4090 data says contention-heavy scenes
 can even get faster).

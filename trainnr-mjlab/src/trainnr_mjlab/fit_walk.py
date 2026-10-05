@@ -1,4 +1,4 @@
-"""A walk trained under a measured fit (docs/70 §11 item 1, 2026-09-25):
+"""A walk trained under a measured fit (2026-09-25):
 the robot's joints set at the fit's estimates and randomized over its
 intervals, instead of declared constants and a declared span.
 

@@ -21,6 +21,82 @@ accepted = [
   "MPL-2.0",
   "OFL-1.1",
   "Ubuntu-font-1.0",
+  # Only through the clarification of epaint_default_fonts below: the
+  # Hack font's licence carries the Bitstream Vera licence it derives
+  # from. deny.toml reads the crate's declared expression, which names it
+  # not, so it is not in deny.toml's list.
+  "Bitstream-Vera",
 ]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
+
+# Clarifications: crates whose declared licence leaves out code or fonts
+# they compile into the binary, so cargo-about would print the canonical
+# licence text without the owners' notices. Each names the files that
+# carry those notices, with the file's SHA-256. On a mismatch (a version
+# bump changed the file) cargo-about only warns and drops the
+# clarification; `tools/third-party-notices.py check` then fails the
+# release's licences job on the missing notice (checked 2026-10-04). Re-read
+# the files and update the checksums with the crate's version.
+#
+# zstd-sys bundles the zstd C library: BSD-3-Clause, Meta Platforms
+# (zstd/LICENSE; its GPL-2.0 alternative in zstd/COPYING is not taken).
+[zstd-sys.clarify]
+license = "(MIT OR Apache-2.0) AND BSD-3-Clause"
+
+[[zstd-sys.clarify.files]]
+path = "LICENSE.Mit"
+license = "MIT"
+checksum = "129e8edef29e9abcd2ebabe252f4ef1b1289cdca356bf0040284a2fbccfb96c8"
+
+[[zstd-sys.clarify.files]]
+path = "LICENSE.Apache-2.0"
+license = "Apache-2.0"
+checksum = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+
+[[zstd-sys.clarify.files]]
+path = "zstd/LICENSE"
+license = "BSD-3-Clause"
+checksum = "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+
+# lz4-sys bundles liblz4: the library directory is BSD-2-Clause, Yann
+# Collet (liblz4/lib/LICENSE); the rest of the LZ4 tree is not compiled.
+[lz4-sys.clarify]
+license = "MIT AND BSD-2-Clause"
+
+[[lz4-sys.clarify.files]]
+path = "LICENSE"
+license = "MIT"
+checksum = "77633124ac69bf094e06cf9f3157c54d6e51d6b58a38d4f28141947815ecadfa"
+
+[[lz4-sys.clarify.files]]
+path = "liblz4/lib/LICENSE"
+license = "BSD-2-Clause"
+checksum = "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+
+# egui's default fonts: Hack (MIT, Source Foundry, over the Bitstream Vera
+# licence: fonts/Hack-Regular.txt holds both), emoji-icon-font (MIT, John
+# Slegers), Noto Emoji (OFL-1.1) and Ubuntu Light (Ubuntu Font Licence).
+# The crate's own code is MIT OR Apache-2.0.
+[epaint_default_fonts.clarify]
+license = "(MIT OR Apache-2.0) AND MIT AND Bitstream-Vera AND OFL-1.1 AND Ubuntu-font-1.0"
+
+[[epaint_default_fonts.clarify.files]]
+path = "fonts/Hack-Regular.txt"
+license = "Bitstream-Vera"
+checksum = "47c0cccbeec7e8614548cc485588b28149e7874188df5f41b36efebcee285c87"
+
+[[epaint_default_fonts.clarify.files]]
+path = "fonts/emoji-icon-font-mit-license.txt"
+license = "MIT"
+checksum = "b9d2c1d909aa149996fd4c91dcb92b2362a04431640c1d200959da94caf8cde1"
+
+[[epaint_default_fonts.clarify.files]]
+path = "fonts/OFL.txt"
+license = "OFL-1.1"
+checksum = "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+
+[[epaint_default_fonts.clarify.files]]
+path = "fonts/UFL.txt"
+license = "Ubuntu-font-1.0"
+checksum = "2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002"

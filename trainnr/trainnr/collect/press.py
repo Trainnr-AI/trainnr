@@ -154,8 +154,8 @@ class DemoBatch:
 
 
 class PressFeed(Protocol):
-    """Where a press run streams (docs/66 §0: everything that happens
-    streams to the Studio). The loop reports every attempt and the
+    """Where a press run streams (everything that happens streams to
+    the Studio). The loop reports every attempt and the
     final accounting; what listens — the Studio via
     `collect/press_feed.py`, a test's list — is the caller's choice."""
 

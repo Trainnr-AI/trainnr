@@ -1,4 +1,4 @@
-"""The paper's figures, drawn from finding records — never by hand.
+"""The findings' figures, drawn from finding records — never by hand.
 
 A figure here is a FUNCTION of a `Finding`: the arms' successes, trials
 and exact intervals become dots with interval whiskers (a curve over
@@ -59,7 +59,7 @@ PANEL = (2.9, 2.15)  # one panel, inches: three fit the 5.5 in text width side b
 BAR_WIDTH = 0.62
 FOOTER_WRAP = 88  # characters per footer line at the panel width
 # Display names for arms whose record names are the study's shorthand;
-# the paper's tables use these words (the record keeps its own). The
+# the figures use these words (the record keeps its own). The
 # walk's "point / narrow / wide" are spans; the lift's "point /
 # identified / guessed / wide" are randomization bases, and its
 # "identified" is the declared ±5 % span the paper says it was.
@@ -85,7 +85,7 @@ ARM_LABELS = WALK_ARM_LABELS  # the walk's, for callers that predate the split
 
 
 def arm_label(arm: str, finding: Finding) -> str:
-    """The paper's word for an arm, by study."""
+    """The figures' word for an arm, by study."""
     if finding.id.startswith("walk-"):
         return WALK_ARM_LABELS.get(arm, arm)
     if "lift" in finding.id:
@@ -175,9 +175,9 @@ def title_of(finding: Finding) -> str:
 
 
 def rank_colours(rates: dict[str, float]) -> dict[str, tuple[str, str]]:
-    """Fill and edge per arm by its success rate (Prakhar's rule,
-    2026-09-08): the best arm green, the worst red, the rest blue; ties
-    at the top are all green, and arms that all tie are blue."""
+    """Fill and edge per arm by its success rate, ranked (the figure
+    rule since 2026-09-08): the best arm green, the worst red, the rest
+    blue; ties at the top are all green, and arms that all tie are blue."""
     if not rates:
         return {}
     best, worst = max(rates.values()), min(rates.values())

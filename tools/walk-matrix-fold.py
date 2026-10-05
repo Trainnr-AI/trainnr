@@ -45,8 +45,8 @@ DEFAULT_SPAN = 0.30
 NARROW_SPAN = 0.10  # walk_verdict's LAW_DR_SPAN: the plain certificate's draws
 REPLICATE_SEP = "#"
 PROTOCOL = (
-    "docs/70 §9 (the mismatch matrix: tools/walk-mismatch-matrix.sh, "
-    "every C1 policy judged pinned at fit x s and under drawn spans)"
+    "the mismatch matrix: tools/walk-mismatch-matrix.sh, "
+    "every C1 policy judged pinned at fit x s and under drawn spans"
 )
 ARM_SPAN = {
     "point": "none",

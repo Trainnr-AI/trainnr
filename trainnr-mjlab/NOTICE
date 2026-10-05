@@ -1,5 +1,5 @@
 trainnr
-Copyright 2026 Prakhar Aggarwal
+Copyright 2026 Trainnr AI
 
 This product is licensed under the Functional Source License, Version 1.1,
 ALv2 Future License (FSL-1.1-ALv2; see LICENSE): any use other than a
@@ -24,8 +24,21 @@ Robot models redistributed under robots/
   MuJoCo Menagerie: robots/so101-nominal/. Our wrapper so101.xml adds
   sensors only.
 - microduck (Pollen Robotics, https://github.com/pollen-robotics/microduck_rl,
-  branch develop at d424a0c8; Apache-2.0): robot_walk.xml and the 38 meshes
-  it references, under robots/microduck/.
+  branch develop at d424a0c8; Apache-2.0): robot_walk.xml, under
+  robots/microduck/. The 38 meshes it references are not redistributed:
+  Pollen Robotics' README says "3D model files are licensed under Creative
+  Commons BY-SA-NC", terms that forbid commercial use and are not an
+  Apache-2.0 grant. robots/microduck/FETCH.json names each mesh by its
+  git blob id at that commit, and trainnr fetches them from Pollen
+  Robotics' repository the first time the robot is used, under those
+  terms (robots/microduck/LICENSES/MESHES.md). The microduck in the
+  README's robots image (docs/figures/readme/robots.png) is rendered from
+  those meshes: credit Pollen Robotics, and that part of the image is under
+  their Creative Commons BY-SA-NC terms, not Apache-2.0. The
+  reward and randomization constants in
+  trainnr-mjlab/src/trainnr_mjlab/microduck_walk.py are quoted from
+  src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py at the same
+  commit (Apache-2.0).
 - Robotiq 2F-85 (from https://github.com/robotiq/isaacsim_assets at 6d992b6),
   imported from USD into robots/robotiq-2f85-isaac/. Dual-licensed as its
   source is:
@@ -41,7 +54,9 @@ Robot models redistributed under robots/
   Apache-2.0): the declared actuator constants in
   trainnr-mjlab/src/trainnr_mjlab/go2_walk.py are read from
   src/assets/robots/unitree_go2/ at 1425b15. The Go2 model itself is not
-  distributed; onboarding reads it from the user's own copy.
+  distributed; onboarding reads it from the user's own copy. The images of
+  the Go2 in README.md and under docs/figures/ (the Studio's screenshots in
+  docs/figures/readme/, docs/figures/go2/) are rendered from that model.
 
 Actuator models under robots/actuators/ and robots/actuator-bundles/
 
@@ -60,14 +75,32 @@ state is shown before download and recorded on every recording made)
 - leg-odometry (Yibin Wu et al., https://github.com/YibinWu/leg-odometry,
   release test_v1.0): a real Go2's /lowstate bag. The repository is MIT;
   the bag states no licence of its own.
-- DFKI Robotics Innovation Center, field201 (Zenodo record 19336009,
-  https://zenodo.org/records/19336009; CC BY 4.0,
-  https://creativecommons.org/licenses/by/4.0/): a real Go2 on Vulcano
-  Island. Changes: joint parameters fitted from it and plotted; the figures
-  under docs/figures/go2-sysid/dfki-field201/ are derived from it.
-- sim2real-robot-identification (IIT DLSLab,
-  https://github.com/iit-DLSLab/sim2real-robot-identification;
-  BSD-3-Clause): the Go2 chirp traj_0.pt.
+- "Unitree Go2 Quadruped State Estimation" by Mihaela Popescu, Franek
+  Stark, Hannah Isermann, Rohit Kumar, Jonas Haack and Shubham Vyas (DFKI
+  Robotics Innovation Center; Zenodo, 2026, DOI 10.5281/zenodo.19336009,
+  https://zenodo.org/records/19336009), licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/): the field201 bag, a real
+  Go2 on Vulcano Island. Changes: joint parameters fitted from it and
+  plotted; the figures under docs/figures/go2-sysid/dfki-field201/ are
+  derived from it.
+- sim2real-robot-identification (Dynamic Legged Systems Lab, Istituto
+  Italiano di Tecnologia,
+  https://github.com/iit-DLSLab/sim2real-robot-identification at b73d6a2;
+  BSD-3-Clause, "Copyright (c) 2025, DLS Lab at Istituto Italiano di
+  Tecnologia, Italy"): the Go2 chirp datasets/go2/traj_0.pt. The figures
+  under docs/figures/go2-sysid/iit-chirp/ are derived from it.
+
+Interfaces and data restated here
+
+- ROS 2 message definitions (Apache-2.0): trainnr/trainnr/robots/ros_layouts.py
+  restates the field layouts of std_msgs, geometry_msgs and sensor_msgs
+  (https://github.com/ros2/common_interfaces) and builtin_interfaces
+  (https://github.com/ros2/rcl_interfaces) to decode recordings.
+- ArmnetBench v0.1 (armnet; arXiv:2607.24481; the Hugging Face datasets
+  armnet/armnetbench_v01_robometer and armnet/armnetbench_v01_lerobot_so101,
+  Apache-2.0): data/armnetbench-v01-so101-counts.json and
+  data/armnetbench-checkpoint-census.json are counts and a census derived
+  from them.
 
 Scenes used in the recorded experiments (not distributed here)
 
@@ -94,18 +127,25 @@ Software this product depends on (no source copied)
   viewer embedded in the Studio through the re_viewer and re_ui crates;
   egui and eframe (MIT OR Apache-2.0). The Studio's binary also statically
   links other Rust crates under permissive licences (MIT, Apache-2.0, BSD,
-  ISC, Zlib, Unicode-3.0, MPL-2.0) and embeds fonts under the SIL Open Font
-  Licence 1.1 and the Ubuntu Font Licence; the list is
+  ISC, Zlib, Unicode-3.0, MPL-2.0 and others), among them the zstd and LZ4
+  C libraries (BSD-3-Clause, Meta Platforms; BSD-2-Clause, Yann Collet) and
+  Apache Arrow and DataFusion with their NOTICE files. It embeds five
+  fonts: Inter (The Inter Project Authors; SIL Open Font Licence 1.1),
+  through re_ui; and egui's defaults, Ubuntu Light (Canonical; Ubuntu Font
+  Licence 1.0), Hack (Source Foundry Authors; MIT, with Bitstream Vera Sans
+  Mono under the Bitstream Vera licence), emoji-icon-font (John Slegers;
+  MIT) and Noto Emoji (Google; SIL Open Font Licence 1.1). Every Studio
+  archive carries THIRD_PARTY_LICENSES.md with each crate's and font's
+  licence text and those NOTICE files; the list is
   crates/trainnr-studio/Cargo.lock and the allow-list is
   crates/trainnr-studio/deny.toml.
-- Newton (NVIDIA, Apache-2.0) and OpenUSD (Pixar, Apache-2.0 with the
+- Newton (a Linux Foundation project, initiated by Disney Research, Google
+  DeepMind and NVIDIA; Apache-2.0) and OpenUSD (Pixar, Apache-2.0 with the
   Tomorrow Open Source Technology notice): the USD import path.
+- torchrunx (GPL-3.0): mjlab declares it as a dependency, so it is installed
+  with trainnr-mjlab; mjlab imports it only to launch multi-GPU training.
+  trainnr imports it nowhere, and no part of it is distributed here.
 - gsplat (Apache-2.0), COLMAP (BSD-3-Clause, a system install) and Open3D
   (MIT): the scene capture chain.
 
 Other
-
-- docs/paper/latex/neurips_2023.sty: the NeurIPS 2023 LaTeX style file
-  (the NeurIPS Foundation), fetched 2026-09-08 from media.neurips.cc and
-  redistributed unmodified for the paper's layout. The file states no
-  licence of its own.

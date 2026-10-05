@@ -27,7 +27,7 @@ pub const RENDER_STREAM_SCRIPT: &str = "studio-render-stream.py";
 // `deploy`: onnxruntime, for a deployment's policy in the viewport.
 const PIPELINE_EXTRAS: &[&str] = &["sim", "viz", "deploy"];
 
-/// The WSL-only environment for MuJoCo's offscreen GL (the box's
+/// The WSL-only environment for MuJoCo's offscreen GL (the WSL machine's
 /// documented gotcha: without these it falls back to llvmpipe, the
 /// software rasterizer at ~300 ms/frame). Mirrors `trainnr/wsl.env`.
 #[cfg(target_os = "linux")]
@@ -74,12 +74,20 @@ fn resolve_repo_root(
         }
     }
     // `crates/trainnr-studio` is two directories under the repo root in a
-    // checkout; a copied binary never reaches this line with a live path.
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .map(Path::to_path_buf)
-        .unwrap_or_default()
+    // checkout. Only a debug build trusts the path baked in at build time:
+    // a release binary built on CI would run scripts from wherever that
+    // path exists on the user's machine, which another account could
+    // create (2026-10-04 security review).
+    if cfg!(debug_assertions) {
+        if let Some(root) = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .filter(|p| is_repo_root(p))
+        {
+            return root.to_path_buf();
+        }
+    }
+    PathBuf::new()
 }
 
 fn is_repo_root(path: &Path) -> bool {

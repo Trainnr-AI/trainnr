@@ -2,7 +2,7 @@
  "id": "walk-c1-refit-2026-09-06",
  "claim": "C1 on the walk, arms point-refit, identified on actuator xl330-m6@e57c25635c89 \u2014 same G3 recipe, trained under [point-refit: none: the bundle's point fit exactly (no law DR); identified: identified-set: joint draw from 100 bootstrap replicates of xl330-m6@e57c25635c89 (marginal 95 % box on the bundle as `uncertainty`)] \u2014 each certified AT THE FIT of that bundle (no law DR, pushes on) on 120 matched trials; a second certificate per run judges under \u00b10.10 law DR.",
  "date": "2026-09-06",
- "repo_commit": "c5cb7b9-dirty",
+ "repo_commit": "eb9baf0-dirty",
  "argv": [
   "tools/walk-c1-fold.py",
   "docs/artifacts/walk-c1",
@@ -211,7 +211,7 @@
  "caveats": [
   "The identified arm draws from the bundle's bootstrap interval (docs/e2e-research/72): log-sampling variability on one unit and one bench, not unit-to-unit spread; its point arm is the same bundle with no draw, so the comparison is at one point.",
   "Replicates are pooled per arm (trial k of each run starts identically); per-run counts are on the record so the between-run spread is visible.",
-  "The second certificate per run (`under_span_0.10`) was first judged under the bundle's marginal interval boxes (the DR event preferred a bundle's interval over a declared span; fixed in commit 7c56b72) and re-judged 2026-09-07 under \u00b10.10 around the point on the owned RTX 3090 Ti; the at-fit column is the pods' originals."
+  "The second certificate per run (`under_span_0.10`) was first judged under the bundle's marginal interval boxes (the DR event preferred a bundle's interval over a declared span; fixed in commit 0232fe1) and re-judged 2026-09-07 under \u00b10.10 around the point on the owned RTX 3090 Ti; the at-fit column is the pods' originals."
  ],
  "revised": [
   {
@@ -220,7 +220,7 @@
   },
   {
    "date": "2026-09-07",
-   "what": "under_span_0.10 column re-judged on the WSL machine with the fixed seam (commit 7c56b72; tools/walk-refit-rejudge-on-box.sh): six certificates replaced, 58/120 and 56/120 became 53/120 and 53/120; the at-fit column is unchanged (its certificates were not re-run)."
+   "what": "under_span_0.10 column re-judged on the WSL machine with the fixed seam (commit 0232fe1; tools/walk-refit-rejudge-on-box.sh): six certificates replaced, 58/120 and 56/120 became 53/120 and 53/120; the at-fit column is unchanged (its certificates were not re-run)."
   }
  ]
 }
