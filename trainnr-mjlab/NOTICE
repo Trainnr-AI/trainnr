@@ -56,7 +56,7 @@ Robot models redistributed under robots/
   src/assets/robots/unitree_go2/ at 1425b15. The Go2 model itself is not
   distributed; onboarding reads it from the user's own copy. The images of
   the Go2 in README.md and under docs/figures/ (the Studio's screenshots in
-  docs/figures/readme/, docs/figures/go2/) are rendered from that model.
+  docs/figures/readme/) are rendered from that model.
 
 Actuator models under robots/actuators/ and robots/actuator-bundles/
 

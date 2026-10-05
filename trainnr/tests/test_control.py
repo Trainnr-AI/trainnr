@@ -438,6 +438,29 @@ class WslGpuEnvironment(unittest.TestCase):
             self.assertEqual(control.wsl_gpu_environment({"A": "b"}), {"A": "b"})
 
 
+class WslDisplayEnvironment(unittest.TestCase):
+    """A WSL boot without /run/user/<uid>: the Studio found no Wayland
+    compositor and exited (2026-10-05)."""
+
+    def test_a_missing_socket_points_at_wslgs_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            wslg = Path(tmp) / "wslg"
+            wslg.mkdir()
+            (wslg / "wayland-0").touch()
+            env = {"WAYLAND_DISPLAY": "wayland-0", "XDG_RUNTIME_DIR": f"{tmp}/gone"}
+            with mock.patch.object(control, "on_wsl", return_value=True):
+                fixed = control.wsl_display_environment(dict(env), wslg)
+                self.assertEqual(fixed["XDG_RUNTIME_DIR"], str(wslg))
+                (Path(tmp) / "gone").mkdir()
+                (Path(tmp) / "gone" / "wayland-0").touch()
+                self.assertEqual(control.wsl_display_environment(dict(env), wslg), env)
+
+    def test_elsewhere_the_environment_is_untouched(self) -> None:
+        env = {"WAYLAND_DISPLAY": "wayland-0", "XDG_RUNTIME_DIR": "/nowhere"}
+        with mock.patch.object(control, "on_wsl", return_value=False):
+            self.assertEqual(control.wsl_display_environment(dict(env)), env)
+
+
 class APlantedStateFile(unittest.TestCase):
     """A shared project's studio-state.json named a pid with a heartbeat in
     the future, and quit_studio signalled that process (security review,

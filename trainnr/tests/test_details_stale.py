@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from trainnr.project import create_project, index_project, write_index
-from trainnr.project.details import details_path
+from trainnr.project.details import details_path, trial_row
 from trainnr.project.previews import _first_sentence
 
 
@@ -64,6 +64,27 @@ class StaleDetails(unittest.TestCase):
             _first_sentence("Rate 0.53 held. Then not."), "Rate 0.53 held."
         )
         self.assertEqual(_first_sentence("No stop here"), "No stop here")
+
+
+class TrialRows(unittest.TestCase):
+    def test_a_failed_trial_lists_only_the_milestones_it_reached(self) -> None:
+        record = {
+            "trial": 0,
+            "seed": 1000,
+            "policy": "model_149",
+            "success": False,
+            "steps": 1000,
+            "events": [
+                {"index": 0, "name": "survived", "passed": True},
+                {"index": 1, "name": "tracked", "passed": False},
+            ],
+        }
+        self.assertEqual(
+            trial_row(record), [0, 1000, "model_149", "failure", 1000, "survived"]
+        )
+        # a record whose events carry no verdict lists what happened
+        record["events"] = [{"name": "grasped"}]
+        self.assertEqual(trial_row(record)[-1], "grasped")
 
 
 if __name__ == "__main__":

@@ -113,11 +113,10 @@ def run_status(
     return UNRECORDED
 
 
-def refresh_training(folder: Path) -> dict[str, Any] | None:
-    """The folder's `training.json` from the trainer's own event file
-    (every series it logs) with the console log's facts, or from the
-    console log alone; returns the record written, or None when neither
-    holds an iteration yet."""
+def read_training(folder: Path) -> dict[str, Any] | None:
+    """The training record from the trainer's own event file (every series
+    it logs) with the console log's facts, or from the console log alone;
+    None when neither holds an iteration yet. Nothing is written."""
     log = folder / TRAIN_LOG
     text = read_text(log, errors="replace") if log.is_file() else ""
     parsed = parse_rsl_rl_log(text) if text else None
@@ -138,8 +137,37 @@ def refresh_training(folder: Path) -> dict[str, Any] | None:
         return None
     out = record.to_json()
     out["status"] = run_status(folder, text, record=out)
-    write_json(folder / TRAINING_FILE, out)
     return out
+
+
+def refresh_training(folder: Path) -> dict[str, Any] | None:
+    """The folder's `training.json` written from `read_training`; returns
+    the record written, or None when there is nothing to record yet."""
+    out = read_training(folder)
+    if out is not None:
+        write_json(folder / TRAINING_FILE, out)
+    return out
+
+
+def current_training(folder: Path) -> dict[str, Any] | None:
+    """The run's training record as it stands now, for a reader that must
+    not write: `training.json`, or the record read afresh when the
+    trainer's files are newer or it says running after they stopped.
+    A run that had just finished was listed with no status, iterations or
+    reward until something refreshed the project (an agent run,
+    2026-10-05)."""
+    if stale(folder) or left_running(folder):
+        fresh = read_training(folder)
+        if fresh is not None:
+            return fresh
+    path = folder / TRAINING_FILE
+    if not path.is_file():
+        return None
+    try:
+        written: dict[str, Any] = read_json(path)
+    except (OSError, ValueError):
+        return None
+    return written
 
 
 def left_running(folder: Path, *, now: float | None = None) -> bool:

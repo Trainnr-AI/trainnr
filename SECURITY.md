@@ -86,8 +86,8 @@ analytics are compiled out of the Studio.
 
 ### Files outside a project
 
-The projects home (`~/trainnr`, or `TRAINNR_HOME`) holds the projects and
-`.current`, the project a new session starts on; the user's cache
+The projects home (`~/trainnr`, or `TRAINNR_HOME`) holds the projects,
+`.current` (the project a new session starts on) and `cache/` (downloads such as public logs); the user's cache
 folder (`~/.cache/trainnr/studio` on Linux, `~/Library/Caches` on macOS,
 `%LOCALAPPDATA%` on Windows) holds the downloaded Studio; `uv` keeps its cache; the Studio keeps its
 window state and Rerun's blueprints in the OS's application-data folder.

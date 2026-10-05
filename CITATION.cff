@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: >-
   If you use trainnr, please cite the software.
 type: software
-title: "trainnr: the end-to-end robotics platform, from real-to-sim through training to a gated deployment"
+title: "trainnr: the physical AI platform for robot learning, run from your coding agent"
 abstract: >-
   The end-to-end robotics platform, run from a coding agent: a robot's
   dynamics are identified from its own telemetry into a content-hashed
@@ -10,7 +10,7 @@ abstract: >-
   provenance, policies are trained by reinforcement learning (MuJoCo,
   mjlab) or imitation learning (LeRobot) on the identified model with a
   measured randomization span, evaluated with paired trials and exact
-  intervals, gated against the robot's runtime, deployed, and watched
+  intervals, gated against the robot's runtime in simulation, and watched
   through their telemetry for drift, which starts the next turn. One MCP
   server, the Studio (a desktop app) and a Claude Code plugin.
 authors:
@@ -18,7 +18,6 @@ authors:
     given-names: Prakhar
     affiliation: Trainnr AI
 repository-code: "https://github.com/Trainnr-AI/trainnr"
-url: "https://trainnr.ai"
 license-url: "https://github.com/Trainnr-AI/trainnr/blob/main/LICENSE"
 version: 0.1.0
 keywords:

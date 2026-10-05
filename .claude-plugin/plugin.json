@@ -5,9 +5,9 @@
   "description": "The physical AI platform for robot learning, run from your coding agent: data collection and telemetry, real-to-sim system identification, simulation, synthetic data, reinforcement and imitation learning, evaluation, sim-to-real deployment, and the data flywheel back into training. One MCP server, the Studio (downloaded on first use), seven agents and two skills.",
   "author": {
     "name": "Trainnr AI",
-    "url": "https://trainnr.ai"
+    "url": "https://github.com/Trainnr-AI/trainnr"
   },
-  "homepage": "https://trainnr.ai",
+  "homepage": "https://github.com/Trainnr-AI/trainnr",
   "repository": "https://github.com/Trainnr-AI/trainnr",
   "license": "FSL-1.1-ALv2",
   "keywords": [

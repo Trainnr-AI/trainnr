@@ -1100,6 +1100,25 @@ def _run(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     return sections
 
 
+def trial_row(record: dict[str, Any]) -> list[Any]:
+    """One trial of an evaluation's records, as its page lists it; the
+    events are the milestones the trial reached: a walk's record lists
+    every one it was judged on with `passed`, and a failed trial read
+    "survived, tracked" (2026-10-05)."""
+    return [
+        record.get("trial"),
+        record.get("seed"),
+        record.get("policy"),
+        "success" if record.get("success") else "failure",
+        record.get("steps"),
+        ", ".join(
+            e.get("name", "")
+            for e in record.get("events", [])
+            if isinstance(e, dict) and e.get("passed", True)
+        ),
+    ]
+
+
 def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     c = read_json(root / CERTIFICATE_FILE)
     n = c.get("trials")
@@ -1109,21 +1128,7 @@ def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Secti
         for line in read_text(rec).splitlines():
             if not line.strip():
                 continue
-            r = json.loads(line)
-            rows.append(
-                [
-                    r.get("trial"),
-                    r.get("seed"),
-                    r.get("policy"),
-                    "success" if r.get("success") else "failure",
-                    r.get("steps"),
-                    ", ".join(
-                        e.get("name", "")
-                        for e in r.get("events", [])
-                        if isinstance(e, dict)
-                    ),
-                ]
-            )
+            rows.append(trial_row(json.loads(line)))
     funnel = c.get("funnel") or {}
     raw_protocol = c.get("protocol")
     protocol: dict[str, Any] = raw_protocol if isinstance(raw_protocol, dict) else {}

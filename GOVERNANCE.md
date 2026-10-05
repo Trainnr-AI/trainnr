@@ -1,6 +1,6 @@
 # Governance
 
-trainnr is developed in the open by Trainnr AI (https://trainnr.ai) under
+trainnr is developed in the open by Trainnr AI under
 the Functional Source License (FSL-1.1-ALv2).
 
 ## Roles
@@ -45,18 +45,9 @@ task and robot registries), which are part of the public API below.
 Nothing in this repository depends on a hosted service, and nothing here
 requires an account.
 
-The open packages send no telemetry and never phone home. The only
-network connections they make are the ones the user asks for:
-
-- downloading the prebuilt Studio from this repository's GitHub release
-  (`trainnr studio --install`, `launch_studio`, the plugin's session hook);
-- fetching a registered public robot log (`ingest_public_log`) or a public
-  robot asset at a pinned commit (`tools/import-usd.py`, which fetches
-  an Isaac asset by repository and commit);
-- a rented cloud GPU (RunPod's API and its storage), only through the
-  cloud tools, with the user's own key;
-- an openpi policy server the user points an evaluation at;
-- the local Studio (127.0.0.1) receiving the viewer's streams.
+The open packages send no telemetry and never phone home. Every network
+connection they make, when it happens and how to turn it off, is listed
+in [SECURITY.md](SECURITY.md#network).
 
 The Studio is built without the Rerun viewer's analytics feature
 (`rerun`'s default features are off in `crates/trainnr-studio/Cargo.toml`).

@@ -1,4 +1,4 @@
-# BAM's raw bench logs are public: the fitted interval the manuscript was missing
+# BAM's raw bench logs are public: the fitted interval the draft paper was missing
 
 *Researched 2026-09-05 (primary sources, URLs and dates inline). The
 question: can the "narrow" arm's declared ±10 % become a
@@ -80,7 +80,7 @@ per replicate the MAE and the parameter vector; the interval is the
 `aa17d1c` = v1.0.2, trials, sampler, replicate count). Then the
 walk's randomization-width study ("walk C1": the microduck walk
 trained at point, declared ±10 %, declared ±30 % and the identified
-interval; manuscript §5.4 and §5.6) gains the arm the thesis names —
+interval; the draft paper's §5.4 and §5.6) gains the arm the thesis names —
 trained under the *identified* interval.
 
 Honest caveats to print with it: the interval captures log-sampling
@@ -151,7 +151,7 @@ bundle for readers and for consumers that only understand boxes.
 **Run 2026-09-05 UTC:** three point arms and three identified arms on the
 refit bundle (`tools/walk-c1-refit-pods.sh`), certified at the refit's
 fit; then their matrix cells (record `walk-c1-refit` and
-`walk-mismatch-matrix-refit`). The manuscript's §5.6 is those certificates.
+`walk-mismatch-matrix-refit`). The draft paper's §5.6 (published separately) is those certificates.
 
 ## 7. BAM's declared search bounds (read from the clone at aa17d1c, 2026-09-06)
 

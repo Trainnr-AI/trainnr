@@ -59,11 +59,14 @@ say "actions: read-only token, no PR approvals by Actions, GitHub's own and four
 if [ "$PRIVATE" = "false" ]; then
   # Forks are how outside contributors open pull requests; GitHub allows
   # them on a private repository only when the organisation does.
-  api -X PATCH "repos/$REPO" -F allow_forking=true >/dev/null
-  say "forks: allowed"
+  # Neither stops the script: a refusal here must not leave main without
+  # the rulesets below (the read-back at the end names what did not take).
+  api -X PATCH "repos/$REPO" -F allow_forking=true >/dev/null \
+    && say "forks: allowed" || say "forks: NOT set (allow forking in the settings)"
   api -X PUT "repos/$REPO/actions/permissions/fork-pr-contributor-approval" \
-    -f approval_policy=all_external_contributors >/dev/null
-  say "actions: every outside contributor's run waits for approval"
+    -f approval_policy=all_external_contributors >/dev/null \
+    && say "actions: every outside contributor's run waits for approval" \
+    || say "actions: outside contributors' approval NOT set (Settings > Actions)"
 fi
 
 # --- labels ------------------------------------------------------------

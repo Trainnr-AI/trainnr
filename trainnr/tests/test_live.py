@@ -17,6 +17,7 @@ from trainnr.project.live import (
     TRAINING_FILE,
     VERDICT_DIR,
     WRITING_S,
+    current_training,
     refresh_project,
     refresh_training,
     refresh_verdicts,
@@ -84,6 +85,24 @@ class TheLiveRecord(unittest.TestCase):
             record = refresh_training(run)
         self.assertIsNotNone(record)
         self.assertEqual(record["final"]["reward"], 12.5)
+
+    def test_a_reader_sees_the_finished_run_without_writing(self) -> None:
+        """list_experiments named a just-finished run with no status,
+        iterations or reward until something refreshed the project (an
+        agent run, 2026-10-05)."""
+        import os  # noqa: PLC0415
+
+        _, run = self._project(LOG)
+        refresh_training(run)
+        written = (run / TRAINING_FILE).read_text()
+        old = time.time() - 60
+        os.utime(run / TRAINING_FILE, (old, old))
+        with (run / TRAIN_LOG).open("a") as log:
+            log.write("[g3] done - checkpoints in runs/go2-c1\n")
+        record = current_training(run)
+        self.assertIsNotNone(record)
+        self.assertEqual(record["status"], "done")
+        self.assertEqual((run / TRAINING_FILE).read_text(), written)
 
     def test_a_log_with_no_iteration_writes_nothing(self) -> None:
         _, run = self._project("[g3] identity: {}\n")

@@ -40,9 +40,13 @@ stays).
   this tree.
 - `projects/…` paths are local project directories, untracked by design.
   Where a copy ships under `docs/artifacts/`, the record names it first.
-- A protocol or commit marked "not public (maintainers' log)" lives only
-  in the maintainers' working log; the record's numbers, command and
-  artifacts stand on their own.
+- A protocol or commit marked "not public (maintainers' log)", or "the
+  maintainers' progress log (private)", lives only in the maintainers'
+  working notes; the record's numbers, command and artifacts stand on
+  their own.
+- `docs/paper/…` is the draft paper, which moved out of this repository
+  on 2026-10-05 to be published with its own; a record citing it stands
+  on its own numbers.
 
 ## The tools
 

@@ -55,7 +55,7 @@ never needed ("the doors", "the press", "the referee") become the industry's.
 |---|---|---|
 | the Studio | **trainnr Studio** (decided 2026-10-03): the app you install; binary `trainnr-studio`, command `trainnr studio`, app id `ai.trainnr.studio` | The tools were already `launch_studio`, `describe_studio`, `set_studio_theme`, and `$TRAINNR_STUDIO` names the binary, so the user-facing name and the API agree. The app is not a viewer only: it lists the project, runs the simulator, mirrors jobs. Inside it the words are exact: **the viewer** (the embedded Rerun viewer), **the simulator** (the MuJoCo window), **the pages** (Robots … Monitoring). |
 | the doors (MCP tools) | **tools** of the **trainnr MCP server** | MCP's own word. Tool prefix `mcp__trainnr__*` from a checkout's `.mcp.json`, `mcp__plugin_trainnr_trainnr__*` through the plugin. |
-| the press | **data generation** (`generate_demos`) | W&B / LeRobot vocabulary; "press" stays as the module name only. |
+| the press | **data generation** (`generate_walk_demos`, `generate_kitting_demos`, `generate_planned_demos`) | W&B / LeRobot vocabulary; "press" stays as the module name only. |
 | the referee | **success criterion** / **judge** | Gymnasium vocabulary. |
 | a certificate | **evaluation** (the page already says so) | The word "certificate" stays inside the JSON file it names and in the paper's method name; users see evaluations. |
 | the gate | **gate** | A CI word; keep. |
@@ -76,7 +76,7 @@ the rule both Rerun and goose follow.
 *Decided 2026-10-03 (one repository for now; a split later if needed): everything
 below the first three rows is deferred. The product repository holds
 mjsim (docs/84), the telemetry readers, the exact statistics, the scene
-chain and the paper as modules and directories with their seams named,
+chain as modules and directories with their seams named,
 so a split later is a move, not a rewrite. The rows stay as the shape a
 split would take.*
 
@@ -88,7 +88,7 @@ split would take.*
 | **`trainnr-robots`** (public, later) | large third-party robot bundles (microduck 20 MB, ALOHA 2 15 MB, the 2F-85) as release tarballs the pipeline fetches on demand through `asset_fetch` | Asset licences differ from code licences and the files are big; the small actuator library and nominal bundles stay in the product repo. First release: everything stays in `trainnr`; the split is a later, mechanical move. |
 | **`mjsim`** (public, planned; docs/84) | the MuJoCo simulator window: the egui widget (Rust) and the simulation stream (Python), one version; the Studio and `trainnr` depend on it | its own cadence and its own users (any egui app, any MuJoCo user); the name is free on PyPI and crates.io |
 | a paper repository | planned: the paper moved out of this repository on 2026-10-05 and will be published in its own | A paper freezes at submission and is cited by DOI; the product repository says only that the research is ongoing. |
-| **`rig`** (public archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
+| **`rig`** (private archive) | the 2025–26 rig: the 14 crates and the firmware (29 kLOC), extracted with history | A different product era; out of the product repo before the first public push. |
 | **`.github`** (public) | the organisation profile README | GitHub's convention. |
 
 Not repositories: a docs repo (docs live beside the code and a checker ties

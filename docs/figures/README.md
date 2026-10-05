@@ -9,7 +9,7 @@ edited by hand.
   `docs/68-findings.md`.
 - `attribution/`, `viewport-deploy/`: the deployment gate's attribution
   and trial pictures, cited by the Go2 records and `docs/77-the-unitree-loop.md`.
-- `go2/`: the Studio after the Go2 loop closed, the README's picture.
+- `readme/`: the README's screenshots and logo.
 - `go2-sysid/`: the identification runs on the public Go2 logs, cited by
   `go2-legged-fit-public-logs-2026-09-24`.
 - `gripper-pick/`, `usd-import/`: the gripper imported from USD, cited by

@@ -2,7 +2,7 @@
   "name": "trainnr",
   "owner": {
     "name": "Trainnr AI",
-    "url": "https://trainnr.ai"
+    "url": "https://github.com/Trainnr-AI/trainnr"
   },
   "metadata": {
     "description": "Trainnr AI's plugins for coding agents.",
@@ -17,7 +17,7 @@
       "author": {
         "name": "Trainnr AI"
       },
-      "homepage": "https://trainnr.ai",
+      "homepage": "https://github.com/Trainnr-AI/trainnr",
       "repository": "https://github.com/Trainnr-AI/trainnr",
       "license": "FSL-1.1-ALv2",
       "keywords": [

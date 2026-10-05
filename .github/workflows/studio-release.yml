@@ -191,7 +191,7 @@ jobs:
           python3 - <<'PY'
           import os, re, pathlib
           tag = os.environ["TAG"]
-          version = tag.removeprefix("v")
+          version = tag.removeprefix("v").split("-rc.")[0]  # a candidate's notes are its version's
           text = pathlib.Path("CHANGELOG.md").read_text()
           m = re.search(r"^## \[" + re.escape(version) + r"\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
           body = m.group(1).strip() if m else ""

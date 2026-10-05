@@ -5,7 +5,7 @@ and exact intervals become dots with interval whiskers (a curve over
 episodes when every arm declares a distinct count, a categorical row
 otherwise), and the provenance rides on the figure itself — finding
 id, commit, instrument, trials, protocol — so a figure separated from
-its caption still says where it came from. Saved as SVG (the paper),
+its caption still says where it came from. Saved as SVG (documents),
 PDF (LaTeX), PNG (the README), and a CSV of exactly the numbers
 plotted, under `docs/figures/`, TRACKED beside the record.
 

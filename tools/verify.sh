@@ -73,7 +73,7 @@ step "ruff lint (trainnr_mjlab)"    "(cd trainnr-mjlab && uvx $RUFF check src te
 MYPY="mypy==2.3.1"
 step "mypy (trainnr)"          "(cd trainnr && uv run --extra sim --extra mcp --extra deploy --extra viz --with $MYPY mypy trainnr)"
 step "mypy (trainnr_mjlab)"         "(cd trainnr-mjlab && uv run --extra viz --with $MYPY mypy src/trainnr_mjlab)"
-step "python tests (trainnr)"  "(cd trainnr && uv run python -m unittest discover -s tests)"
+step "python tests (trainnr)"  "(cd trainnr && uv run --extra sim --extra mcp --extra deploy --extra viz python -m unittest discover -s tests)"
 # The recorder tests need the viz extra (rerun): named here, as the README
 # names it, so a fresh clone runs them rather than skipping them (2026-09-27).
 step "python tests (trainnr_mjlab)" "(cd trainnr-mjlab && uv run --extra viz python -m unittest discover -s tests -t .)"

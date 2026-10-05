@@ -17,6 +17,5 @@
 docs/findings/** linguist-generated=true
 docs/artifacts/** linguist-generated=true linguist-detectable=false
 docs/68-findings.md linguist-generated=true
-docs/paper/paper-1.md linguist-generated=true
 *.lock linguist-generated=true
 uv.lock linguist-generated=true

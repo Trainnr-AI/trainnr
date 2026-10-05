@@ -9,7 +9,7 @@ with exact confidence intervals, exports and gates them for deployment in
 simulation, and checks new telemetry for drift. Every step is an MCP tool
 and every result is a hash-stamped record the next step cites. What runs
 today, and where, is in the repository's
-[README](../README.md#status).
+[README](https://github.com/Trainnr-AI/trainnr#status).
 
 The premise: **the robot is an artifact, not an import.** A robot enters
 as a bundle `name@hash` (canonical MJCF or a USD asset read by Newton,
@@ -17,8 +17,8 @@ measured dynamics with intervals, provenance), and every stage codes
 against that bundle, never against an embodiment.
 
 The architecture and its decisions:
-[`docs/22-pipeline-architecture.md`](../docs/22-pipeline-architecture.md);
-the loop this package serves: [`docs/76-the-loop.md`](../docs/76-the-loop.md).
+[`docs/22-pipeline-architecture.md`](https://github.com/Trainnr-AI/trainnr/blob/main/docs/22-pipeline-architecture.md);
+the loop this package serves: [`docs/76-the-loop.md`](https://github.com/Trainnr-AI/trainnr/blob/main/docs/76-the-loop.md).
 
 ## Layout
 

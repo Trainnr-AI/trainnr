@@ -61,7 +61,7 @@ if [ -d trainnr ] && command -v uv >/dev/null 2>&1; then
   gate "ruff lint (trainnr)"    "cd trainnr && uvx $RUFF check ."
   gate "ruff format (tools)"    "cd trainnr && uvx $RUFF format --check ../tools"
   gate "ruff lint (tools)"      "cd trainnr && uvx $RUFF check ../tools"
-  gate "python tests (trainnr)" "cd trainnr && uv run python -m unittest discover -s tests"
+  gate "python tests (trainnr)" "cd trainnr && uv run --extra sim --extra mcp --extra deploy --extra viz python -m unittest discover -s tests"
 fi
 
 [ "$fail" -eq 0 ] || {

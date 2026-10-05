@@ -571,6 +571,31 @@ def wsl_gpu_environment(env: dict[str, str]) -> dict[str, str]:
     return env
 
 
+# WSLg serves Wayland from its own runtime directory and links it into
+# the user's; on a boot where that link is missing (no /run/user/<uid>),
+# the window found no compositor and the Studio exited at once
+# (2026-10-05: "WaylandError(Connection(NoCompositor))"). The launcher
+# points the child at WSLg's directory when the user's lacks the socket.
+WSLG_RUNTIME_DIR = Path("/mnt/wslg/runtime-dir")
+
+
+def wsl_display_environment(
+    env: dict[str, str], wslg_runtime: Path = WSLG_RUNTIME_DIR
+) -> dict[str, str]:
+    """The environment with `XDG_RUNTIME_DIR` at WSLg's own directory when
+    this is WSL, the Wayland socket is missing where the environment says
+    it is, and WSLg's directory holds it; unchanged otherwise."""
+    display = env.get("WAYLAND_DISPLAY", "")
+    if not on_wsl() or not display or Path(display).is_absolute():
+        return env
+    runtime = env.get("XDG_RUNTIME_DIR", "")
+    if runtime and (Path(runtime) / display).exists():
+        return env
+    if (wslg_runtime / display).exists():
+        env["XDG_RUNTIME_DIR"] = str(wslg_runtime)
+    return env
+
+
 def launch(  # noqa: PLR0911 - each refusal names its own reason
     project: Project, binary: Path | None = None
 ) -> dict[str, Any]:
@@ -600,7 +625,7 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
         }
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)
-    env = wsl_gpu_environment(dict(os.environ))
+    env = wsl_display_environment(wsl_gpu_environment(dict(os.environ)))
     env[PROJECT_ENV] = str(project.root)
     # the projects home the switcher lists, the one the tools create in
     env.setdefault(PROJECTS_ENV, str(projects_home()))

@@ -28,15 +28,6 @@ runs/
 
 # coverage databases carry absolute paths; per machine, never tracked
 .coverage*
-# LaTeX build products of tools/paper-tex.py (main.tex and main.pdf are tracked)
-docs/paper/latex/figures/
-docs/paper/latex/*.aux
-docs/paper/latex/*.log
-docs/paper/latex/*.out
-docs/paper/latex/*.fls
-docs/paper/latex/*.fdb_latexmk
-docs/paper/latex/*.toc
-docs/paper/latex/*.synctex.gz
 .playwright-mcp/
 # the forks' worktrees (claude worktree plugin), never part of the tree
 .claude/worktrees/
@@ -59,3 +50,17 @@ htmlcov/
 # The microduck's meshes are fetched from Pollen Robotics on first use
 # (robots/microduck/FETCH.json): their licence keeps them out of this repository.
 robots/microduck/assets/
+# keys and credentials never belong in the tree
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials*.json
+.netrc
+# editor, notebook and tracker state
+.idea/
+.vscode/
+.ipynb_checkpoints/
+wandb/
+.pytest_cache/
+.mypy_cache/

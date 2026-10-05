@@ -1,7 +1,7 @@
 # The pipeline as software: architecture of `trainnr/`
 
 *Historical design note, 2026-08-20. The current layout is the README's
-"What is in the box" and docs/80 §4; the loop design is docs/76. Kept
+"What's inside" and docs/80 §4; the loop design is docs/76. Kept
 because its decisions (§3) still hold and its module map records what the
 package looked like before the Go2 loop.*
 

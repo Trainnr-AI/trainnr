@@ -222,7 +222,7 @@ parameter the task depends on.
 One MCP server, three families, all over the same seams the pipeline
 itself uses — never around them.
 
-*Counts are dated. The server registers 76 tools as of 2026-10-03; the
+*Counts are dated. The server registers 75 tools as of 2026-10-05; the
 families below are the design, with the counts of 2026-09-24.*
 
 - **DESCRIBE** (built, 14 tools): bundles, actuators, certified bundles,

@@ -252,6 +252,7 @@ in the environment you start Claude Code from.
 | `TRAINNR_STUDIO_RELEASE` | The release tag to download the Studio from, instead of `v<version>` |
 | `TRAINNR_NO_PREFETCH` | `1`: the plugin's session hook prepares nothing in the background |
 | `TRAINNR_PUBLIC_LOGS_DIR` | Where downloaded public logs are cached |
+| `TRAINNR_NO_ROBOT_FETCH` | `1`: a robot's files that are fetched on first use (the microduck's meshes) are refused, with the command that fetches them |
 | `TRAINNR_VIEWER_BIND` | The address the Studio's viewer server binds; default `127.0.0.1:9876` (this machine only); `0.0.0.0:9876` opens it to a trusted network |
 | `TRAINNR_BRUSH` | Where Brush, the Gaussian-splat trainer, is, when it is not on `PATH` as `brush_app` |
 | `TRAINNR_UNITREE_REFERENCE` | The `unitree_rl_mjlab` checkout the DDS gate runs Unitree's simulator from, instead of `~/.cache/trainnr/unitree_rl_mjlab` |
@@ -408,7 +409,7 @@ check on the fit's own recording is refused: it can only say "within".
 | Robot | What ran, in simulation | From |
 |---|---|---|
 | Unitree Go2 | the whole loop: identify from public logs, train, evaluate, two gates, pre-flight, drift, a captured scene | Unitree's `unitree_rl_mjlab` model |
-| microduck (biped) | walk training across fifteen randomization spans | Pollen Robotics' model, BAM actuator fits; its meshes (CC BY-SA-NC) are fetched from Pollen Robotics on first use |
+| microduck (biped) | walk training across fifteen randomization spans | Pollen Robotics' model, BAM actuator fits; its meshes (CC BY-NC-SA) are fetched from Pollen Robotics on first use |
 | SO-101 arm | the lift study and generated demonstrations | TheRobotStudio's model |
 | Robotiq 2F-85 | imported from Isaac Sim USD through Newton, audited equal to the source | NVIDIA's Isaac Sim asset |
 
@@ -459,7 +460,7 @@ confidence bound, never on the point estimate.
 | Step | What happens | The tools | What it leaves |
 |---|---|---|---|
 | 1. Capture | telemetry from the robot or a public log, a phone video of the space | `start_capture`, `ingest_recording`, `ingest_public_log`, `capture_scene` | recordings with their rate, dropouts and licence state; scenes |
-| 2. Real-to-sim | hardware proximity, measured: the robot's own telemetry fitted into the model it trains on, every parameter with an interval and a pinned / not pinned verdict; the captured space with its see-versus-touch gap measured | `onboard_robot`, `identify_system`, `import_scene` | the robot bundle `name@hash`, the fit record, the scene record |
+| 2. Real-to-sim | how close the simulation is to the hardware, measured: the robot's own telemetry fitted into the model it trains on, every parameter with an interval and a pinned / not pinned verdict; the captured space with its see-versus-touch gap measured | `onboard_robot`, `identify_system`, `import_scene` | the robot bundle `name@hash`, the fit record, the scene record |
 | 3. Build data | demonstrations generated under recorded randomization, kept by the task's success criterion, exported as LeRobot v3 with a datasheet | `generate_kitting_demos`, `generate_walk_demos`, `multiply_demos` | datasets with provenance |
 | 4. Train | reinforcement learning on mjlab or imitation through LeRobot, on the identified model with a measured randomization span | `train_walk`, `run_chain` | experiments and policies |
 | 5. Evaluate | a clip cannot tell 10 % from 99 %; an evaluation here is paired, seed-matched trials with an exact confidence interval and a milestone funnel, and the gate reads the lower bound | `evaluate_walk`, `list_evaluations`, `describe_evaluation` | evaluations that gate on the lower bound |
@@ -478,8 +479,8 @@ confidence bound, never on the point estimate.
 | [`trainnr-mjlab/`](trainnr-mjlab/README.md) | L1, Python package `trainnr_mjlab` | the mjlab trainer: identified actuator physics as an mjlab actuator, the randomization events, the linter that turns silent no-ops into errors, the walk tasks |
 | [`crates/trainnr-studio/`](crates/trainnr-studio/) | L2, Rust | the Studio; talks to L0 through the project's files and processes only |
 | [`robots/`](robots/) | data | the actuator library (BAM's fits, each with provenance) and the nominal robot bundles |
-| [`tools/`](tools/) | scripts | the gates (`verify.sh`, `check-docs.py`, `check-numbers.py`, `check-layers.py`), the paper build, the cloud runbook |
-| [`docs/`](docs/) | the record | dated research against primary sources, numbered decisions, the findings and the paper |
+| [`tools/`](tools/) | scripts | the gates (`verify.sh`, `check-docs.py`, `check-numbers.py`, `check-layers.py`), the study scripts, the cloud runbook |
+| [`docs/`](docs/) | the record | dated research against primary sources, numbered decisions and the findings |
 | [`.claude/`](.claude/), [`.claude-plugin/`](.claude-plugin/) | the plugin | the agents, the skills and the manifest that make this repository a Claude Code marketplace |
 
 The layers never import upward (`tools/check-layers.py`). Robot and dataset
@@ -494,7 +495,7 @@ identity is `name@hash` everywhere; nothing is nameable without its hash.
 | `no project is selected: create one with create_project … or choose one with use_project` | Ask the agent to create a project, or to use an existing one (`list_projects` lists them). `TRAINNR_PROJECT` names one for a single process. |
 | `the Studio release … is not published yet` (or HTTP 404) when the Studio downloads | No release is published yet: build the Studio from source ([above](#the-studio)); with the plugin, set `TRAINNR_STUDIO` to the binary. |
 | A job failed | `describe_job(job_id)` reports its `error`; the whole log is `~/trainnr/projects/<project>/mcp-jobs/<job>.log`. |
-| `trainnr mcp needs the sim and mcp extras` | Start the server as `uv run --directory trainnr --extra sim --extra mcp trainnr mcp`. |
+| ``trainnr mcp needs the `sim` and `mcp` extras`` | Start the server as `uv run --directory trainnr --extra sim --extra mcp trainnr mcp`. |
 | `port 9876 (the viewer server) is held by another process` | Another Studio or a standalone Rerun viewer is running; close it, then launch again. |
 | Slow or black rendering under WSL | The WSL launch settings live in `trainnr/wsl.env`; they apply only on WSL and never override a variable you set. |
 | `the publisher states no licence for this data` from `ingest_public_log` | Pass `accept_unlicensed=True` once you have checked your use is allowed. |
@@ -512,7 +513,8 @@ Tool names and arguments changed before 0.1.0; [`CHANGELOG.md`](CHANGELOG.md) li
 ## Licence
 
 [FSL-1.1-ALv2](LICENSE): any use other than a competing product or service, and each version under Apache-2.0 two years after it is made available. Third-party material is listed in [`NOTICE`](NOTICE). The 2025–26
-rig this toolchain grew up on is kept in a private archive; its recordings
+hardware rig this toolchain grew up on (a camera, two motors and three
+servos on a Pico) is kept in a private archive; its recordings
 stay here under `recordings/`. "Robotiq" in
 `robots/robotiq-2f85-isaac` is Robotiq Inc.'s gripper; trainnr is not
 affiliated with Robotiq.

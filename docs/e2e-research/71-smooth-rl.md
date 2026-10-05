@@ -12,7 +12,7 @@ training-time RTC [2] (2512.05964) and concurrent control [35]
 fourth teacher→student distillation runs on the microduck walk (240
 episodes at 60k steps; the same recipe re-pressed), as recorded in
 docs/68-findings.md; E0–E2 are this document's three experiments, not
-the manuscript's E1–E7.*
+the draft paper's E1–E7 (published separately).*
 
 ## 0. What the paper is, in one paragraph
 

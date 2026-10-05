@@ -10,12 +10,12 @@ not in this repository.
 
 | Read | What it is | Speaks from |
 |---|---|---|
-| [`../README.md`](../README.md) | What trainnr is, its status and limits, install, the platforms, the eight-step loop, the layout | 2026-10-04 |
+| [`../README.md`](../README.md) | What trainnr is, its status and limits, install, the platforms, the eight-step loop, the layout | 2026-10-05 |
 | [76 The loop](76-the-loop.md) | The design of the agent-driven loop: stamped artifacts, the state machine, the MCP tool families, the identify, deploy and drift seams, the Studio as the control surface | designed 2026-09-08, build notes to 2026-09-28 |
 | [77 The Unitree loop](77-the-unitree-loop.md) | A Go2 from asset to sim-to-sim deployment through the tools: gates, attribution, pre-flight, drift, the fit-trained walk | 2026-09-10 to 2026-09-26 |
 | [78 The scene loop](78-the-scene-loop.md) | A captured scene (phone video to splat and collision proxy) as a stamped artifact, and walking the Go2 on it | 2026-09-22 to 2026-09-25 |
 | [35 The Studio](35-the-studio.md) | The desktop app: what it shows, how it talks to the project, measured performance lessons, the history of its design | 2026-09-08, updated 2026-10-03 |
-| [68 Findings ledger](68-findings.md) | Every measured result with its commit, command, instrument, outcome and caveats; generated from [`findings/`](findings/) | 2026-08-27 to 2026-09-26 |
+| [68 Findings ledger](68-findings.md) | Every measured result with its commit, command, instrument, outcome and caveats; generated from [`findings/`](findings/) | 2026-08-27 to 2026-10-05 |
 | [Glossary](GLOSSARY.md) | The project's words: bundle, stamp, pinned, certificate, gate, basis, world, the campaign labels | 2026-10-03, updated 2026-10-04 |
 
 ## Design and decisions

@@ -36,6 +36,9 @@ updates:
       # Unitree's SDK installs (the dds group).
       - dependency-name: "openpi-client"
       - dependency-name: "cyclonedds"
+      # The build backend (`[build-system]`), which no lock pins: the
+      # update job failed every week with "No files have changed".
+      - dependency-name: "setuptools"
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
     open-pull-requests-limit: 3

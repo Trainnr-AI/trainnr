@@ -1640,11 +1640,20 @@ def _project_runs_root() -> Path | None:
 
 
 def _run_manifests(folder: Path) -> dict[str, Any]:
-    """The manifests a run folder holds, by name without `.json`."""
+    """The manifests a run folder holds, by name without `.json`; the
+    training record as it stands now (`live.current_training`), never one
+    a just-finished run has outgrown."""
+    from trainnr.envs.rsl_rl_log import TRAINING_FILE  # noqa: PLC0415
+    from trainnr.project.live import current_training  # noqa: PLC0415
+
     manifests: dict[str, Any] = {}
     for name in PROJECT_RUN_MANIFESTS:
         path = folder / name
-        if path.is_file():
+        if name == TRAINING_FILE:
+            training = current_training(folder)
+            if training is not None:
+                manifests[name.removesuffix(".json")] = training
+        elif path.is_file():
             with contextlib.suppress(ValueError, OSError):
                 manifests[name.removesuffix(".json")] = json.loads(path.read_text())
     return manifests

@@ -45,6 +45,10 @@ first `cargo` command there; on Linux the build needs the system libraries
 the README lists ([The Studio](README.md#the-studio)), and a cold build
 takes about 3.5 GB of disk and 4 to 6 minutes. trainnr-mjlab's environment
 is about 6 GB, and training in it needs an NVIDIA GPU with CUDA.
+The first test run fetches the microduck's meshes (about 22 MB, once) from
+Pollen Robotics' repository, since they are not redistributed here
+(`robots/microduck/LICENSES/MESHES.md`); offline, fetch them ahead with
+`python -m trainnr.bundles.fetch robots/microduck` from `trainnr/`.
 
 The layers (docs/80 §4): `trainnr` never imports `trainnr-mjlab` or
 the Studio; `trainnr-mjlab` imports `trainnr`; the Studio talks to the

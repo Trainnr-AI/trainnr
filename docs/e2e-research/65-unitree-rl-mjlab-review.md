@@ -155,5 +155,5 @@ source, failure-bin sampling as prior art for the funnel→press loop,
 the deploy.yaml/sim2sim contract as the shape of the sim-to-real seam
 (built since: `trainnr/deploy`), and the reward vocabulary + curricula
 as the adoption list for trainnr_mjlab when the walk grows terrain.
-The manuscript's §8 re-reads this repository at commit 1425b15
+The draft paper's §8 (published separately) re-reads this repository at commit 1425b15
 (in preparation).

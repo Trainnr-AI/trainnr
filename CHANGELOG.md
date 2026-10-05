@@ -88,6 +88,7 @@ Not yet released; the repository is being prepared for its first public release.
 - NOTICE names the copyright holder, Trainnr AI.
 - The microduck's 38 meshes are no longer in the repository: Pollen Robotics licenses its 3D model files Creative Commons BY-SA-NC, which is not an Apache-2.0 grant. `robots/microduck/FETCH.json` pins each one by its git blob id, and trainnr fetches them from `pollen-robotics/microduck_rl` the first time the robot is used (about 22 MB; `TRAINNR_NO_ROBOT_FETCH=1` refuses, `python -m trainnr.bundles.fetch robots/microduck` fetches ahead). The bundle's stamp is unchanged once they are in place.
 - Conduct reports and a security fallback go to trainnrai@gmail.com.
+- The plugin, marketplace, registry entry and citation point at this repository until trainnr.ai serves a page; GOVERNANCE.md's network list defers to SECURITY.md's, which is complete.
 - The 2025–26 rig is named as a private archive; the documentation no longer links to its repository, which is not public. NOTICE credits Pollen Robotics for the microduck in the README's robots image, under its Creative Commons BY-SA-NC terms.
 - Projects live in `~/trainnr/projects` (`TRAINNR_PROJECTS`, `TRAINNR_HOME`); `create_project` makes the new project current and the new `use_project` tool chooses one; user caches move to `~/trainnr/cache` (existing checkout caches are kept).
 - Tool descriptions are in plain words, every tool is annotated read-only or destructive, and the server reports its version.
@@ -110,6 +111,17 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Fixed
 
+- From a fresh clone, walked end to end by an agent (2026-10-05):
+  `list_experiments` and `describe_experiment` read a just-finished run's
+  record afresh from the trainer's files (it was listed with no status,
+  iterations or reward until something refreshed the project); an
+  evaluation's trials list the milestones each reached (a failed trial
+  read "survived, tracked"); the Studio launches on a WSL boot whose
+  runtime directory lacks the Wayland socket, using WSLg's own.
+- `tools/github-setup.sh` applies the rulesets even when a public-only
+  setting is refused; a release candidate's notes are its version's
+  CHANGELOG section; the local gates run the Python suite with CI's
+  extras.
 - Each MCP server process keeps its own current project; two agent sessions sharing `.current` moved each other's training and exports.
 - A fresh plugin install reads its trained runs without TensorBoard (the console log is the record) and builds the trainer's environment with the recorder (`viz`); both failed for a stranger on 2026-10-04.
 - `export_deployment` cites by default the newest evaluation in the policy's own world; a newer run under a delay, a scaled gain or another fit is a stress result, never the certificate.
