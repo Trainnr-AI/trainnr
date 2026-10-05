@@ -1,8 +1,9 @@
 # Governance
 
-trainnr is developed in the open by Trainnr AI under the Functional Source
-License (FSL-1.1-ALv2): any use other than a competing product or service,
-and each version under the Apache License 2.0 two years after its release.
+trainnr is developed in the open under the Trainnr AI name by its copyright
+holder, Prakhar Aggarwal, under the Functional Source License
+(FSL-1.1-ALv2): any use other than a competing product or service, and each
+version under the Apache License 2.0 two years after its release.
 
 ## Roles
 

@@ -85,7 +85,7 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Changed
 
-- NOTICE names the copyright holder, Trainnr AI.
+- NOTICE and LICENSE name the copyright holder, Prakhar Aggarwal; trainnr is published under the Trainnr AI name.
 - The microduck's 38 meshes are no longer in the repository: Pollen Robotics licenses its 3D model files Creative Commons BY-SA-NC, which is not an Apache-2.0 grant. `robots/microduck/FETCH.json` pins each one by its git blob id, and trainnr fetches them from `pollen-robotics/microduck_rl` the first time the robot is used (about 22 MB; `TRAINNR_NO_ROBOT_FETCH=1` refuses, `python -m trainnr.bundles.fetch robots/microduck` fetches ahead). The bundle's stamp is unchanged once they are in place.
 - Conduct reports and a security fallback go to trainnrai@gmail.com.
 - The plugin, marketplace, registry entry and citation point at this repository until trainnr.ai serves a page; GOVERNANCE.md's network list defers to SECURITY.md's, which is complete.
