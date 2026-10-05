@@ -157,6 +157,9 @@ def fetch_file(
                 f"{where}: the LFS media is {len(media)} bytes, not the pointer's "
                 f"{size} with sha256 {oid[:12]}…; nothing was kept"
             )
+    elif blob is not None and git_blob_id(media) != blob:
+        # no raw answer to check: the media itself must be the listed blob
+        raise AssetFetchError(f"{where}: its bytes are not the blob the tree lists")
     return media
 
 

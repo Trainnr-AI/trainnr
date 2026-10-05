@@ -149,6 +149,12 @@ def refresh_training(folder: Path) -> dict[str, Any] | None:
     return out
 
 
+# Records read afresh, by their sources' paths, mtimes and sizes: a list
+# call on 14 runs no tool had refreshed parsed every event file each time,
+# 25 s (review, 2026-10-05).
+_READ_CACHE: dict[Path, tuple[tuple[tuple[str, int, int], ...], dict[str, Any]]] = {}
+
+
 def current_training(folder: Path) -> dict[str, Any] | None:
     """The run's training record as it stands now, for a reader that must
     not write: `training.json`, or the record read afresh when the
@@ -157,8 +163,18 @@ def current_training(folder: Path) -> dict[str, Any] | None:
     reward until something refreshed the project (an agent run,
     2026-10-05)."""
     if stale(folder) or left_running(folder):
+        sources = tuple(
+            (str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in _sources(folder)
+        )
+        cached = _READ_CACHE.get(folder)
+        if cached is not None and cached[0] == sources:
+            return cached[1]
         fresh = read_training(folder)
         if fresh is not None:
+            # a finished run's record never changes; a running one's
+            # status moves with the clock, so it is read again
+            if fresh.get("status") == STATUS_DONE:
+                _READ_CACHE[folder] = (sources, fresh)
             return fresh
     path = folder / TRAINING_FILE
     if not path.is_file():

@@ -9,12 +9,17 @@
 [ -n "${TRAINNR_NO_PREFETCH:-}" ] && exit 0
 root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 command -v uv >/dev/null 2>&1 || exit 0
+# It runs from the plugin's own folder, never the one Claude Code opened:
+# `python -m` puts the working folder first on the import path, and uv
+# reads a uv.toml it finds there (security review, 2026-10-05). `-P` keeps
+# the working folder off the path as well.
+cd "$root" || exit 0
 (
-  uv sync --quiet --directory "$root/trainnr" --extra sim --extra mcp >/dev/null 2>&1
+  uv sync --quiet --locked --directory "$root/trainnr" --extra sim --extra mcp >/dev/null 2>&1
   # A checkout that built the Studio needs no download.
   [ -x "$root/crates/trainnr-studio/target/release/trainnr-studio" ] && exit 0
   # uv supplies a current Python: macOS's command-line tools ship 3.9.
   PYTHONPATH="$root/trainnr" uv run --quiet --no-project --python 3.12 \
-    python -m trainnr.studio_install --quiet >/dev/null 2>&1
+    python -P -m trainnr.studio_install --quiet >/dev/null 2>&1
 ) &
 exit 0

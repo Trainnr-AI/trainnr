@@ -348,9 +348,9 @@ class TheStudentEvaluation(unittest.TestCase):
                 robot="microduck",
             )
             [(argv, _)] = spawner.calls
-            self.assertEqual(
-                argv[-4:], ["--student", "runs/s/pretrained_model", "--horizon", "10"]
-            )
+            # a folder of the project, resolved (security review, 2026-10-05)
+            student = str(spawner.root / "runs" / "s" / "pretrained_model")
+            self.assertEqual(argv[-4:], ["--student", student, "--horizon", "10"])
 
 
 class TheCrossEvaluation(unittest.TestCase):

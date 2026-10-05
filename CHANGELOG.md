@@ -6,7 +6,7 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
-Not yet released; the repository is being prepared for its first public release.
+Not yet released; the repository is being prepared for its first public release. trainnr is licensed under the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2, `LICENSE`): any use other than a competing product or service; each version is also licensed under Apache-2.0 two years after it is made available.
 
 ### Changed (breaking)
 
@@ -85,7 +85,7 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Changed
 
-- NOTICE names the copyright holder, Trainnr AI.
+- NOTICE and LICENSE name the copyright holder, Prakhar Aggarwal; trainnr is published under the Trainnr AI name.
 - The microduck's 38 meshes are no longer in the repository: Pollen Robotics licenses its 3D model files Creative Commons BY-SA-NC, which is not an Apache-2.0 grant. `robots/microduck/FETCH.json` pins each one by its git blob id, and trainnr fetches them from `pollen-robotics/microduck_rl` the first time the robot is used (about 22 MB; `TRAINNR_NO_ROBOT_FETCH=1` refuses, `python -m trainnr.bundles.fetch robots/microduck` fetches ahead). The bundle's stamp is unchanged once they are in place.
 - Conduct reports and a security fallback go to trainnrai@gmail.com.
 - The plugin, marketplace, registry entry and citation point at this repository until trainnr.ai serves a page; GOVERNANCE.md's network list defers to SECURITY.md's, which is complete.
@@ -111,6 +111,11 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Fixed
 
+- The microduck's meshes are fetched only by what uses the robot (training, identifying, onboarding, showing it); listing or describing it, a preview or a detail page never downloads. Its stamp is `microduck@ad90736153cc` with or without the meshes (`FETCH.json` records it, with a hash of the files the bundle carries). Two processes fetching at once no longer break each other. Tests that need the meshes fetch them, or skip by name when `TRAINNR_NO_ROBOT_FETCH=1` forbids it.
+- `list_experiments` caches a finished run's record read afresh (25 s for 14 runs no tool had refreshed); a job a tool started records its process's start time, so `cancel_job` and the Studio's Stop can stop it.
+- `launch_studio` names the process holding the viewer's port, and the port check reads `TRAINNR_VIEWER_BIND`'s port and IPv6 hosts (`[::1]:9876`).
+- `tools/github-setup.sh` applies every setting it can and names the ones refused; the read-back decides the exit code.
+- NOTICE names BAM's actuator model (ported), Unitree's and DFKI's message layouts, Rerun's example and allocator setup, the mimalloc C library, the Robotiq renders, the gym-aloha constants and the microduck's PPO recipe; both packages ship the full NOTICE; scene records name trainnr's own licence.
 - From a fresh clone, walked end to end by an agent (2026-10-05):
   `list_experiments` and `describe_experiment` read a just-finished run's
   record afresh from the trainer's files (it was listed with no status,
@@ -144,6 +149,11 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Security
 
+- A project from someone else can no longer make trainnr write, append or delete outside it through a link it carries: every write the project layer, the job runner and the bundles make goes through `trainnr.safe_write`, which checks the target and the folders below the project's root and stages each file fresh. One `describe_project` call overwrote a file through a planted `.index/project.json.tmp`, and pruning a linked `.index/commands` deleted files outside the project.
+- The Studio applies a command only when it carries the running Studio's session token (`studio-state.json`); a command file that came with a project, whatever its time stamp, is never applied. Its log panel reads the log beside a job's record, never the path the record names; it opens a record's viewer file only inside the project; its Stop button signals a pid only when that process started when the record says (both ways, as `cancel_job` does); and its simulator's frame file has a random name, readable by the user alone.
+- `evaluate_walk(student=…)` takes a folder inside the project or a Hugging Face repo id, and refuses a student whose processor files name a step that is not LeRobot's own: LeRobot imports the classes they name, so a crafted checkpoint ran code when it loaded.
+- A robot bundle's `FETCH.json` names a repository and a commit by their shapes, and its files land only inside the bundle (a `../` path and a link out of the bundle were written through); an empty raw answer no longer skips the blob check.
+- The plugin's session hook runs from the plugin's own folder with `python -P`, so a json.py or a uv.toml in the folder Claude Code opened is never picked up; the Studio installer refuses a redirect away from HTTPS; a public log's zip member never inflates past its recorded size; a deployment's and an actuator's names are plain words; a push to a rented machine leaves out credentials under any common name, not only `.env`.
 - A project from someone else cannot steer the Studio into writing outside it: the Studio writes through no link a project carries, applies no command file older than its session, accepts only plain command ids, and its Stop button refuses pid 1 and a reused pid. `quit_studio` signals only a Studio process and trusts no heartbeat from the future; job status reads the log beside the record; a deployment manifest's program names must be plain names.
 - Checkpoints are read in PyTorch's weights-only mode before rsl_rl loads them, so a `.pt` that carries code is refused.
 - `play_walk`'s browser viewer binds 127.0.0.1; `start_capture` listens at most an hour; a release Studio no longer trusts the checkout path baked in at build time; the Studio warns when `TRAINNR_VIEWER_BIND` opens the viewer beyond this machine.

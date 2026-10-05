@@ -138,7 +138,7 @@ def main() -> int:
         "--stills", type=Path, default=None, help="where the MuJoCo stills go"
     )
     args = parser.parse_args()
-    from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
     from trainnr.robot.legged_fit import LeggedJoints  # noqa: PLC0415
 
     fit = LeggedJoints().fit_balance(args.bundle, args.recording)
@@ -146,7 +146,7 @@ def main() -> int:
     saved = stream(fit, args.recording, f"trainnr-fit-{args.recording.name}")
     print(f"viewer recording: {saved}")
     if args.stills is not None:
-        model_file = model_file_of(args.bundle)
+        model_file = model_file_for_use(args.bundle)
         assert model_file is not None
         for path in stills(model_file, fit, args.stills):
             print(f"still: {path}")

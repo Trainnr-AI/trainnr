@@ -42,6 +42,7 @@ from typing import Any
 
 import numpy as np
 
+import trainnr
 from trainnr.robot.fit_record import code_version
 from trainnr.scenes import gap as gap_audit
 from trainnr.scenes.colmap_model import read_text_model
@@ -1090,7 +1091,7 @@ def _tools_used(
         Tool(
             name="trainnr.scenes",
             version=code_version(),
-            license="Apache-2.0",
+            license=trainnr.__license__,
             role="the chain, the alignment, the record",
         ),
     ]

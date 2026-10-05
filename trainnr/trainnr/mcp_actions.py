@@ -22,6 +22,7 @@ Environment shapes (each the wrapped tool's own documented launch):
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -118,6 +119,31 @@ def inside_project(value: str | None, *, default: str, what: str) -> str:
             "experiment in)"
         )
     return str(resolved)
+
+
+HF_REPO_ID = re.compile(r"[A-Za-z0-9][\w.-]*/[\w.-]+")
+
+
+def student_source(value: str) -> str:
+    """A student checkpoint: a folder inside the current project, or a
+    Hugging Face repo id `org/name` (its processors are checked before it
+    loads, `envs.lerobot_policy`). A folder elsewhere is refused, as every
+    path a tool reads is (security review, 2026-10-05)."""
+    from trainnr.project import current_project  # noqa: PLC0415
+
+    candidate = Path(value).expanduser()
+    local = candidate if candidate.is_absolute() else current_project().root / candidate
+    path_like = (
+        candidate.is_absolute() or value.startswith((".", "~")) or value.count("/") != 1
+    )
+    if local.exists() or path_like:  # a repo id is exactly org/name
+        return inside_project(value, default=value, what="student")
+    if HF_REPO_ID.fullmatch(value):
+        return value
+    raise ValueError(
+        f"student {value!r}: a folder inside the project, or a Hugging Face "
+        "repo id org/name"
+    )
 
 
 def project_output(name: str) -> str:
@@ -422,7 +448,7 @@ class Actions:
         if device is not None:
             argv += ["--device", device]
         if student is not None:
-            argv += ["--student", student, "--horizon", str(horizon)]
+            argv += ["--student", student_source(student), "--horizon", str(horizon)]
         if scene is not None:  # judged on the captured scene it trained on (docs/78 E2)
             argv += ["--scene", scene]
         if judge_in_fit is not None:  # a cross-evaluation in another robot world

@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 
+import trainnr
 from trainnr.robot.fit_record import code_version
 from trainnr.scenes import gap as gap_audit
 from trainnr.scenes.obj import FACE, VERTEX
@@ -229,7 +230,7 @@ def import_scene(source: Path, out_dir: Path, *, name: str) -> Path:
             Tool(
                 name="trainnr.scenes",
                 version=code_version(),
-                license="Apache-2.0",
+                license=trainnr.__license__,
                 role="the import, the world-frame splat, the gap",
             ),
         ),

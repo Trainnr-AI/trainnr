@@ -244,7 +244,7 @@ What building it found, beyond §4's list:
 |---|---|---|---|---|---|---|
 | Isaac Lab `MjcfConverter`/`UrdfConverter` | to USD only, needs a running Kit | BSD-3 | — | — | — | wrong direction |
 | Isaac Sim `isaacsim.asset.exporter.urdf` 2.2.6 | USD → URDF; wheel built from source, Python ≥3.12 | Apache-2.0 | kept as `<mimic>` | written as a non-standard `<loop_joint>` MuJoCo's URDF loader ignores | stiffness dropped on purpose | loop re-authored by hand: no |
-| LightwheelAI/usd2mjcf | USD → MJCF | "Apache-2.0" repo with 2023 NVIDIA proprietary headers inside; 6 commits, July 2025 | lost | unhandled | lost | unusable for OSS |
+| LightwheelAI/usd2mjcf | USD → MJCF | "Apache-2.0" repo with 2023 NVIDIA proprietary headers inside; 6 commits, July 2025 | lost | unhandled | lost | unusable for redistribution |
 | nvidia-srl-usd-to-urdf 1.0.3 | USD → URDF | no licence field, internal GitLab | | | | no |
 | newton-physics/mujoco-usd-converter, urdf-usd-converter | to USD only | Apache-2.0 | | | | wrong direction |
 | MuJoCo `usd_decoder` (+ Isaac's `physx_asset_to_mjc` to translate PhysX mimics to Newton's) | USD → MjSpec in-process | Apache-2.0 | kept | reads `excludeFromArticulation` | no DriveAPI | needs a from-source MuJoCo; the one to revisit when wheels ship it |

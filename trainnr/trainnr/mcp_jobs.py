@@ -50,6 +50,8 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from trainnr import safe_write
+
 # pydantic (the MCP surface) reads these signatures; on Python < 3.12 it
 # accepts only typing_extensions' TypedDict (a Python 3.11 environment, 2026-09-12).
 if sys.version_info >= (3, 12):
@@ -256,9 +258,7 @@ class RunStatus:
 
 def write_status(path: Path, status: RunStatus) -> None:
     """Atomic, like the exit file: a reader sees the old status or the new."""
-    staged = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    staged.write_text(json.dumps(asdict(status)), encoding="utf-8")
-    os.replace(staged, path)
+    safe_write.write_text(path, json.dumps(asdict(status)))
 
 
 def read_status(path: Path) -> RunStatus | None:
@@ -276,9 +276,7 @@ def record_exit(exit_path: Path, code: int) -> None:
     create-then-write of write_text let status() read an EMPTY file
     mid-write (int('') - the lifecycle test, on a GPU workstation's faster
     fake exit, 2026-09-02)."""
-    staged = exit_path.with_suffix(".exit.tmp")
-    staged.write_text(str(code))
-    os.replace(staged, exit_path)
+    safe_write.write_text(exit_path, str(code))
 
 
 def runner_argv(argv: Sequence[str], exit_path: Path) -> list[str]:
@@ -288,7 +286,7 @@ def runner_argv(argv: Sequence[str], exit_path: Path) -> list[str]:
 
 
 def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
-    log = open(log_path, "ab")  # noqa: SIM115 - the child owns it past this frame
+    log = safe_write.open_append(log_path)  # the child owns it past this frame
     # The child adopts this job in `track()`: its stages land in the
     # door's own record (the job id is the log's stem).
     env = {**os.environ, JOB_ID_ENV: log_path.stem, JOBS_DIR_ENV: str(log_path.parent)}
@@ -626,8 +624,8 @@ class Tracker:
     def stage(self, text: str) -> None:
         """A new stage: the line replaces the last and joins the log."""
         self._status = replace(self._status, stage=text, done=0, total=0, unit="")
-        with self._log_path.open("a", encoding="utf-8") as log:
-            log.write(f"[{time.strftime('%H:%M:%S')}] {text}\n")
+        with safe_write.open_append(self._log_path) as log:
+            log.write(f"[{time.strftime('%H:%M:%S')}] {text}\n".encode())
         self._write(force=True)
 
     def progress(self, done: int, total: int, unit: str = "", detail: str = "") -> None:
@@ -731,7 +729,7 @@ def track(  # noqa: PLR0913 - a job's identity, each field named
         raise ValueError(f"{SOURCE_ENV}={source!r}; known: {JOB_SOURCES}")
     job_id = f"{kind}-{uuid.uuid4().hex[:8]}"
     log_path = jobs_dir / f"{job_id}.log"
-    log_path.touch()
+    safe_write.open_append(log_path).close()
     JobRecord(
         id=job_id,
         tool=kind,
@@ -740,6 +738,8 @@ def track(  # noqa: PLR0913 - a job's identity, each field named
         log=str(log_path),
         pid=os.getpid(),
         started=time.time(),
+        # the Studio's Stop and cancel_job signal only this process, by it
+        create_time=process_create_time(os.getpid()),
         source=source,
         name=name,
         viewport=viewport,

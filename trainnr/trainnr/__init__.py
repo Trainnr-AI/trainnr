@@ -6,3 +6,5 @@ docs/76-the-loop.md.
 """
 
 __version__ = "0.1.0"
+# The licence a record names when it cites trainnr itself as a tool.
+__license__ = "FSL-1.1-ALv2"

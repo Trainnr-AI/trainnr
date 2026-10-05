@@ -1,5 +1,5 @@
 trainnr
-Copyright 2026 Trainnr AI
+Copyright 2026 Prakhar Aggarwal
 
 This product is licensed under the Functional Source License, Version 1.1,
 ALv2 Future License (FSL-1.1-ALv2; see LICENSE): any use other than a
@@ -35,10 +35,11 @@ Robot models redistributed under robots/
   terms (robots/microduck/LICENSES/MESHES.md). The microduck in the
   README's robots image (docs/figures/readme/robots.png) is rendered from
   those meshes: credit Pollen Robotics, and that part of the image is under
-  their Creative Commons BY-SA-NC terms, not Apache-2.0. The
+  their Creative Commons BY-SA-NC terms, not this product's licence. The
   reward and randomization constants in
-  trainnr-mjlab/src/trainnr_mjlab/microduck_walk.py are quoted from
-  src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py at the same
+  trainnr-mjlab/src/trainnr_mjlab/microduck_walk.py and the PPO recipe in
+  trainnr-mjlab/src/trainnr_mjlab/walk_train.py (`--agent g3`) are quoted
+  from src/mjlab_microduck/tasks/microduck_velocity_env_cfg.py at the same
   commit (Apache-2.0).
 - Robotiq 2F-85 (from https://github.com/robotiq/isaacsim_assets at 6d992b6),
   imported from USD into robots/robotiq-2f85-isaac/. Dual-licensed as its
@@ -51,10 +52,14 @@ Robot models redistributed under robots/
     USD importer; prim paths renamed, hulls moved to files, sensors, a home
     keyframe and control ranges added).
   The texts and the attribution are in robots/robotiq-2f85-isaac/LICENSES/.
+  The renders of the gripper (the README's robots image,
+  docs/figures/gripper-pick/ and docs/figures/usd-import/) are adapted
+  material under the same terms and the same attribution.
 - Unitree Go2 (Unitree Robotics, https://github.com/unitreerobotics/unitree_rl_mjlab;
   Apache-2.0): the declared actuator constants in
   trainnr-mjlab/src/trainnr_mjlab/go2_walk.py are read from
-  src/assets/robots/unitree_go2/ at 1425b15. The Go2 model itself is not
+  src/assets/robots/unitree_go2/ at 1425b15, and its gait clock
+  (`gait_phase`) is transcribed from the reference's `mdp.phase`. The Go2 model itself is not
   distributed; onboarding reads it from the user's own copy. The images of
   the Go2 in README.md and under docs/figures/ (the Studio's screenshots in
   docs/figures/readme/) are rendered from that model.
@@ -65,7 +70,10 @@ Actuator models under robots/actuators/ and robots/actuator-bundles/
   https://github.com/Rhoban/bam; Apache-2.0): the fitted actuator
   parameters for the Dynamixel MX-64, MX-106, XL-320, XL-330, the Feetech
   STS3215, the Waveshare ST3025 and the eRob 80 series, each with a
-  PROVENANCE.json naming the source, the citation and the licence. The
+  PROVENANCE.json naming the source, the citation and the licence; and
+  BAM's actuator model itself, whose equations
+  trainnr-mjlab/src/trainnr_mjlab/kernel.py and actuator.py port and
+  trainnr/trainnr/robot/friction_budget.py transcribes from bam/model.py. The
   xl330-refit bundle carries parameters fitted by this project on BAM's
   published bench logs, whose licence is not stated; the logs are not
   redistributed.
@@ -97,6 +105,14 @@ Interfaces and data restated here
   restates the field layouts of std_msgs, geometry_msgs and sensor_msgs
   (https://github.com/ros2/common_interfaces) and builtin_interfaces
   (https://github.com/ros2/rcl_interfaces) to decode recordings.
+- Unitree's unitree_ros2 message definitions (BSD-3-Clause, "Copyright (c)
+  2016-2024 HangZhou YuShu TECHNOLOGY CO.,LTD. ("Unitree Robotics")") and
+  DFKI's dfki-quad interfaces (BSD-3-Clause, "Copyright (c) 2024 Shubham
+  Vyas, Rohit Kumar, Franek Stark, Hannah Isermann, and Jakob Middelberg
+  (DFKI GmbH, Robotics Innovation Center), and Mihaela Popescu, and Jonas
+  Haack (Robotics Research Group, University of Bremen) and DFKI Quadruped
+  contributors"): trainnr/trainnr/robots/adapters/rosbag2.py restates
+  their message layouts to decode recordings.
 - ArmnetBench v0.1 (armnet; arXiv:2607.24481; the Hugging Face datasets
   armnet/armnetbench_v01_robometer and armnet/armnetbench_v01_lerobot_so101,
   Apache-2.0): data/armnetbench-v01-so101-counts.json and
@@ -114,7 +130,7 @@ Scenes used in the recorded experiments (not distributed here)
   MIT): the Go1 parkour scenes, imported from a zip the user supplies;
   only the measured numbers are kept here.
 
-Software this product depends on (no source copied)
+Software this product depends on
 
 - MuJoCo and MuJoCo Warp (Google DeepMind, Apache-2.0); mjlab (mujocolab,
   Apache-2.0); rsl_rl (ETH Zurich Robotic Systems Lab, BSD-3-Clause);
@@ -122,14 +138,17 @@ Software this product depends on (no source copied)
   trainnr/trainnr/envs/lerobot_plugin.py implements its EnvConfig
   interface); gym-aloha / ACT (Tony Z. Zhao et al.; Apache-2.0 / MIT): the
   transfer-cube task in trainnr/trainnr/tasks/aloha2/ follows the original
-  simulator's conventions so released checkpoints see the scene they were
-  trained on.
+  simulator's conventions, its box and contact constants copied, so
+  released checkpoints see the scene they were trained on.
 - Rerun (Rerun Technologies, MIT OR Apache-2.0): the Python SDK, and the
-  viewer embedded in the Studio through the re_viewer and re_ui crates;
+  viewer embedded in the Studio through the re_viewer and re_ui crates; the
+  Studio's embedding follows Rerun's extend_viewer_ui example
+  (rerun-io/rerun 0.36.3) and copies its allocator setup;
   egui and eframe (MIT OR Apache-2.0). The Studio's binary also statically
   links other Rust crates under permissive licences (MIT, Apache-2.0, BSD,
-  ISC, Zlib, Unicode-3.0, MPL-2.0 and others), among them the zstd and LZ4
-  C libraries (BSD-3-Clause, Meta Platforms; BSD-2-Clause, Yann Collet) and
+  ISC, Zlib, Unicode-3.0, MPL-2.0 and others), among them the zstd, LZ4 and
+  mimalloc C libraries (BSD-3-Clause, Meta Platforms; BSD-2-Clause, Yann
+  Collet; MIT, Microsoft Corporation and Daan Leijen) and
   Apache Arrow and DataFusion with their NOTICE files. It embeds five
   fonts: Inter (The Inter Project Authors; SIL Open Font Licence 1.1),
   through re_ui; and egui's defaults, Ubuntu Light (Canonical; Ubuntu Font
@@ -148,5 +167,3 @@ Software this product depends on (no source copied)
   trainnr imports it nowhere, and no part of it is distributed here.
 - gsplat (Apache-2.0), COLMAP (BSD-3-Clause, a system install) and Open3D
   (MIT): the scene capture chain.
-
-Other

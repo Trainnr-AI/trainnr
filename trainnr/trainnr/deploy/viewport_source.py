@@ -574,7 +574,10 @@ class ViewportScene:
 def deployment_folder(name: str, deploy_root: Path) -> Path:
     """The deployment folder by name under a project's deployments
     (`deploy_root`, the caller's: this tier knows no project), refused by
-    name when it has no manifest."""
+    name when it has no manifest. The name is one plain word: a project's
+    command file supplies it (security review, 2026-10-05)."""
+    if not name or "\\" in name or Path(name).name != name or name.startswith("."):
+        raise ValueError(f"deployment: one plain word, no separators; got {name!r}")
     folder = Path(deploy_root) / name
     if not (folder / MANIFEST_FILE).is_file():
         raise FileNotFoundError(

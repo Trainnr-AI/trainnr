@@ -290,8 +290,11 @@ class TheLibraryAuditsClean(unittest.TestCase):
 
     def test_every_mjcf_bundle_against_itself(self) -> None:
         from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
+        from trainnr.bundles.fetch import unavailable  # noqa: PLC0415
 
         for name in LIBRARY_MJCF:
+            if unavailable(ROBOTS / name):  # fetched on first use, and forbidden
+                continue
             model_file = model_file_of(ROBOTS / name)
             self.assertIsNotNone(model_file, name)
             assert model_file is not None

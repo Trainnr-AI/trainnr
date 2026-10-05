@@ -23,6 +23,15 @@ PHYSICS_DT = 0.002
 SERVOS = 14
 
 
+def setUpModule() -> None:
+    """The meshes are fetched on first use (robots/microduck/FETCH.json)."""
+    from trainnr.bundles.fetch import unavailable  # noqa: PLC0415
+
+    reason = unavailable(ROBOT)
+    if reason:
+        raise unittest.SkipTest(reason)
+
+
 class MicroduckEntity(unittest.TestCase):
     def _actuator(self) -> BamActuatorCfg:
         return BamActuatorCfg.from_bundle(

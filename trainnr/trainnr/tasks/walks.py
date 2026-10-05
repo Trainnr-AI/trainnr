@@ -21,6 +21,7 @@ from typing import Any
 import mujoco
 
 from trainnr.bundles.bundle import model_file_of
+from trainnr.bundles.fetch import missing_files
 from trainnr.bundles.hashing import content_stamp
 from trainnr.bundles.locate import find_bundle
 from trainnr.tasks.registry import register, resolve, walk_entries
@@ -90,8 +91,9 @@ def _walk(name: str, robot: str, spec: WalkSpec, *, bundle: str | None) -> WalkT
         model_file = model_file_of(bundle_dir)
         if model_file is None:
             raise FileNotFoundError(f"{bundle_dir}: no model file recorded to compile")
-        mjspec = mujoco.MjSpec.from_file(str(model_file))
-        mjspec.compile()  # the honesty check: the robot exists and builds
+        if not missing_files(bundle_dir):  # fetched by training, not by a describe
+            mjspec = mujoco.MjSpec.from_file(str(model_file))
+            mjspec.compile()  # the honesty check: the robot exists and builds
     return WalkTask(
         name=name, robot=robot, task_spec=spec, bundle_dir=bundle_dir, spec=mjspec
     )
@@ -185,7 +187,7 @@ def bundle_walk_shape_missing(robot: str) -> list[str]:
     (the walk door will say so itself)."""
     bundle_dir = find_bundle(robot)
     model_file = model_file_of(bundle_dir) if bundle_dir else None
-    if model_file is None:
+    if model_file is None or (bundle_dir and missing_files(bundle_dir)):
         return []
     return walk_shape_missing(robot, mujoco.MjModel.from_xml_path(str(model_file)))
 

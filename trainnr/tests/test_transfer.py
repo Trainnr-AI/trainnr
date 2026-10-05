@@ -44,7 +44,8 @@ class TheCommandLines(unittest.TestCase):
 
 class TheFilters(unittest.TestCase):
     def test_push_never_ships_the_credentials(self) -> None:
-        self.assertIn("--exclude=.env", push_filters())
+        for pattern in (".env*", "*.pem", "*.key", "id_rsa*", ".netrc"):
+            self.assertIn(f"--exclude={pattern}", push_filters())
         self.assertIn("--exclude=runs", push_filters())
 
     def test_pull_takes_a_directory_and_its_contents_then_excludes_the_rest(

@@ -39,14 +39,6 @@ def entity_from_bundle(
     from trainnr.bundles.fetch import ensure_fetched  # noqa: PLC0415
 
     robot_dir = Path(robot_dir)
-    ensure_fetched(robot_dir)  # meshes a bundle does not carry (its licence)
-    model_path = robot_dir / model_file
-    if not model_path.is_file():
-        raise FileNotFoundError(
-            f"{robot_dir.name} has no {model_file!r} — the bundle's model "
-            "file is named explicitly, never guessed"
-        )
-    bundle_stamp = stamp(robot_dir.name, robot_dir)
     # mjlab's actuators field is an ORDERED tuple of cfgs, not a mapping.
     # A dict here silently becomes a tuple of its KEY STRINGS — an entity
     # with no actuator law at all. Caught 2026-09-01 by the walk cfg's
@@ -69,6 +61,15 @@ def entity_from_bundle(
             "mjlab actuators are ordered, not named; pass (cfg,) not "
             "{'name': cfg}"
         )
+    # The arguments are refused before anything is downloaded.
+    ensure_fetched(robot_dir)  # meshes a bundle does not carry (its licence)
+    model_path = robot_dir / model_file
+    if not model_path.is_file():
+        raise FileNotFoundError(
+            f"{robot_dir.name} has no {model_file!r} — the bundle's model "
+            "file is named explicitly, never guessed"
+        )
+    bundle_stamp = stamp(robot_dir.name, robot_dir)
     # Only a given init_state replaces EntityCfg's own default.
     optional: dict[str, Any] = {} if init_state is None else {"init_state": init_state}
     cfg = EntityCfg(

@@ -8,6 +8,7 @@ location on disk does not.
 from __future__ import annotations
 
 import fnmatch
+import glob
 import hashlib
 import json
 from collections.abc import Mapping
@@ -94,8 +95,47 @@ def stamp(name: str, root: Path) -> str:
     content and never move its stamp."""
     if STAMP_SEPARATOR in name:
         raise ValueError(f"artifact name must not contain '{STAMP_SEPARATOR}': {name}")
+    if Path(root).is_dir():
+        recorded = _recorded_stamp(name, Path(root))
+        if recorded is not None:
+            return recorded
     digest = bundle_hash(root, exclude=() if Path(root).is_file() else BUNDLE_RECORDS)
     return f"{name}{STAMP_SEPARATOR}{digest[:STAMP_LENGTH]}"
+
+
+def carried_hash(root: Path, fetched: tuple[str, ...]) -> str:
+    """The hash of what a bundle carries: its content without its records
+    and without the files it fetches on first use."""
+    exclude = BUNDLE_RECORDS + tuple(glob.escape(rel) for rel in fetched)
+    return bundle_hash(root, exclude=exclude)[:STAMP_LENGTH]
+
+
+def _recorded_stamp(name: str, root: Path) -> str | None:
+    """The stamp a bundle's fetch manifest records for it whole, while
+    files it fetches on first use are missing and everything it carries
+    is as recorded; None otherwise, and the stamp is computed. The stamp
+    is one hash over every file's bytes, so without the fetched files it
+    cannot be computed, and a fresh clone listed the microduck as
+    microduck@337dbcb17b56 until its meshes arrived (review, 2026-10-05)."""
+    try:
+        manifest = json.loads((root / FETCH_MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    files, recorded = manifest.get("files"), manifest.get("stamp")
+    carried = manifest.get("carried")
+    if not (
+        isinstance(files, dict)
+        and isinstance(recorded, str)
+        and isinstance(carried, str)
+    ):
+        return None
+    if not recorded.startswith(f"{name}{STAMP_SEPARATOR}"):
+        return None
+    if all((root / rel).is_file() for rel in files):
+        return None  # complete: computed like any other bundle
+    if carried_hash(root, tuple(files)) != carried:
+        return None  # a carried file changed: the record no longer describes it
+    return recorded
 
 
 def is_stamp(value: str) -> bool:

@@ -358,11 +358,30 @@ def _fact(value: Any) -> Any:
 def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     import mujoco  # noqa: PLC0415
 
-    from trainnr.project.previews import _robot_model_file  # noqa: PLC0415
+    from trainnr.project.previews import (  # noqa: PLC0415
+        _robot_model_file,
+        awaiting_fetch,
+    )
 
     model_file = _robot_model_file(root)
     if model_file is None:
         raise ValueError("no MJCF at the asset's root")
+    missing = awaiting_fetch(root)
+    if missing:  # a detail page describes; it never downloads
+        return [
+            _kv(
+                "Asset",
+                [
+                    ("version", artifact.stamp),
+                    ("model file", model_file.name),
+                    (
+                        "fetched on first use",
+                        f"{len(missing)} files (FETCH.json), when the robot is "
+                        "first trained, identified or shown",
+                    ),
+                ],
+            )
+        ]
     m = mujoco.MjModel.from_xml_path(str(model_file))
     name = lambda kind, i: mujoco.mj_id2name(m, kind, i) or f"#{i}"  # noqa: E731
     audit = _importer_audit(root)

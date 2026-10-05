@@ -1837,7 +1837,7 @@ def duck_scene() -> "object":
     business in the task census. The XML's own kp=0.55 position servos
     hold it under the idle sinusoid."""
     import mujoco  # noqa: PLC0415
-    from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
 
     repo = pathlib.Path(__file__).resolve().parent.parent
     scene = mujoco.MjSpec()
@@ -1871,7 +1871,7 @@ def duck_scene() -> "object":
     # give the twenty back — an asset job, not a viewer one.
     count, spacing = FLOCK_COUNT, 0.4
     columns = 5
-    xml = str(model_file_of(repo / "robots" / "microduck"))
+    xml = str(model_file_for_use(repo / "robots" / "microduck"))
     for index in range(count):
         duck = mujoco.MjSpec.from_file(xml)
         trunk = duck.worldbody.first_body()
@@ -2078,12 +2078,12 @@ def walk_scene(
     instead of the plain plane. `dressed`: the Studio's dressing, a sky
     and the live shadow budget; False is the bare mirror of 2026-09-09,
     for a camera whose pixels are data (the walk press's chase camera)."""
-    from trainnr.bundles.bundle import model_file_of  # noqa: PLC0415
+    from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
     from trainnr.bundles.locate import find_bundle  # noqa: PLC0415
     from trainnr.tasks.scene import RenderBudget, grid_of  # noqa: PLC0415
 
     bundle = find_bundle(robot)
-    model_file = model_file_of(bundle) if bundle is not None else None
+    model_file = model_file_for_use(bundle) if bundle is not None else None
     if bundle is None or model_file is None:
         raise FileNotFoundError(
             f"no bundle {robot!r} with a model file in the project or the library"

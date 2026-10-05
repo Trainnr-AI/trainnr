@@ -25,7 +25,17 @@ class Rsync:
     ARCHIVE = "-rlptDz"
     PROGRESS = "--info=progress2"
     EXCLUDES = (
-        ".env",  # the credentials — never
+        # credentials, under any name a project or a checkout gives them —
+        # never (only the exact name `.env` was excluded until 2026-10-05)
+        ".env*",
+        "*.pem",
+        "*.key",
+        "id_rsa*",
+        "id_ed25519*",
+        "id_ecdsa*",
+        ".netrc",
+        "credentials*.json",
+        ".git-credentials",
         ".git",
         ".venv*",  # every venv, every package (trainnr_mjlab's alone is gigabytes)
         "runs",  # datasets and checkpoints live on the machine's volume, not the push

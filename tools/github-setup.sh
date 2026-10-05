@@ -20,6 +20,13 @@ REPO="${REPO:-Trainnr-AI/trainnr}"
 OWNER="${REPO%%/*}"
 api() { gh api -H "Accept: application/vnd.github+json" "$@"; }
 say() { printf '%s\n' "$*"; }
+# Every setting is applied this way: a refused call is named and the
+# script goes on, so one refusal never leaves main without its ruleset;
+# the read-back at the end decides the exit code (review, 2026-10-05).
+apply() {  # description, then the api arguments
+  local what=$1; shift
+  api "$@" >/dev/null || say "  NOT applied: $what (named again in the read-back)"
+}
 
 PRIVATE=$(api "repos/$REPO" --jq .private)
 say "repository: $REPO (private: $PRIVATE)"
@@ -28,12 +35,12 @@ say "repository: $REPO (private: $PRIVATE)"
 # The homepage points at the repository until trainnr.ai serves its own
 # page over HTTPS (it is a parked domain as of 2026-10-03); the
 # organisation's profile is left as it is.
-api -X PATCH "repos/$REPO" \
+apply "merge settings" -X PATCH "repos/$REPO" \
   -F has_issues=true -F has_discussions=true -F has_wiki=false -F has_projects=false \
   -f homepage=https://github.com/Trainnr-AI/trainnr \
   -F allow_merge_commit=false -F allow_squash_merge=true -F allow_rebase_merge=true \
   -F allow_auto_merge=false -F delete_branch_on_merge=true -F allow_update_branch=true \
-  -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES >/dev/null
+  -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES
 # A squash commit's message is the pull request's commit messages, so each
 # commit's Signed-off-by line (the DCO) reaches main; PR_BODY dropped them.
 say "merging: squash or rebase only, a squash keeps every commit's sign-off, branches deleted after merge (web commit sign-off is enforced by the organisation)"
@@ -45,11 +52,11 @@ say "merging: squash or rebase only, a squash keeps every commit's sign-off, bra
 # run (a "verified creator" badge is not a review of this repository's
 # needs, so it grants nothing), and every action must be pinned to a full
 # commit SHA, which the workflows already do.
-api -X PUT "repos/$REPO/actions/permissions/workflow" \
-  -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false >/dev/null
-api -X PUT "repos/$REPO/actions/permissions" \
-  -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true >/dev/null
-api -X PUT "repos/$REPO/actions/permissions/selected-actions" --input - >/dev/null <<'JSON'
+apply "the workflow token" -X PUT "repos/$REPO/actions/permissions/workflow" \
+  -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
+apply "the allowed actions" -X PUT "repos/$REPO/actions/permissions" \
+  -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true
+apply "the named actions" -X PUT "repos/$REPO/actions/permissions/selected-actions" --input - <<'JSON'
 {"github_owned_allowed": true, "verified_allowed": false,
  "patterns_allowed": ["astral-sh/setup-uv@*", "dtolnay/rust-toolchain@*", "Swatinem/rust-cache@*", "ossf/scorecard-action@*"]}
 JSON
@@ -61,21 +68,20 @@ if [ "$PRIVATE" = "false" ]; then
   # them on a private repository only when the organisation does.
   # Neither stops the script: a refusal here must not leave main without
   # the rulesets below (the read-back at the end names what did not take).
-  api -X PATCH "repos/$REPO" -F allow_forking=true >/dev/null \
-    && say "forks: allowed" || say "forks: NOT set (allow forking in the settings)"
-  api -X PUT "repos/$REPO/actions/permissions/fork-pr-contributor-approval" \
-    -f approval_policy=all_external_contributors >/dev/null \
-    && say "actions: every outside contributor's run waits for approval" \
-    || say "actions: outside contributors' approval NOT set (Settings > Actions)"
+  apply "forks allowed" -X PATCH "repos/$REPO" -F allow_forking=true
+  apply "outside contributors' runs wait for approval" \
+    -X PUT "repos/$REPO/actions/permissions/fork-pr-contributor-approval" \
+    -f approval_policy=all_external_contributors
+  say "forks: allowed; every outside contributor's run waits for approval"
 fi
 
 # --- labels ------------------------------------------------------------
 uri() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
 label() {  # name colour description
   if api "repos/$REPO/labels/$(uri "$1")" >/dev/null 2>&1; then
-    api -X PATCH "repos/$REPO/labels/$(uri "$1")" -f color="$2" -f description="$3" >/dev/null
+    apply "label $1" -X PATCH "repos/$REPO/labels/$(uri "$1")" -f color="$2" -f description="$3"
   else
-    api -X POST "repos/$REPO/labels" -f name="$1" -f color="$2" -f description="$3" >/dev/null
+    apply "label $1" -X POST "repos/$REPO/labels" -f name="$1" -f color="$2" -f description="$3"
   fi
 }
 label "needs-triage"   "fbca04" "New; a maintainer has not looked yet"
@@ -141,27 +147,27 @@ JSON
 )
   for body in "$RULES" "$TAGS"; do
     name=$(printf %s "$body" | python3 -c 'import json, sys; print(json.load(sys.stdin)["name"])')
-    id=$(api "repos/$REPO/rulesets" --jq ".[] | select(.name==\"$name\") | .id" | head -1)
+    id=$(api "repos/$REPO/rulesets" --jq ".[] | select(.name==\"$name\") | .id" | head -1) || id=""
     if [ -n "$id" ]; then
-      printf %s "$body" | api -X PUT "repos/$REPO/rulesets/$id" --input - >/dev/null
+      printf %s "$body" | apply "ruleset $name" -X PUT "repos/$REPO/rulesets/$id" --input -
     else
-      printf %s "$body" | api -X POST "repos/$REPO/rulesets" --input - >/dev/null
+      printf %s "$body" | apply "ruleset $name" -X POST "repos/$REPO/rulesets" --input -
     fi
     say "ruleset: $name"
   done
-  api -X PATCH "repos/$REPO" --input - >/dev/null <<'JSON'
+  apply "secret scanning" -X PATCH "repos/$REPO" --input - <<'JSON'
 {"security_and_analysis": {"secret_scanning": {"status": "enabled"},
   "secret_scanning_push_protection": {"status": "enabled"}}}
 JSON
-  api -X PUT "repos/$REPO/private-vulnerability-reporting" >/dev/null
-  api -X PUT "repos/$REPO/vulnerability-alerts" >/dev/null
-  api -X PUT "repos/$REPO/automated-security-fixes" >/dev/null
+  apply "private vulnerability reporting" -X PUT "repos/$REPO/private-vulnerability-reporting"
+  apply "Dependabot alerts" -X PUT "repos/$REPO/vulnerability-alerts"
+  apply "Dependabot fixes" -X PUT "repos/$REPO/automated-security-fixes"
   api -X PATCH "repos/$REPO/code-scanning/default-setup" -f state=configured -f query_suite=default >/dev/null || \
     say "code scanning: enable CodeQL's default setup by hand (Settings, Code security)"
   # A published release's tag and assets can no longer change; the
   # release workflow attaches the archives to a draft, which stays
   # editable until a maintainer publishes it.
-  api -X PUT "repos/$REPO/immutable-releases" >/dev/null
+  apply "immutable releases" -X PUT "repos/$REPO/immutable-releases"
   say "security: secret scanning with push protection, private vulnerability reporting, Dependabot alerts and fixes, CodeQL, immutable releases"
 fi
 
@@ -188,6 +194,7 @@ if [ "$PRIVATE" = "false" ]; then
   RULESETS=$(api "repos/$REPO/rulesets" --jq '.[] | select(.enforcement == "active") | .name' 2>/dev/null || true)
   need "ruleset on main (active)" grep -qx 'main' <<<"$RULESETS"
   need "ruleset on release tags (active)" grep -qx 'release tags' <<<"$RULESETS"
+  need "forks allowed" is true "repos/$REPO" --jq .allow_forking
   need "private vulnerability reporting" is true "repos/$REPO/private-vulnerability-reporting" --jq .enabled
   need "secret scanning" is enabled "repos/$REPO" --jq .security_and_analysis.secret_scanning.status
   need "secret scanning push protection" is enabled "repos/$REPO" --jq .security_and_analysis.secret_scanning_push_protection.status

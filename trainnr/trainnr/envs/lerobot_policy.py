@@ -12,6 +12,7 @@ normalised grippers for the public checkpoints) stay with the rig
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +49,49 @@ def best_device(requested: str | None = None) -> str:
     return "cpu"
 
 
+# The processor pipelines a LeRobot checkpoint carries. LeRobot builds
+# each step from its registry or by importing the class path the file
+# names, so a crafted checkpoint ran code when it loaded (security review,
+# 2026-10-05): only LeRobot's own steps are accepted.
+PROCESSOR_FILES = ("policy_preprocessor.json", "policy_postprocessor.json")
+LEROBOT_MODULE = "lerobot."
+
+
+def check_processors(folder: Path) -> None:
+    """ValueError naming the first processor step that is not LeRobot's
+    own (a registered step, or a class under `lerobot.`)."""
+    for name in PROCESSOR_FILES:
+        path = Path(folder) / name
+        if not path.is_file():
+            continue
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        steps = raw.get("steps", []) if isinstance(raw, dict) else []
+        for step in steps if isinstance(steps, list) else []:
+            if not isinstance(step, dict):
+                raise ValueError(f"{path}: a step that is not an object")
+            if isinstance(step.get("registry_name"), str):
+                continue
+            target = str(step.get("class", ""))
+            if not target.startswith(LEROBOT_MODULE):
+                raise ValueError(
+                    f"{path}: the step class {target!r} is not LeRobot's own; "
+                    "trainnr loads no code a checkpoint names"
+                )
+
+
+def local_checkpoint(source: Path | str) -> Path:
+    """The checkpoint as a local folder, its processors checked: a folder
+    as it is, a Hugging Face repo id downloaded once and loaded from that
+    same snapshot, so what was checked is what loads."""
+    folder = Path(source).expanduser()
+    if not folder.is_dir():
+        from huggingface_hub import snapshot_download  # noqa: PLC0415 - train extra
+
+        folder = Path(snapshot_download(repo_id=str(source)))
+    check_processors(folder)
+    return folder
+
+
 def load_policy(path: Path | str, *, instruction: str, device: str) -> LoadedPolicy:
     try:
         import torch  # noqa: PLC0415
@@ -63,7 +107,7 @@ def load_policy(path: Path | str, *, instruction: str, device: str) -> LoadedPol
             "(uv sync --python 3.12 --extra train)"
         ) from error
 
-    path = str(path)
+    path = str(local_checkpoint(path))
     config = PreTrainedConfig.from_pretrained(path)
     config.device = device
     policy = get_policy_class(config.type).from_pretrained(path, config=config)

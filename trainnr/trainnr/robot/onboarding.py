@@ -29,7 +29,7 @@ from typing import Any
 
 from trainnr.bundles.bundle import (
     AUDIT_KEY,
-    model_file_of,
+    model_file_for_use,
     write_audit,
     write_bundle_record,
 )
@@ -191,7 +191,7 @@ def audit_written(
     """The audit of a bundle the door just wrote, put on its record; an
     unexplained change removes the bundle and refuses, unless accepted,
     and then the record says so."""
-    model_file = model_file_of(destination)
+    model_file = model_file_for_use(destination)
     if model_file is None:
         raise FileNotFoundError(f"{destination} holds no MJCF to audit")
     try:

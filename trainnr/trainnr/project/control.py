@@ -34,7 +34,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from trainnr import safe_write
 from trainnr.paths import CHECKOUT_ENV, checkout
+from trainnr.project.files import read_json
 from trainnr.project.locate import (
     INDEX_DIR,
     PROJECT_ENV,
@@ -232,14 +234,16 @@ def send(project: Project, verb: str, /, **args: Any) -> str:
     if verb not in VERBS:
         raise ValueError(f"unknown verb {verb!r}; one of {', '.join(VERBS)}")
     folder = commands_dir(project)
-    folder.mkdir(parents=True, exist_ok=True)
     cid = f"{time.time_ns()}-{verb}"
     body = {"schema": SCHEMA, "id": cid, "verb": verb}
     body.update({k: v for k, v in args.items() if v is not None})
-    tmp = folder / f"{cid}.json.tmp"
-    tmp.write_text(json.dumps(body), encoding="utf-8")
-    tmp.replace(folder / f"{cid}.json")
-    _prune(folder)
+    # The running Studio's session token: it applies no command without
+    # it, so a command file that came with a project never runs.
+    token = read_json(state_path(project), missing_ok=True).get("session")
+    if isinstance(token, str):
+        body["session"] = token
+    safe_write.write_text(folder / f"{cid}.json", json.dumps(body), project.root)
+    _prune(folder, root=project.root)
     return cid
 
 
@@ -480,8 +484,11 @@ def viewer_port_free(port: int | None = None) -> bool:
     VIEWER_PORT, read at call time so a test can point it elsewhere)."""
     import socket  # noqa: PLC0415
 
-    port = VIEWER_PORT if port is None else port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+    host, bound = viewer_bind()
+    if port is None:
+        port = bound if os.environ.get(VIEWER_BIND_ENV) else VIEWER_PORT
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    with socket.socket(family, socket.SOCK_STREAM) as probe:
         # On Linux, SO_REUSEADDR still refuses a live listener but ignores
         # connections closing in TIME_WAIT, as the Studio's own server
         # does; without it a job retrying its stream kept the probe
@@ -490,10 +497,31 @@ def viewer_port_free(port: int | None = None) -> bool:
         if sys.platform.startswith("linux"):
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            probe.bind((viewer_bind_host(), port))
+            probe.bind((host, port))
         except OSError:
             return False
     return True
+
+
+def port_holder(port: int) -> str | None:
+    """Who listens on `port`, as `pid N (name)`, when the system says
+    (macOS lists other processes' sockets only to root): a refusal named
+    "another process" left an agent unable to tell which (2026-10-05)."""
+    try:
+        import psutil  # noqa: PLC0415
+
+        for conn in psutil.net_connections(kind="tcp"):
+            if (
+                conn.status == psutil.CONN_LISTEN
+                and conn.laddr
+                and conn.laddr.port == port
+            ):
+                if conn.pid is None:
+                    return None
+                return f"pid {conn.pid} ({psutil.Process(conn.pid).name()})"
+    except Exception:  # a name is a courtesy; the refusal stands
+        return None
+    return None
 
 
 # The Studio's viewer server binds this host unless TRAINNR_VIEWER_BIND
@@ -503,11 +531,22 @@ VIEWER_BIND_ENV = "TRAINNR_VIEWER_BIND"
 VIEWER_BIND_HOST = "127.0.0.1"
 
 
+def viewer_bind() -> tuple[str, int]:
+    """The host and port the Studio's viewer server binds:
+    `$TRAINNR_VIEWER_BIND` (`0.0.0.0:9876` opens it; `[::1]:9876` is IPv6,
+    brackets dropped), else this machine only on the viewer's port."""
+    value = os.environ.get(VIEWER_BIND_ENV, "")
+    host, _, port = value.rpartition(":") if ":" in value else (value, "", "")
+    host = host.strip("[]") or VIEWER_BIND_HOST
+    try:
+        return host, int(port)
+    except ValueError:
+        return host, VIEWER_PORT
+
+
 def viewer_bind_host() -> str:
-    """The host the Studio's viewer server binds: `$TRAINNR_VIEWER_BIND`'s
-    host part (`0.0.0.0:9876` opens it), else this machine only."""
-    host = os.environ.get(VIEWER_BIND_ENV, "").rsplit(":", 1)[0]
-    return host or VIEWER_BIND_HOST
+    """The host part of `viewer_bind`."""
+    return viewer_bind()[0]
 
 
 # Studios this process launched, by pid: a child that has exited stays a
@@ -618,10 +657,12 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
     while not viewer_port_free() and time.monotonic() < deadline:
         time.sleep(0.1)
     if not viewer_port_free():
+        holder = port_holder(viewer_bind()[1]) or "another process"
         return {
             "status": "refused",
-            "reason": f"port {VIEWER_PORT} (the viewer server) is held by another "
-            "process; quit the other Studio or Rerun viewer first",
+            "reason": f"port {viewer_bind()[1]} (the viewer server) is held by "
+            f"{holder}; quit that Studio or Rerun viewer first (a Studio on "
+            "another project: quit_studio from that project)",
         }
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -632,7 +673,7 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
     # A downloaded Studio lives in the user's cache, not in the checkout:
     # it finds the simulator's scripts through the checkout's path.
     env.setdefault(CHECKOUT_ENV, str(checkout()))
-    with log.open("ab") as sink:
+    with safe_write.open_append(log, project.root) as sink:
         child = subprocess.Popen(
             [str(binary)],
             cwd=str(checkout()),
@@ -734,11 +775,13 @@ def pid_alive(pid: int) -> bool:
         return True  # it exists; another user's process, or a locked-down OS
 
 
-def _prune(folder: Path, keep: int = KEEP_COMMANDS) -> None:
+def _prune(folder: Path, keep: int = KEEP_COMMANDS, root: Path | None = None) -> None:
+    """Keep the newest commands; delete only in a real folder of the
+    project (a linked `.index/commands` emptied a folder outside it)."""
     files = sorted(p for p in folder.glob("*.json") if not p.name.endswith(".ack.json"))
     for old in files[:-keep] if len(files) > keep else []:
-        old.unlink(missing_ok=True)
-        old.with_name(old.name[: -len(".json")] + ".ack.json").unlink(missing_ok=True)
+        safe_write.remove(old, root)
+        safe_write.remove(old.with_name(old.name[: -len(".json")] + ".ack.json"), root)
 
 
 def terminate_group(pid: int) -> str:

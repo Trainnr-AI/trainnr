@@ -14,19 +14,64 @@ are in place, and the records citing it still resolve.
 A fetch is a network call: it happens when a bundle is loaded for use,
 says what it fetches and under which licence, and is refused with the
 manual line when `TRAINNR_NO_ROBOT_FETCH=1`.
+
+A bundle can come from someone else's project, so a manifest is data: it
+names a GitHub repository and a full commit id by their shapes only, and
+every file lands inside the bundle's own folder, never through a link
+out of it (2026-10-05, a path like `../../.bashrc` was written as given).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
+from trainnr import safe_write
+
 FETCH_FILE = "FETCH.json"
 FETCH_SCHEMA = "trainnr-bundle-fetch/1"
 NO_FETCH_ENV = "TRAINNR_NO_ROBOT_FETCH"
+REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+OBJECT_ID = re.compile(r"[0-9a-f]{40}")
+
+
+def _plain_relative(path: str) -> bool:
+    """A forward-slash path with no root, drive, `..`, `.` or empty part."""
+    parts = path.split("/")
+    return (
+        bool(path)
+        and "\\" not in path
+        and ":" not in path
+        and all(part not in ("", ".", "..") for part in parts)
+    )
+
+
+def _checked(manifest: dict[str, Any], where: Path) -> dict[str, Any]:
+    """The manifest, or ValueError naming the first entry out of shape."""
+    repository, commit = manifest.get("repository"), manifest.get("commit")
+    if not isinstance(repository, str) or not REPOSITORY.fullmatch(repository):
+        raise ValueError(f"{where}: repository {repository!r} is not owner/name")
+    if not isinstance(commit, str) or not OBJECT_ID.fullmatch(commit):
+        raise ValueError(f"{where}: commit {commit!r} is not a full commit id")
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        raise ValueError(f"{where}: files is not a table")
+    for rel, entry in files.items():
+        if not _plain_relative(rel):
+            raise ValueError(f"{where}: {rel!r} is not a plain path inside the bundle")
+        upstream = entry.get("upstream") if isinstance(entry, dict) else None
+        blob = entry.get("blob") if isinstance(entry, dict) else None
+        if not isinstance(upstream, str) or not _plain_relative(upstream):
+            raise ValueError(
+                f"{where}: {rel}'s upstream {upstream!r} is not a plain path"
+            )
+        if not isinstance(blob, str) or not OBJECT_ID.fullmatch(blob):
+            raise ValueError(f"{where}: {rel}'s blob {blob!r} is not a git blob id")
+    return manifest
 
 
 def fetch_manifest(bundle_dir: Path) -> dict[str, Any] | None:
@@ -37,7 +82,7 @@ def fetch_manifest(bundle_dir: Path) -> dict[str, Any] | None:
     manifest: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     if manifest.get("schema") != FETCH_SCHEMA:
         raise ValueError(f"{path}: schema is not {FETCH_SCHEMA!r}")
-    return manifest
+    return _checked(manifest, path)
 
 
 def missing_files(bundle_dir: Path) -> list[str]:
@@ -72,16 +117,32 @@ def ensure_fetched(bundle_dir: Path) -> list[Path]:
         file=sys.stderr,
     )
     written = []
+    root = bundle_dir.resolve()
     for rel in missing:
         entry = manifest["files"][rel]
-        data = fetch_file(repo, commit, entry["upstream"], blob=entry["blob"])
         target = bundle_dir / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        staging = target.with_name(target.name + ".part")
-        staging.write_bytes(data)
-        staging.replace(target)
-        written.append(target)
+        if target.is_symlink() or not target.resolve().is_relative_to(root):
+            raise ValueError(f"{bundle_dir}: {rel} would be written outside the bundle")
+        data = fetch_file(repo, commit, entry["upstream"], blob=entry["blob"])
+        written.append(safe_write.write_bytes(target, data, root))
     return written
+
+
+def unavailable(bundle_dir: Path) -> str | None:
+    """Why the bundle cannot be had whole right now, or None once it is:
+    its files are fetched first, unless `TRAINNR_NO_ROBOT_FETCH=1` forbids
+    it. A test skips by this reason; a failed download still raises."""
+    bundle_dir = Path(bundle_dir)
+    missing = missing_files(bundle_dir)
+    if not missing:
+        return None
+    if os.environ.get(NO_FETCH_ENV) == "1":
+        return (
+            f"{bundle_dir.name}: {len(missing)} files are fetched on first use "
+            f"and {NO_FETCH_ENV}=1 forbids it"
+        )
+    ensure_fetched(bundle_dir)
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

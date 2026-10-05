@@ -256,10 +256,10 @@ Rerun render through wgpu, not because of a framework choice.
 The app briefly had a full ACP (Agent Client Protocol) chat panel: live
 tool-call cards, markdown replies, a Stop button, prompt queueing, and
 the seven pipeline specialists as stage chips. It worked, and it was
-removed with the first open-core slice, along with about a thousand
+removed when the Studio was cut to the public release's scope, along with about a thousand
 lines and the ACP dependency.
 
-**Why (the open-core decision, 2026-09-07):** developers already have an agent
+**Why (the bring-your-own-agent decision, 2026-09-07):** developers already have an agent
 they trust and pay for. Embedding one makes us a worse IDE instead of a
 better instrument. The agent lives in the developer's own tool — Claude
 Code in a terminal, Cursor, VS Code, Claude Desktop — and reaches this

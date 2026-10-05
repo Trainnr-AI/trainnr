@@ -43,6 +43,7 @@ REQUIRED: dict[str, str] = {
     "Apache Arrow": "the NOTICE of the arrow, parquet and object_store crates",
     "Meta Platforms": "zstd's BSD-3-Clause licence (zstd-sys, about.toml)",
     "Yann Collet": "liblz4's BSD-2-Clause licence (lz4-sys, about.toml)",
+    "Daan Leijen": "mimalloc's MIT licence (libmimalloc-sys, about.toml)",
     "Bitstream": "the Hack font's Bitstream Vera licence (epaint_default_fonts)",
     "John Slegers": "emoji-icon-font's MIT licence (epaint_default_fonts)",
 }
