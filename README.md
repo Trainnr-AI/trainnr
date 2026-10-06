@@ -137,9 +137,14 @@ you    Create a project called go2, onboard Unitree's Go2 from
        and identify it from the IIT chirp log.
 agent  create_project("go2")                        → ~/trainnr/projects/go2, now open
        onboard_robot(".../go2.xml", "go2")          → go2@e5aa641994fc, shape checked
-       ingest_public_log("iit-go2-chirp")           → 24 s · 200 Hz · 6 channels · public log
+       ingest_public_log("iit-go2-chirp")           → job ingest-public-log-…, started
+       describe_job(job_id, wait_s=60)              → done · 24 s · 200 Hz · 6 channels · public log
        identify_system("go2", "iit-go2-chirp")      → 31 of 36 parameters pinned at 95 %
 ```
+
+An ingest is a job (a public log is tens to hundreds of megabytes), so
+the agent waits on it before the next step; asked too early,
+`identify_system` names the job that is still writing the recording.
 
 A parameter is **pinned** when its 95 % confidence interval is narrow
 enough to use (within a tenth of its allowed range), and **not pinned**

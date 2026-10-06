@@ -115,6 +115,7 @@ Not yet released; the repository is being prepared for its first public release.
 ### Fixed
 
 - `list_projects` marks the current project as current when the projects home is reached through a link, as macOS's `/var` and `/tmp` are; it compared one resolved path with one that was not.
+- `identify_system`, `check_drift` and the other tools that take an artifact by name refuse one that a running job of the project is still writing by naming the job and the wait (`describe_job`), not "no artifact"; `ingest_public_log`'s handle says `next`, and the README's CPU quickstart shows the wait. Asked right after the handle, as the quickstart read, the first identification of a fresh install was refused (macOS, 2026-10-06).
 - The microduck's meshes are fetched only by what uses the robot (training, identifying, onboarding, showing it); listing or describing it, a preview or a detail page never downloads. Its stamp is `microduck@ad90736153cc` with or without the meshes (`FETCH.json` records it, with a hash of the files the bundle carries). Two processes fetching at once no longer break each other. Tests that need the meshes fetch them, or skip by name when `TRAINNR_NO_ROBOT_FETCH=1` forbids it.
 - `list_experiments` caches a finished run's record read afresh (25 s for 14 runs no tool had refreshed); a job a tool started records its process's start time, so `cancel_job` and the Studio's Stop can stop it.
 - `launch_studio` names the process holding the viewer's port, and the port check reads `TRAINNR_VIEWER_BIND`'s port and IPv6 hosts (`[::1]:9876`).
