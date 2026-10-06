@@ -73,6 +73,10 @@ EXCEPTIONS: dict[str, str] = {
     "PYSEC-2025-194": "torch 2.11 in trainnr's lock; fixed in 2.13.0, which "
     "trainnr-mjlab's lock has; LeRobot 0.6.1 (train) requires torch<2.12; "
     "2026-10-04",
+    "CVE-2026-104851": "fsspec 2026.2.0 in trainnr's lock (Python 3.12 and "
+    "later); fixed in 2026.6.0, which trainnr-mjlab's lock has (2026.9.0); "
+    "datasets 4.8.5 requires fsspec<=2026.2.0 and LeRobot 0.6.1 (train) "
+    "requires datasets<5; 2026-10-06",
 }
 
 # The licences a dependency may carry without a written reason: permissive

@@ -1917,8 +1917,10 @@ def list_project_dirs() -> list[dict[str, Any]]:
     (stages proved of eight) from its index when one exists."""
     from trainnr.project import current_project, list_projects  # noqa: PLC0415
 
+    # Compared resolved: one project reached through a link (macOS's /var
+    # and /tmp are links) was listed as not current.
     try:
-        current: Path | None = current_project().root
+        current: Path | None = current_project().root.resolve()
     except FileNotFoundError:
         current = None
     listed = []
@@ -1926,7 +1928,7 @@ def list_project_dirs() -> list[dict[str, Any]]:
         entry: dict[str, Any] = {
             "name": project.name,
             "root": str(project.root),
-            "current": project.root == current,
+            "current": project.root.resolve() == current,
         }
         if project.index_path.is_file():
             raw = json.loads(project.index_path.read_text())

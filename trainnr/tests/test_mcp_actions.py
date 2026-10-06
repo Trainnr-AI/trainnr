@@ -180,7 +180,11 @@ class TheDoors(unittest.TestCase):
             self.assertEqual(argv[1], str(TOOLS_DIR / "e2e-smoke.py"))
             self.assertIn("--from", argv)
             self.assertEqual(argv[argv.index("--name") + 1], "demo")
-            self.assertEqual(argv[argv.index("--runs") + 1], str(spawner.root / "runs"))
+            # Places, not spellings: macOS's /var is a link to /private/var.
+            self.assertEqual(
+                Path(argv[argv.index("--runs") + 1]).resolve(),
+                (spawner.root / "runs").resolve(),
+            )
             with self.assertRaisesRegex(ValueError, "plain word"):
                 actions.run_chain(name="../../x")
 

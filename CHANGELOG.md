@@ -114,6 +114,7 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Fixed
 
+- `list_projects` marks the current project as current when the projects home is reached through a link, as macOS's `/var` and `/tmp` are; it compared one resolved path with one that was not.
 - The microduck's meshes are fetched only by what uses the robot (training, identifying, onboarding, showing it); listing or describing it, a preview or a detail page never downloads. Its stamp is `microduck@ad90736153cc` with or without the meshes (`FETCH.json` records it, with a hash of the files the bundle carries). Two processes fetching at once no longer break each other. Tests that need the meshes fetch them, or skip by name when `TRAINNR_NO_ROBOT_FETCH=1` forbids it.
 - `list_experiments` caches a finished run's record read afresh (25 s for 14 runs no tool had refreshed); a job a tool started records its process's start time, so `cancel_job` and the Studio's Stop can stop it.
 - `launch_studio` names the process holding the viewer's port, and the port check reads `TRAINNR_VIEWER_BIND`'s port and IPv6 hosts (`[::1]:9876`).
@@ -152,6 +153,7 @@ Not yet released; the repository is being prepared for its first public release.
 
 ### Security
 
+- The locks take werkzeug 3.1.9 and multidict 6.9.1 (CVE-2026-102598, CVE-2026-104874), and trainnr-mjlab's takes fsspec 2026.9.0. trainnr's keeps fsspec 2026.2.0 (CVE-2026-104851), because datasets 4.8.5 requires fsspec<=2026.2.0 and LeRobot 0.6.1 requires datasets<5; the advisory gate lists it as a dated exception until LeRobot moves.
 - A project from someone else can no longer make trainnr write, append or delete outside it through a link it carries: every write the project layer, the job runner and the bundles make goes through `trainnr.safe_write`, which checks the target and the folders below the project's root and stages each file fresh. One `describe_project` call overwrote a file through a planted `.index/project.json.tmp`, and pruning a linked `.index/commands` deleted files outside the project.
 - The Studio applies a command only when it carries the running Studio's session token (`studio-state.json`); a command file that came with a project, whatever its time stamp, is never applied. Its log panel reads the log beside a job's record, never the path the record names; it opens a record's viewer file only inside the project; its Stop button signals a pid only when that process started when the record says (both ways, as `cancel_job` does); and its simulator's frame file has a random name, readable by the user alone.
 - `evaluate_walk(student=…)` takes a folder inside the project or a Hugging Face repo id, and refuses a student whose processor files name a step that is not LeRobot's own: LeRobot imports the classes they name, so a crafted checkpoint ran code when it loaded.
