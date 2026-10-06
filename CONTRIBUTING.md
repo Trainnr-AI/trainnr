@@ -43,7 +43,8 @@ You need [uv](https://docs.astral.sh/uv/), git and
 `crates/trainnr-studio/rust-toolchain.toml`, and rustup installs it on the
 first `cargo` command there; on Linux the build needs the system libraries
 the README lists ([The Studio](README.md#the-studio)), and a cold build
-takes about 3.5 GB of disk and 4 to 6 minutes. trainnr-mjlab's environment
+takes about 3.5 GB of disk and 4 to 9 minutes, the pinned toolchain's
+install included. trainnr-mjlab's environment
 is about 6 GB, and training in it needs an NVIDIA GPU with CUDA.
 The first test run fetches the microduck's meshes (about 22 MB, once) from
 Pollen Robotics' repository, since they are not redistributed here

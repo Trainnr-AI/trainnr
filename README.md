@@ -232,7 +232,9 @@ sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev 
     libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev
 ```
 
-Then build it, about 3.5 GB of disk and 4 to 6 minutes on a cold build:
+Then build it, about 3.5 GB of disk and 4 to 9 minutes on a cold build
+(the first `cargo` call also installs the pinned toolchain; an Apple
+Silicon laptop took 8.5 minutes in all):
 
 ```sh
 git clone https://github.com/Trainnr-AI/trainnr && cd trainnr/crates/trainnr-studio
