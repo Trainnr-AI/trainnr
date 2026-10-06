@@ -1,0 +1,88 @@
+# The Python packages to PyPI, from a published release: the sdist and
+# wheel the release workflow built and attested, downloaded from the
+# release and checked against their attestations before the upload, so
+# what PyPI serves is byte for byte what the release holds. A
+# pre-release (an rc) goes to TestPyPI, the rehearsal; a release goes to
+# PyPI, after a maintainer approves the `pypi-<package>` environment. Trusted
+# publishing (OIDC): no token is stored anywhere. `workflow_dispatch`
+# with a tag uploads an already-published release (the first version).
+name: pypi
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "A published release to upload (e.g. v0.1.0)"
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: pypi-${{ github.event.inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: trainnr
+            files: "trainnr-[0-9]*"
+          - package: trainnr-mjlab
+            files: "trainnr_mjlab-*"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # One environment per package and index (PyPI's pending publishers
+    # are unique per repository, workflow and environment, so two
+    # projects cannot share one): testpypi-<package> for a release
+    # candidate, pypi-<package> for a version, which waits for a
+    # maintainer's approval.
+    environment:
+      name: ${{ contains(github.event.inputs.tag || github.event.release.tag_name, '-rc.') && 'testpypi' || 'pypi' }}-${{ matrix.package }}
+    permissions:
+      contents: read      # download the release's files
+      attestations: read  # read their attestations
+      id-token: write     # trusted publishing
+    env:
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      FILES: ${{ matrix.files }}
+      PACKAGE: ${{ matrix.package }}
+    steps:
+      - name: the package, from the published release
+        run: |
+          gh release download "$TAG" --dir dist --pattern "$FILES"
+          ls -la dist
+          test "$(ls dist | wc -l)" -eq 2   # an sdist and a wheel
+      - name: it was built by this repository's release workflow
+        run: |
+          for file in dist/*; do
+            gh attestation verify "$file" --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/release.yml"
+          done
+      - name: it names this release's version
+        run: |
+          want="${TAG#v}"; want="${want%-rc.*}"
+          name="${PACKAGE//-/_}"
+          for file in dist/*; do
+            case "$(basename "$file")" in
+              "$PACKAGE"-"$want".tar.gz|"$name"-"$want".tar.gz|"$PACKAGE"-"$want"-*.whl|"$name"-"$want"-*.whl) ;;
+              *) echo "::error::$file is not $PACKAGE $want"; exit 1 ;;
+            esac
+          done
+      - name: upload to TestPyPI (a release candidate)
+        if: contains(env.TAG, '-rc.')
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true   # a second rc of one version: TestPyPI keeps the first
+          print-hash: true
+      - name: upload to PyPI
+        if: ${{ !contains(env.TAG, '-rc.') }}
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          print-hash: true

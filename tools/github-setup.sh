@@ -58,9 +58,9 @@ apply "the allowed actions" -X PUT "repos/$REPO/actions/permissions" \
   -F enabled=true -f allowed_actions=selected -F sha_pinning_required=true
 apply "the named actions" -X PUT "repos/$REPO/actions/permissions/selected-actions" --input - <<'JSON'
 {"github_owned_allowed": true, "verified_allowed": false,
- "patterns_allowed": ["astral-sh/setup-uv@*", "dtolnay/rust-toolchain@*", "Swatinem/rust-cache@*", "ossf/scorecard-action@*"]}
+ "patterns_allowed": ["astral-sh/setup-uv@*", "dtolnay/rust-toolchain@*", "Swatinem/rust-cache@*", "ossf/scorecard-action@*", "pypa/gh-action-pypi-publish@*"]}
 JSON
-say "actions: read-only token, no PR approvals by Actions, GitHub's own and four named actions only, each pinned to a commit SHA"
+say "actions: read-only token, no PR approvals by Actions, GitHub's own and five named actions only, each pinned to a commit SHA"
 # A first-time or outside contributor's workflow waits for a maintainer's
 # approval before it runs (public repositories only).
 if [ "$PRIVATE" = "false" ]; then
@@ -74,6 +74,22 @@ if [ "$PRIVATE" = "false" ]; then
     -f approval_policy=all_external_contributors
   say "forks: allowed; every outside contributor's run waits for approval"
 fi
+
+# --- the PyPI environments -----------------------------------------------
+# pypi.yml uploads a published release's packages under one environment
+# per package and index (trusted publishing: each is a pending publisher
+# on its index, and PyPI wants each unique). The `pypi-*` ones wait for
+# the maintainer's approval; the `testpypi-*` ones (release candidates)
+# do not.
+for pkg in trainnr trainnr-mjlab; do
+  apply "environment pypi-$pkg" -X PUT "repos/$REPO/environments/pypi-$pkg" --input - <<'JSON'
+{"reviewers": [{"type": "User", "id": 21175569}], "deployment_branch_policy": null}
+JSON
+  apply "environment testpypi-$pkg" -X PUT "repos/$REPO/environments/testpypi-$pkg" --input - <<'JSON'
+{"deployment_branch_policy": null}
+JSON
+done
+say "environments: pypi-trainnr, pypi-trainnr-mjlab (approval by the maintainer), testpypi-trainnr, testpypi-trainnr-mjlab"
 
 # --- labels ------------------------------------------------------------
 uri() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }

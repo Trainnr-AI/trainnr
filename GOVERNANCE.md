@@ -106,8 +106,13 @@ attestation (Sigstore, signed with the workflow's identity), and all of
 it goes to a draft release, with the CHANGELOG's section as the notes. A
 maintainer checks the draft and publishes it; publishing starts
 `.github/workflows/release-verify.yml`, which checks what was published
-on all three systems as a user gets it. The Python packages are not
-uploaded to PyPI yet: they are on the release. Step by step:
+on all three systems as a user gets it, and
+`.github/workflows/pypi.yml`, which uploads the two Python packages to
+PyPI: the files from the release, checked against their attestations
+first, through trusted publishing (no token), after a maintainer approves
+the `pypi-trainnr` and `pypi-trainnr-mjlab` environments; a release
+candidate goes to TestPyPI instead.
+Step by step:
 
 1. **The release pull request.** On a branch from an up-to-date `main`:
 
@@ -174,7 +179,14 @@ uploaded to PyPI yet: they are on the release. Step by step:
    replacing an archive. release-verify then runs on all three systems:
    checksums, attestations, the wheel installed clean naming the version,
    the Studio installed through trainnr's own installer.
-7. **Install as a user** from a fresh clone: `uv run --directory trainnr
+7. **Approve the PyPI upload.** Publishing starts `pypi.yml`; it waits in
+   the `pypi-trainnr` and `pypi-trainnr-mjlab` environments for a
+   maintainer's approval (the run's page, "Review deployments"), then
+   uploads. A release candidate uploads to
+   TestPyPI without asking. PyPI never takes a version twice: a mistake
+   is a new patch version. `workflow_dispatch` with a tag uploads a
+   release published before this workflow existed.
+8. **Install as a user** from a fresh clone: `uv run --directory trainnr
    trainnr studio --install` downloads the new archive and checks its
    SHA-256; then, in Claude Code, `claude plugin marketplace add
    Trainnr-AI/trainnr` and `claude plugin install trainnr@trainnr`, and a

@@ -6,6 +6,10 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Python packages are uploaded to PyPI by `.github/workflows/pypi.yml` when a release is published (the release's own attested files, trusted publishing, a maintainer's approval per package); a release candidate goes to TestPyPI. `uvx --from "trainnr[sim,mcp]" trainnr mcp` runs the server with no checkout.
+
 ### Changed
 
 - The README's Studio section describes the prebuilt download (the plugin's first session, `launch_studio` on demand, `trainnr studio --install`) now that v0.1.0 is published; building from source is CONTRIBUTING's.
