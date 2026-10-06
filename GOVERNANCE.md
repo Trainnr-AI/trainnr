@@ -110,7 +110,8 @@ on all three systems as a user gets it, and
 `.github/workflows/pypi.yml`, which uploads the two Python packages to
 PyPI: the files from the release, checked against their attestations
 first, through trusted publishing (no token), after a maintainer approves
-the `pypi` environment; a release candidate goes to TestPyPI instead.
+the `pypi-trainnr` and `pypi-trainnr-mjlab` environments; a release
+candidate goes to TestPyPI instead.
 Step by step:
 
 1. **The release pull request.** On a branch from an up-to-date `main`:
@@ -179,8 +180,9 @@ Step by step:
    checksums, attestations, the wheel installed clean naming the version,
    the Studio installed through trainnr's own installer.
 7. **Approve the PyPI upload.** Publishing starts `pypi.yml`; it waits in
-   the `pypi` environment for a maintainer's approval (the run's page,
-   "Review deployments"), then uploads. A release candidate uploads to
+   the `pypi-trainnr` and `pypi-trainnr-mjlab` environments for a
+   maintainer's approval (the run's page, "Review deployments"), then
+   uploads. A release candidate uploads to
    TestPyPI without asking. PyPI never takes a version twice: a mistake
    is a new patch version. `workflow_dispatch` with a tag uploads a
    release published before this workflow existed.

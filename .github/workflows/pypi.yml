@@ -3,7 +3,7 @@
 # release and checked against their attestations before the upload, so
 # what PyPI serves is byte for byte what the release holds. A
 # pre-release (an rc) goes to TestPyPI, the rehearsal; a release goes to
-# PyPI, after a maintainer approves the `pypi` environment. Trusted
+# PyPI, after a maintainer approves the `pypi-<package>` environment. Trusted
 # publishing (OIDC): no token is stored anywhere. `workflow_dispatch`
 # with a tag uploads an already-published release (the first version).
 name: pypi
@@ -25,13 +25,23 @@ concurrency:
 
 jobs:
   upload:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: trainnr
+            files: "trainnr-[0-9]*"
+          - package: trainnr-mjlab
+            files: "trainnr_mjlab-*"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # TestPyPI for a release candidate, PyPI for a version; each
-    # environment is a pending publisher on that index, and `pypi`
-    # waits for a maintainer's approval.
+    # One environment per package and index (PyPI's pending publishers
+    # are unique per repository, workflow and environment, so two
+    # projects cannot share one): testpypi-<package> for a release
+    # candidate, pypi-<package> for a version, which waits for a
+    # maintainer's approval.
     environment:
-      name: ${{ contains(github.event.inputs.tag || github.event.release.tag_name, '-rc.') && 'testpypi' || 'pypi' }}
+      name: ${{ contains(github.event.inputs.tag || github.event.release.tag_name, '-rc.') && 'testpypi' || 'pypi' }}-${{ matrix.package }}
     permissions:
       contents: read      # download the release's files
       attestations: read  # read their attestations
@@ -40,26 +50,28 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      FILES: ${{ matrix.files }}
+      PACKAGE: ${{ matrix.package }}
     steps:
-      - name: the packages, from the published release
+      - name: the package, from the published release
         run: |
-          gh release download "$TAG" --dir dist \
-            --pattern 'trainnr-[0-9]*' --pattern 'trainnr_mjlab-*'
+          gh release download "$TAG" --dir dist --pattern "$FILES"
           ls -la dist
-          test "$(ls dist | wc -l)" -eq 4
-      - name: every package was built by this repository's release workflow
+          test "$(ls dist | wc -l)" -eq 2   # an sdist and a wheel
+      - name: it was built by this repository's release workflow
         run: |
           for file in dist/*; do
             gh attestation verify "$file" --repo "$GH_REPO" \
               --signer-workflow "$GH_REPO/.github/workflows/release.yml"
           done
-      - name: the packages name this release's version
+      - name: it names this release's version
         run: |
           want="${TAG#v}"; want="${want%-rc.*}"
+          name="${PACKAGE//-/_}"
           for file in dist/*; do
             case "$(basename "$file")" in
-              trainnr-"$want".tar.gz|trainnr-"$want"-*.whl|trainnr_mjlab-"$want".tar.gz|trainnr_mjlab-"$want"-*.whl) ;;
-              *) echo "::error::$file is not version $want"; exit 1 ;;
+              "$PACKAGE"-"$want".tar.gz|"$name"-"$want".tar.gz|"$PACKAGE"-"$want"-*.whl|"$name"-"$want"-*.whl) ;;
+              *) echo "::error::$file is not $PACKAGE $want"; exit 1 ;;
             esac
           done
       - name: upload to TestPyPI (a release candidate)

@@ -76,17 +76,20 @@ if [ "$PRIVATE" = "false" ]; then
 fi
 
 # --- the PyPI environments -----------------------------------------------
-# pypi.yml uploads a published release's packages under one of these
-# (trusted publishing: each is a pending publisher on its index). `pypi`
-# waits for the maintainer's approval; `testpypi` (release candidates)
-# does not.
-apply "environment pypi" -X PUT "repos/$REPO/environments/pypi" --input - <<'JSON'
+# pypi.yml uploads a published release's packages under one environment
+# per package and index (trusted publishing: each is a pending publisher
+# on its index, and PyPI wants each unique). The `pypi-*` ones wait for
+# the maintainer's approval; the `testpypi-*` ones (release candidates)
+# do not.
+for pkg in trainnr trainnr-mjlab; do
+  apply "environment pypi-$pkg" -X PUT "repos/$REPO/environments/pypi-$pkg" --input - <<'JSON'
 {"reviewers": [{"type": "User", "id": 21175569}], "deployment_branch_policy": null}
 JSON
-apply "environment testpypi" -X PUT "repos/$REPO/environments/testpypi" --input - <<'JSON'
+  apply "environment testpypi-$pkg" -X PUT "repos/$REPO/environments/testpypi-$pkg" --input - <<'JSON'
 {"deployment_branch_policy": null}
 JSON
-say "environments: pypi (approval by the maintainer), testpypi"
+done
+say "environments: pypi-trainnr, pypi-trainnr-mjlab (approval by the maintainer), testpypi-trainnr, testpypi-trainnr-mjlab"
 
 # --- labels ------------------------------------------------------------
 uri() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }

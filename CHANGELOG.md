@@ -8,7 +8,7 @@ All notable changes to trainnr. The format follows
 
 ### Added
 
-- The Python packages are uploaded to PyPI by `.github/workflows/pypi.yml` when a release is published (the release's own attested files, trusted publishing, a maintainer's approval); a release candidate goes to TestPyPI. `uvx --from "trainnr[sim,mcp]" trainnr mcp` runs the server with no checkout.
+- The Python packages are uploaded to PyPI by `.github/workflows/pypi.yml` when a release is published (the release's own attested files, trusted publishing, a maintainer's approval per package); a release candidate goes to TestPyPI. `uvx --from "trainnr[sim,mcp]" trainnr mcp` runs the server with no checkout.
 
 ### Changed
 
