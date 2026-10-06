@@ -68,9 +68,11 @@ jobs:
       - name: the trainnr wheel installs clean and names this version
         run: |
           uv venv --python 3.12 clean
-          if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; else bin=clean/bin; fi
-          uv pip install --python "$bin/python" rel/trainnr-*-py3-none-any.whl
-          got=$("$bin/trainnr" version)
+          # Windows: the interpreter is Scripts/python.exe, and uv looks the
+          # path up as given (v0.1.0-rc.2's verify failed on the bare name).
+          if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; exe=.exe; else bin=clean/bin; exe=; fi
+          uv pip install --python "$bin/python$exe" rel/trainnr-*-py3-none-any.whl
+          got=$("$bin/trainnr$exe" version)
           want="${TAG#v}"; want="${want%-rc.*}"
           echo "trainnr version: $got (release $TAG)"
           test "$got" = "$want"
@@ -78,5 +80,5 @@ jobs:
         env:
           TRAINNR_STUDIO_RELEASE: ${{ github.event.inputs.tag || github.event.release.tag_name }}
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; else bin=clean/bin; fi
-          "$bin/python" -m trainnr.studio_install
+          if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; exe=.exe; else bin=clean/bin; exe=; fi
+          "$bin/python$exe" -m trainnr.studio_install
