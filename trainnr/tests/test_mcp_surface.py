@@ -685,8 +685,10 @@ class PublicLogLicences(unittest.TestCase):
                 with mock.patch(
                     "trainnr.mcp_actions.Actions.ingest_public_log", started
                 ):
-                    self.assertEqual(
-                        ingest_public_log("go2-leg-odometry", accept_unlicensed=True),
-                        {"job_id": "j"},
+                    handle = ingest_public_log(
+                        "go2-leg-odometry", accept_unlicensed=True
                     )
+                self.assertEqual(handle["job_id"], "j")
+                self.assertEqual(handle["status"], "started")
+                self.assertIn("describe_job", handle["next"])  # a job, said so
                 self.assertTrue(started.call_args.kwargs["accept_unlicensed"])
