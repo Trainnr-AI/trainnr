@@ -6,6 +6,8 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-06
+
 Not yet released; the repository is being prepared for its first public release. trainnr is licensed under the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2, `LICENSE`): any use other than a competing product or service; each version is also licensed under Apache-2.0 two years after it is made available.
 
 ### Changed (breaking)
