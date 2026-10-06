@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -504,6 +505,48 @@ class TheJobTable(unittest.TestCase):
         self.assertTrue(log_dir.name.startswith("go2-walk-"), log_dir)
         self.assertEqual(handle["experiment"], log_dir.name)
         self.assertIn("evaluate_walk", handle["next"])
+
+    def test_a_recording_still_being_written_names_its_job(self) -> None:
+        """identify_system right after ingest_public_log's handle, as the
+        quickstart reads: the job is still running, so the refusal names it
+        and the wait, not "no artifact" (fresh-install test, 2026-10-06)."""
+        self.call("create_project", {"path": "demo", "name": "demo"})
+        # any robot, in a folder of its own (onboarding copies the model's
+        # folder, so one under the home would be copied into itself)
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        model = Path(folder.name) / "go2.xml"
+        model.write_text(
+            '<mujoco><worldbody><body name="b"><joint name="j"/>'
+            '<geom size="0.1"/></body></worldbody></mujoco>'
+        )
+        made = self.call("onboard_robot", {"model_path": str(model), "name": "go2"})
+        self.assertNotEqual(made.get("status"), "refused", made)
+        gate = threading.Event()
+
+        class _Running(_ExitedProcess):
+            def wait(self) -> int:
+                gate.wait()
+                return 0
+
+        def spawn(argv: Any, cwd: Path, log_path: Path) -> _Running:
+            Path(log_path).write_text("fetching\n")
+            return _Running()
+
+        with mock.patch("trainnr.mcp_jobs._spawn", spawn):
+            handle = self.call(
+                "ingest_public_log", {"log": "iit-go2-chirp", "accept_unlicensed": True}
+            )
+        self.addCleanup(gate.set)
+        self.assertEqual(handle["status"], "started")
+        self.assertIn("describe_job", handle["next"])
+        asked = self.call(
+            "identify_system", {"robot": "go2", "recording": "iit-go2-chirp"}
+        )
+        self.assertEqual(asked["status"], "refused")
+        self.assertIn(handle["job_id"], asked["reason"])
+        self.assertIn("describe_job", asked["reason"])
+        self.assertNotIn("no artifact 'iit-go2-chirp' in", asked["reason"])
 
     def test_evaluate_reads_the_walk_from_the_experiment(self) -> None:
         """evaluate_walk asked for a `task` argument it does not take; the

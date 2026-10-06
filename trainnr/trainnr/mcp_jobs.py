@@ -482,9 +482,14 @@ class JobManager:
         for watcher in self._watchers:
             watcher.join(timeout)
 
-    def start(self, tool: str, argv: Sequence[str], cwd: Path) -> JobHandle:
+    def start(
+        self, tool: str, argv: Sequence[str], cwd: Path, *, name: str = ""
+    ) -> JobHandle:
         """Spawn `argv` in `cwd`; returns the job's id, log path and pid at
-        once. The runner makes its environment ready first (`prepare_uv`)."""
+        once. The runner makes its environment ready first (`prepare_uv`).
+        `name` is what the work is about, recorded now: a door whose job
+        writes an artifact names it here, so a lookup made before the
+        job's own process has started can still find the job."""
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         job_id = f"{tool}-{uuid.uuid4().hex[:8]}"
         log_path = self.jobs_dir / f"{job_id}.log"
@@ -500,6 +505,7 @@ class JobManager:
             pid=process.pid,
             started=time.time(),
             create_time=process_create_time(process.pid),
+            name=name,
         )
         record.write(self._record_path(job_id))
 

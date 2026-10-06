@@ -2099,7 +2099,7 @@ def list_public_logs() -> list[dict[str, Any]]:
 
 def ingest_public_log(
     log: str, name: str | None = None, accept_unlicensed: bool = False
-) -> JobHandle | Refusal:
+) -> dict[str, Any] | Refusal:
     """Fetch a registered public log (every piece checked against its byte
     count and digest, cached under runs/public-logs) and ingest it into
     the current project with its basis "public log" and a provenance
@@ -2130,12 +2130,19 @@ def ingest_public_log(
         and public_logs.locate(name) is None
     ):
         return refusal(public_logs.unlicensed_reason(entry))
-    return Actions(JobManager(_jobs_root)).ingest_public_log(
+    handle = Actions(JobManager(_jobs_root)).ingest_public_log(
         name,
         project=str(project.root),
         recording_name=recording_name,
         accept_unlicensed=accept_unlicensed,
     )
+    recording = recording_name or name
+    return {
+        **handle,
+        "status": "started",
+        "next": f"describe_job(job_id, wait_s=60), then the recording {recording!r} "
+        f"is in the project (identify_system(<robot>, {recording!r}))",
+    }
 
 
 # -- the Studio's control surface (docs/76 §10.1) ----------------------------------
@@ -2665,11 +2672,43 @@ def pick_artifact(
 
 
 def _project_artifact(stamp: str, kind: str | None) -> Any:
+    """The current project's artifact `stamp` names (see `pick_artifact`).
+    One that is not there yet because a running job of the project's is
+    still writing it is refused naming the job and the wait: an agent
+    that asks right after a door's job handle (ingest_public_log, then
+    identify_system) was told "no artifact", which reads as permanent
+    (fresh-install test on macOS, 2026-10-06)."""
     from trainnr.project import current_project, index_project  # noqa: PLC0415
 
     project = current_project()
     artifacts = index_project(project).artifacts
-    return project, pick_artifact(artifacts, stamp, kind, str(project.root))
+    try:
+        return project, pick_artifact(artifacts, stamp, kind, str(project.root))
+    except KeyError:
+        job = _job_writing(stamp)
+        if job is None:
+            raise
+        raise KeyError(
+            f"no artifact {stamp!r} yet: job {job['job_id']} ({job['tool']}) is "
+            f"still writing it; describe_job({job['job_id']!r}, wait_s=60) until "
+            "it is done, then ask again"
+        ) from None
+
+
+def _job_writing(stamp: str) -> Any:
+    """A running job in the current project's table whose recorded name
+    is `stamp`'s bare name: the job that will write that artifact."""
+    from trainnr.mcp_jobs import STATE_RUNNING, JobManager  # noqa: PLC0415
+
+    name = stamp.rsplit("@", 1)[0]
+    return next(
+        (
+            job
+            for job in JobManager(_jobs_root()).list()
+            if job["state"] == STATE_RUNNING and job["name"] == name
+        ),
+        None,
+    )
 
 
 def list_identification_methods() -> list[dict[str, str]]:
@@ -3119,11 +3158,7 @@ def describe_viewer_stream(
 
 
 def _any_project_artifact(stamp: str) -> Any:
-    from trainnr.project import current_project, index_project  # noqa: PLC0415
-
-    project = current_project()
-    artifacts = index_project(project).artifacts
-    return project, pick_artifact(artifacts, stamp, None, str(project.root))
+    return _project_artifact(stamp, None)
 
 
 def describe_identification(robot: str) -> dict[str, Any] | Refusal:

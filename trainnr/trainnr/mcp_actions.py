@@ -829,7 +829,9 @@ class Actions:
             *_given("--as", recording_name),
             *(["--accept-unlicensed"] if accept_unlicensed else []),
         ]
-        return self.jobs.start("ingest-public-log", argv, PIPELINE_DIR)
+        return self.jobs.start(
+            "ingest-public-log", argv, PIPELINE_DIR, name=recording_name or name
+        )
 
     # -- onboarding ----------------------------------------------------
 
