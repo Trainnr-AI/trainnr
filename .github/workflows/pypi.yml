@@ -29,10 +29,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # the sdist and the wheel by name: a looser pattern took the
+          # package's SBOM too (trainnr-0.1.0.cdx.json; the rehearsal)
           - package: trainnr
-            files: "trainnr-[0-9]*"
+            sdist: "trainnr-[0-9]*.tar.gz"
+            wheel: "trainnr-[0-9]*.whl"
           - package: trainnr-mjlab
-            files: "trainnr_mjlab-*"
+            sdist: "trainnr_mjlab-*.tar.gz"
+            wheel: "trainnr_mjlab-*.whl"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # One environment per package and index (PyPI's pending publishers
@@ -50,12 +54,13 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      FILES: ${{ matrix.files }}
+      SDIST: ${{ matrix.sdist }}
+      WHEEL: ${{ matrix.wheel }}
       PACKAGE: ${{ matrix.package }}
     steps:
       - name: the package, from the published release
         run: |
-          gh release download "$TAG" --dir dist --pattern "$FILES"
+          gh release download "$TAG" --dir dist --pattern "$SDIST" --pattern "$WHEEL"
           ls -la dist
           test "$(ls dist | wc -l)" -eq 2   # an sdist and a wheel
       - name: it was built by this repository's release workflow
