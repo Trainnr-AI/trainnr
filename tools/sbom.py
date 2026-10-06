@@ -135,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=REPO / "dist" / "sbom")
     parser.add_argument("--skip-studio", action="store_true")
     args = parser.parse_args(argv)
+    # Absolute: the writers run inside each package's folder, and a path
+    # relative to the repository root could not be opened from there (the
+    # first release candidate, 2026-10-06).
+    args.out = args.out.resolve()
     args.out.mkdir(parents=True, exist_ok=True)
     made = [python_sbom(p, args.version, args.out) for p in PYTHON_PACKAGES]
     if not args.skip_studio:
