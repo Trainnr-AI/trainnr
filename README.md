@@ -257,6 +257,13 @@ it at your binary with `TRAINNR_STUDIO`.
 <details>
 <summary><b>Any other MCP client</b> (Cursor, Codex, a checkout)</summary>
 
+**Any MCP client, no checkout**: the packages are on PyPI, so the server
+is one command with [uv](https://docs.astral.sh/uv/) installed:
+
+```sh
+claude mcp add trainnr -- uvx --from "trainnr[sim,mcp]" trainnr mcp
+```
+
 **Any MCP client**, from a checkout (the server is `trainnr mcp`, served over
 stdio). The server runs from a checkout today; a PyPI package is planned.
 

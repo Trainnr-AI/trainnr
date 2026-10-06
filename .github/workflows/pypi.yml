@@ -1,0 +1,76 @@
+# The Python packages to PyPI, from a published release: the sdist and
+# wheel the release workflow built and attested, downloaded from the
+# release and checked against their attestations before the upload, so
+# what PyPI serves is byte for byte what the release holds. A
+# pre-release (an rc) goes to TestPyPI, the rehearsal; a release goes to
+# PyPI, after a maintainer approves the `pypi` environment. Trusted
+# publishing (OIDC): no token is stored anywhere. `workflow_dispatch`
+# with a tag uploads an already-published release (the first version).
+name: pypi
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "A published release to upload (e.g. v0.1.0)"
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: pypi-${{ github.event.inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # TestPyPI for a release candidate, PyPI for a version; each
+    # environment is a pending publisher on that index, and `pypi`
+    # waits for a maintainer's approval.
+    environment:
+      name: ${{ contains(github.event.inputs.tag || github.event.release.tag_name, '-rc.') && 'testpypi' || 'pypi' }}
+    permissions:
+      contents: read      # download the release's files
+      attestations: read  # read their attestations
+      id-token: write     # trusted publishing
+    env:
+      TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: the packages, from the published release
+        run: |
+          gh release download "$TAG" --dir dist \
+            --pattern 'trainnr-[0-9]*' --pattern 'trainnr_mjlab-*'
+          ls -la dist
+          test "$(ls dist | wc -l)" -eq 4
+      - name: every package was built by this repository's release workflow
+        run: |
+          for file in dist/*; do
+            gh attestation verify "$file" --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/release.yml"
+          done
+      - name: the packages name this release's version
+        run: |
+          want="${TAG#v}"; want="${want%-rc.*}"
+          for file in dist/*; do
+            case "$(basename "$file")" in
+              trainnr-"$want".tar.gz|trainnr-"$want"-*.whl|trainnr_mjlab-"$want".tar.gz|trainnr_mjlab-"$want"-*.whl) ;;
+              *) echo "::error::$file is not version $want"; exit 1 ;;
+            esac
+          done
+      - name: upload to TestPyPI (a release candidate)
+        if: contains(env.TAG, '-rc.')
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true   # a second rc of one version: TestPyPI keeps the first
+          print-hash: true
+      - name: upload to PyPI
+        if: ${{ !contains(env.TAG, '-rc.') }}
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          print-hash: true
