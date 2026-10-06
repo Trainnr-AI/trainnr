@@ -14,7 +14,16 @@ PY="${TRAINNR_UV_PYTHON:-3.12.8}"   # the version both venvs' pyvenv.cfg name
 if ! dpkg -s libegl1 libgl1 libglib2.0-0 rsync >/dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq libegl1 libgl1 libglib2.0-0 rsync >/tmp/trainnr-apt.log 2>&1
 fi
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+# uv's installer, pinned to a release and its SHA-256 rather than piped from
+# a URL that can change (Scorecard's pinned-dependencies check, 2026-10-07).
+# Move both lines together: the hash is of that version's installer.
+UV_VERSION=0.12.23
+UV_INSTALLER_SHA256=b8e6c43099ee9f9a550984d3ad56948457c689e7a99c090b35377234ac241491
+if ! command -v uv >/dev/null; then
+  curl -LsSf -o /tmp/uv-installer.sh "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-installer.sh"
+  echo "$UV_INSTALLER_SHA256  /tmp/uv-installer.sh" | sha256sum -c - >/dev/null
+  sh /tmp/uv-installer.sh && rm -f /tmp/uv-installer.sh
+fi
 uv python install "$PY" >/dev/null 2>&1 || true
 cd "$REPO"
 trainnr-mjlab/.venv/bin/python -c 'import torch, mujoco, warp; print("trainnr_mjlab venv ok, cuda", torch.cuda.is_available())'
