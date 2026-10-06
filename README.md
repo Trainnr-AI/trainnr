@@ -99,9 +99,8 @@ desktop app, shows each stage as it lands.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) (it brings
   Python 3.12 if you don't have it) and git.
 - Disk: the plugin clones this repository (about 216 MB); the server's
-  environment is about 0.6 GB; the Studio is about 72 MB once a release is
-  published, and building it from source takes about 3.5 GB until then
-  ([The Studio](#the-studio)); the first training job downloads the
+  environment is about 0.6 GB; the Studio, downloaded prebuilt, is about
+  72 MB ([The Studio](#the-studio)); the first training job downloads the
   trainer's environment, about 6 GB.
 - Training needs an NVIDIA GPU with CUDA. Everything else runs on a laptop
   CPU.
@@ -214,38 +213,25 @@ The Studio is the desktop app: the embedded Rerun viewer, the MuJoCo
 simulator, and a page for every record in the project. `launch_studio`
 opens it on the current project.
 
-**Prebuilt.** The release workflow builds the Studio for Linux (x86_64),
-macOS (Apple Silicon) and Windows (x86_64), about 72 MB, and the plugin
-downloads the one for your platform. **No release has been published
-yet**, so for now the download fails (`the Studio release … is not
-published yet`) and you build the Studio from source.
-
-**From source.** You need git and [rustup](https://rustup.rs). The
-toolchain is pinned in `crates/trainnr-studio/rust-toolchain.toml` (Rust
-1.97.1 with rustfmt and clippy), and rustup installs it on the first
-`cargo` command in that folder. On macOS, Xcode's command-line tools
-provide the linker. On Linux, install the system libraries CI installs
-(a C compiler and `pkg-config` are assumed):
+**Prebuilt.** Each release builds the Studio for Linux (x86_64), macOS
+(Apple Silicon) and Windows (x86_64), about 72 MB, with its SHA-256 and a
+build attestation. You do not build it: the plugin's first session
+downloads the one for your platform in the background, and
+`launch_studio` downloads it on demand when it is not there yet. From a
+checkout, the same download is one command:
 
 ```sh
-sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-    libxkbcommon-dev libssl-dev libgtk-3-dev libudev-dev
+uv run --directory trainnr trainnr studio --install
 ```
 
-Then build it, about 3.5 GB of disk and 4 to 9 minutes on a cold build
-(the first `cargo` call also installs the pinned toolchain; an Apple
-Silicon laptop took 8.5 minutes in all):
+It installs under your user cache (`~/.cache/trainnr/studio/` on Linux,
+`~/Library/Caches/trainnr/studio/` on macOS), the version that matches the
+package; `TRAINNR_STUDIO_RELEASE` picks another release's.
 
-```sh
-git clone https://github.com/Trainnr-AI/trainnr && cd trainnr/crates/trainnr-studio
-cargo build --release   # → target/release/trainnr-studio
-```
-
-A server running from that checkout finds the binary there. **With the
-plugin**, the server runs from the plugin's own copy of the repository, so
-point it at your build: set
-`TRAINNR_STUDIO=<your clone>/crates/trainnr-studio/target/release/trainnr-studio`
-in the environment you start Claude Code from.
+**From source**, only if you change the Studio: [CONTRIBUTING.md](CONTRIBUTING.md)
+has the toolchain and the build (about 3.5 GB and 4 to 9 minutes). A
+server running from that checkout uses the build; with the plugin, point
+it at your binary with `TRAINNR_STUDIO`.
 
 <details>
 <summary><b>Environment variables</b> you may set</summary>
@@ -313,7 +299,7 @@ steps that use Unitree's DDS stack.
 | The gate on Unitree's simulator over DDS, live capture from Unitree's DDS bus | no | yes | through WSL2 |
 | Training (`train_walk`, mjlab on MuJoCo Warp) and `preview_rewards` | no; rent a GPU (`tools/cloud-gpu.py`) | NVIDIA GPU with CUDA | NVIDIA GPU through WSL2 |
 | Captured scenes (COLMAP, Gaussian splats) | yes, on Metal | yes, CUDA | through WSL2 |
-| The Studio | builds from source; run on an M1 Pro | builds from source | compiles in CI; native Windows untested, WSL2 tested |
+| The Studio | prebuilt, downloaded; run on an M1 Pro | prebuilt, downloaded | prebuilt, downloaded; native Windows untested, WSL2 tested |
 
 On Windows, WSL2 is the tested path; nothing has been run on native
 Windows. `preview_rewards` needs CUDA today. Isaac Sim and Isaac Lab need
@@ -500,7 +486,7 @@ identity is `name@hash` everywhere; nothing is nameable without its hash.
 | You see | What to do |
 |---|---|
 | `no project is selected: create one with create_project … or choose one with use_project` | Ask the agent to create a project, or to use an existing one (`list_projects` lists them). `TRAINNR_PROJECT` names one for a single process. |
-| `the Studio release … is not published yet` (or HTTP 404) when the Studio downloads | No release is published yet: build the Studio from source ([above](#the-studio)); with the plugin, set `TRAINNR_STUDIO` to the binary. |
+| `the Studio release … is not published yet` (or HTTP 404) when the Studio downloads | The package's version has no release yet (a checkout ahead of the last release), or no network: `TRAINNR_STUDIO_RELEASE=v0.1.0` names the last release, or build it ([CONTRIBUTING.md](CONTRIBUTING.md)) and set `TRAINNR_STUDIO` to the binary. |
 | A job failed | `describe_job(job_id)` reports its `error`; the whole log is `~/trainnr/projects/<project>/mcp-jobs/<job>.log`. |
 | ``trainnr mcp needs the `sim` and `mcp` extras`` | Start the server as `uv run --directory trainnr --extra sim --extra mcp trainnr mcp`. |
 | `port 9876 (the viewer server) is held by another process` | Another Studio or a standalone Rerun viewer is running; close it, then launch again. |
