@@ -105,7 +105,10 @@ class TheMcpProjectTools(_Home):
         from trainnr import mcp_server  # noqa: PLC0415
 
         made = mcp_server.create_project_dir("demo", "demo")
-        self.assertEqual(made["root"], str(locate.projects_home() / "demo"))
+        # Places, not spellings: macOS's /var is a link to /private/var.
+        self.assertEqual(
+            Path(made["root"]).resolve(), (locate.projects_home() / "demo").resolve()
+        )
         self.assertEqual(locate.current_project().root.name, "demo")
         listed = mcp_server.list_project_dirs()
         self.assertEqual([(p["name"], p["current"]) for p in listed], [("demo", True)])

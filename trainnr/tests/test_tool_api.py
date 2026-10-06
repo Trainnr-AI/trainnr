@@ -472,7 +472,10 @@ class TheJobTable(unittest.TestCase):
             "ingest_public_log", {"log": "iit-go2-chirp", "accept_unlicensed": True}
         )
         job_id = handle["job_id"]
-        self.assertIn(str(self.home), handle["log"])
+        # Places, not spellings: macOS's /var is a link to /private/var.
+        self.assertTrue(
+            Path(handle["log"]).resolve().is_relative_to(self.home.resolve())
+        )
         status = self.call("describe_job", {"job_id": job_id})
         for _ in range(100):  # the watcher records the stub's exit
             if status["state"] != "running":
@@ -494,7 +497,10 @@ class TheJobTable(unittest.TestCase):
         self.assertNotEqual(handle.get("status"), "refused", handle)
         argv = self.call("describe_job", {"job_id": handle["job_id"]})["argv"]
         log_dir = Path(argv[argv.index("--log-dir") + 1])
-        self.assertEqual(log_dir.parent, self.home / "p" / "demo" / "runs")
+        # Places, not spellings: macOS's /var is a link to /private/var.
+        self.assertEqual(
+            log_dir.parent.resolve(), (self.home / "p" / "demo" / "runs").resolve()
+        )
         self.assertTrue(log_dir.name.startswith("go2-walk-"), log_dir)
         self.assertEqual(handle["experiment"], log_dir.name)
         self.assertIn("evaluate_walk", handle["next"])
