@@ -12,6 +12,7 @@ All notable changes to trainnr. The format follows
 
 ### Changed
 
+- The Studio opens dark on a first launch (`set_studio_theme` and the title-bar switch still choose, and the choice is kept); the README's screenshots follow the reader's GitHub theme, dark and light.
 - The README's Studio section describes the prebuilt download (the plugin's first session, `launch_studio` on demand, `trainnr studio --install`) now that v0.1.0 is published; building from source is CONTRIBUTING's.
 
 ## [0.1.0] - 2026-10-06
