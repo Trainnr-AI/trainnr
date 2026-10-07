@@ -10,7 +10,7 @@ not in this repository.
 
 | Read | What it is | Speaks from |
 |---|---|---|
-| [`../README.md`](../README.md) | What trainnr is, its status and limits, install, the platforms, the eight-step loop, the layout | 2026-10-05 |
+| [`../README.md`](../README.md) | What trainnr is, its status and limits, install (the plugin, or PyPI with no checkout), the prebuilt Studio, the platforms, the eight-step loop, the layout | 2026-10-07 |
 | [76 The loop](76-the-loop.md) | The design of the agent-driven loop: stamped artifacts, the state machine, the MCP tool families, the identify, deploy and drift seams, the Studio as the control surface | designed 2026-09-08, build notes to 2026-09-28 |
 | [77 The Unitree loop](77-the-unitree-loop.md) | A Go2 from asset to sim-to-sim deployment through the tools: gates, attribution, pre-flight, drift, the fit-trained walk | 2026-09-10 to 2026-09-26 |
 | [78 The scene loop](78-the-scene-loop.md) | A captured scene (phone video to splat and collision proxy) as a stamped artifact, and walking the Go2 on it | 2026-09-22 to 2026-09-25 |
