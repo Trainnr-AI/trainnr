@@ -33,7 +33,10 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-<img alt="The Studio's Overview of a Go2 project: the stages of the loop, and the best policy under each test condition with its exact interval" src="docs/figures/readme/studio-overview.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-overview-dark.png">
+  <img alt="The Studio's Overview of a Go2 project: the stages of the loop, and the best policy under each test condition with its exact interval" src="docs/figures/readme/studio-overview-light.png">
+</picture>
 
 trainnr is a platform for **physical AI**: robot learning
 from the robot's own data, end to end. It identifies a robot's dynamics
@@ -326,7 +329,10 @@ parameter carries a 95 % interval and a verdict: pinned when the data
 constrains it, not pinned when it does not. A public log works too, with
 its provenance shown as such.
 
-<img alt="A robot's page in the Studio: the asset, and its system identification table with estimates, 95 % intervals, and pinned or not pinned for each parameter" src="docs/figures/readme/studio-identification.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-identification-dark.png">
+  <img alt="A robot's page in the Studio: the asset, and its system identification table with estimates, 95 % intervals, and pinned or not pinned for each parameter" src="docs/figures/readme/studio-identification-light.png">
+</picture>
 
 `onboard_robot` · `ingest_recording` · `ingest_public_log` · `start_capture` · `identify_system`
 
@@ -338,7 +344,10 @@ on the fitted model with a randomization span that comes from the fit's
 intervals instead of a guess. Demonstrations are generated under recorded
 randomization and kept by the task's success criterion, with a datasheet.
 
-<img alt="An experiment's page: the reward curve, provenance, the trainer's settings and the training table" src="docs/figures/readme/studio-experiment.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-experiment-dark.png">
+  <img alt="An experiment's page: the reward curve, provenance, the trainer's settings and the training table" src="docs/figures/readme/studio-experiment-light.png">
+</picture>
 
 `create_task` · `check_task` · `train_walk` · `generate_walk_demos` · `multiply_demos` · `run_chain`
 
@@ -348,7 +357,10 @@ A clip cannot tell 10 % from 99 %. An evaluation here is paired,
 seed-matched trials with an exact (Clopper-Pearson) confidence interval and
 a funnel of how far each episode got; gates read the lower bound.
 
-<img alt="An evaluation's page: 38 of 40 with its 95 % interval, survived and tracked bars, provenance and the protocol" src="docs/figures/readme/studio-evaluation.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-evaluation-dark.png">
+  <img alt="An evaluation's page: 38 of 40 with its 95 % interval, survived and tracked bars, provenance and the protocol" src="docs/figures/readme/studio-evaluation-light.png">
+</picture>
 
 `evaluate_walk` · `describe_evaluation` · `list_evaluations` · `describe_friction`
 
@@ -363,7 +375,10 @@ policy is. A failed gate is attributed to its cause, latency first.
 Pre-flight checks joint order, gains, ranges, torques and compute before
 the first tick, and measures the stops, in simulation.
 
-<img alt="A deployment's page: provenance, the manifest, and the sim-to-sim gate: 18 of 20 in plain MuJoCo against the 38 of 40 evaluation it cites" src="docs/figures/readme/studio-deployment.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-deployment-dark.png">
+  <img alt="A deployment's page: provenance, the manifest, and the sim-to-sim gate: 18 of 20 in plain MuJoCo against the 38 of 40 evaluation it cites" src="docs/figures/readme/studio-deployment-light.png">
+</picture>
 
 `export_deployment` · `gate_deployment` · `attribute_deployment` · `preflight_deployment` · `stage_deployment`
 
@@ -376,7 +391,10 @@ feet touch, and the gap between the two measured. The image shows the
 public Mip-NeRF 360 "garden" capture run through that pipeline, with an
 exported Go2 policy walking in it.
 
-<img alt="The Studio's simulator: an exported Go2 policy walking in the Mip-NeRF 360 garden scene, with joint, command, force and contact plots" src="docs/figures/readme/studio-simulator-garden.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-simulator-garden-dark.png">
+  <img alt="The Studio's simulator: an exported Go2 policy walking in the Mip-NeRF 360 garden scene, with joint, command, force and contact plots" src="docs/figures/readme/studio-simulator-garden-light.png">
+</picture>
 
 <sub>Scene: Mip-NeRF 360 "garden" (Barron et al., CVPR 2022), reconstructed by trainnr's scene pipeline.</sub>
 
@@ -398,7 +416,10 @@ the commands; a robot walking outdoors, torque from motor current), so
 part of the gap can be the recording rather than the robot. A drift
 check on the fit's own recording is refused: it can only say "within".
 
-<img alt="A drift check's page: a second Go2's field log (DFKI, CC BY 4.0) judged against the fit from the first: 6 parameters out of interval, 5 within, 25 undetermined, and the recommendation to re-identify" src="docs/figures/readme/studio-drift.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figures/readme/studio-drift-dark.png">
+  <img alt="A drift check's page: a second Go2's field log (DFKI, CC BY 4.0) judged against the fit from the first: 6 parameters out of interval, 5 within, 25 undetermined, and the recommendation to re-identify" src="docs/figures/readme/studio-drift-light.png">
+</picture>
 
 `check_drift` · `describe_project` · `list_experiments` · `list_findings`
 

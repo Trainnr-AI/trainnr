@@ -142,7 +142,8 @@ Dark and light, or the system's, from egui's own theme preference: the
 switch sits in the title bar beside the viewer's panel buttons, the
 `set_studio_theme` door sets it, and the choice is stored with the
 window (`trainnr.theme` in eframe's storage) and restored before the
-first frame. Rerun's design tokens serve the embedded viewer in either
+first frame; a first launch opens dark (since 2026-10-07; light was the
+default from 2026-10-03). Rerun's design tokens serve the embedded viewer in either
 theme; the app's own surfaces come from `theme.rs`, one palette per
 theme: dark is the tokens' values, light is designed (a white page,
 warm paper panels, chips one step deeper, hairlines near the surface,

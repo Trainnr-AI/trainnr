@@ -2396,7 +2396,7 @@ THEMES = ("system", "dark", "light")
 
 
 def set_studio_theme(theme: str) -> dict[str, Any] | Refusal:
-    """The Studio's theme: `light` (the default), `dark`, or `system`
+    """The Studio's theme: `dark` (the default), `light`, or `system`
     (follow the desktop). The embedded viewer, the pages and the card
     pictures follow; the choice is kept across launches."""
     from trainnr.project import current_project  # noqa: PLC0415

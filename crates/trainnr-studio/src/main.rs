@@ -216,8 +216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             rerun_app.app_options_mut().custom_window_decorations = chrome::custom_chrome();
 
             // The theme the person chose last time, before the first frame;
-            // light when nothing was chosen (the default since 2026-10-03:
-            // the designed light palette is the product's face, theme.rs).
+            // DEFAULT_THEME when nothing was chosen.
             let chosen = cc
                 .storage
                 .and_then(|s| s.get_string(THEME_KEY))
@@ -1521,8 +1520,10 @@ fn cmd_clone(
 
 /// The storage key of the chosen theme preference.
 const THEME_KEY: &str = "trainnr.theme";
-/// The theme a first launch opens in, before anyone picks one.
-const DEFAULT_THEME: egui::ThemePreference = egui::ThemePreference::Light;
+/// The theme a first launch opens in, before anyone picks one: dark,
+/// the tokens' own palette, since 2026-10-07 (light from 2026-10-03 to
+/// then). A stored choice always wins.
+const DEFAULT_THEME: egui::ThemePreference = egui::ThemePreference::Dark;
 
 /// The heartbeat's word for the theme in effect.
 fn theme_name(theme: egui::Theme) -> &'static str {
