@@ -28,6 +28,7 @@ mod detail;
 mod keys;
 mod listing;
 mod model;
+mod onboarding;
 mod pages;
 mod palette;
 mod pictures;

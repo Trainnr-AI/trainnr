@@ -157,6 +157,21 @@ picks the set of its theme, so a switch is instant. Under WSLg the app
 takes winit's own window path (Wayland) since 2026-10-03; the X11 path
 (`TRAINNR_X11=1`) presents a frame in half a second there (measured 2026-10-03).
 
+### 5.2 Empty pages and the first project (2026-10-09)
+
+A fresh-install review found every empty page one faint sentence in a box
+and a new project's Overview nine grey stage chips and four zeros, with
+nothing to do next. Each page now has a guide (`onboarding.rs`, one per
+section): its icon, a title, one sentence on what the page holds, and the
+words to say to the agent, each in a chip that copies itself on a click.
+An empty project's Overview keeps the pipeline and shows **Start here**
+instead of the zeros: three numbered steps (bring in the robot, give it
+data, fit its dynamics), each with its words. The prompts are sentences a
+person would type, never tool calls; a test holds every rail page to a
+title, a sentence and call-free prompts. Sentences use the text colour,
+not the muted one: muted measured 2.7:1 on a dark card, under the 4.5:1
+body text needs; the guides measure 5.1:1 (dark) and 9.7:1 (light).
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

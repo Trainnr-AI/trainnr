@@ -114,10 +114,11 @@ STATES: tuple[tuple[str, Kind], ...] = (
 
 # What an agent does next when a state is the first missing one.
 NEXT_MOVE: dict[str, str] = {
+    # Short: the Overview shows it under the pipeline, and the formats are
+    # the tools' own descriptions (fresh-install review, 2026-10-09).
     "telemetry recorded": (
-        "record the robot's telemetry (ingest_recording: a .wire file, a LeRobot "
-        "dataset, a ROS 2 bag as .mcap or rosbag2 .db3, a mocap CSV or BVH), or a "
-        "registered public log (ingest_public_log) — or start from its model"
+        "bring in the robot's model (onboard_robot), or its telemetry "
+        "(ingest_recording) or a public log of it (ingest_public_log)"
     ),
     "asset onboarded": "onboard the robot's model as an asset (onboard_robot)",
     "system identified": (
