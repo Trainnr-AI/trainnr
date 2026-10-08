@@ -282,25 +282,6 @@ impl Section {
     pub fn icon_for(kind: &str) -> &'static re_ui::Icon {
         kind_entry(kind).map_or(&icons::ENTITY_EMPTY, |k| k.icon)
     }
-
-    /// The sentence a section shows when it has nothing yet — what the
-    /// agent would do to fill it.
-    pub fn empty_hint(self) -> &'static str {
-        match self {
-            Self::Robots => "No assets yet. Ask your agent to onboard a robot model (MJCF or URDF) or record its telemetry.",
-            Self::Environments => "No environments yet. Ask your agent to define a task and run acceptance, or import a captured scene.",
-            Self::Recordings => "No recordings yet. Record telemetry from a robot, a ROS 2 bag, a LeRobot dataset, or motion capture.",
-            Self::Datasets => "No datasets yet. Ask your agent to generate demonstrations.",
-            Self::Experiments => "No experiments yet. Ask your agent to train a policy on a dataset.",
-            Self::Policies => "No policies yet. A training experiment leaves checkpoints here.",
-            Self::Certificates => "No evaluations yet. Ask your agent to evaluate a policy with paired trials.",
-            Self::Deployments => "No deployments yet. Export a deployment manifest and pass the sim-to-sim check.",
-            Self::Monitoring => "Nothing monitored yet. Record fresh telemetry and check for parameter drift.",
-            Self::Findings => "No findings yet. A finding is a recorded result with its commit, command line and simulator build.",
-            Self::Projects => "No projects yet. Ask your agent to create one.",
-            Self::Overview | Self::Live => "",
-        }
-    }
 }
 
 /// The eight loop states, in the field's words, keyed by the index's
@@ -571,10 +552,11 @@ pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathB
         );
         ui.add_space(20.0);
         if list.is_empty() {
-            card(ui, None).show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                weak_body(ui, Section::Projects.empty_hint());
-            });
+            crate::onboarding::empty_state(
+                ui,
+                Section::Projects.icon(),
+                &Section::Projects.guide(),
+            );
             return;
         }
         let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
@@ -656,10 +638,15 @@ pub fn overview(
         pipeline_strip(ui, index);
         ui.add_space(24.0);
 
-        kpi_row(ui, index, go_to);
-        ui.add_space(24.0);
-
-        best_by_condition(ui, model, index, go_to);
+        // Nothing yet: what to do first, not a row of zeros.
+        if index.artifacts.is_empty() {
+            crate::onboarding::start_here(ui);
+            ui.add_space(24.0);
+        } else {
+            kpi_row(ui, index, go_to);
+            ui.add_space(24.0);
+            best_by_condition(ui, model, index, go_to);
+        }
 
         // What is happening comes before what exists: the agent's moves
         // and its jobs, then the newest artifacts.
@@ -1323,10 +1310,7 @@ pub fn section(
         }
         ui.add_space(16.0);
         if rows.is_empty() {
-            card(ui, None).show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                weak_body(ui, section.empty_hint());
-            });
+            crate::onboarding::empty_state(ui, section.icon(), &section.guide());
             return;
         }
         // A page with one artifact is that artifact: its drawer opens on
