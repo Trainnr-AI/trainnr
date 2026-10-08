@@ -102,11 +102,14 @@ desktop app, shows each stage as it lands.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) (it brings
   Python 3.12 if you don't have it) and git.
 - Disk: the plugin clones this repository (about 216 MB); the server's
-  environment is about 0.6 GB; the Studio, downloaded prebuilt, is about
-  72 MB ([The Studio](#the-studio)); the first training job downloads the
-  trainer's environment, about 6 GB.
-- Training needs an NVIDIA GPU with CUDA. Everything else runs on a laptop
-  CPU.
+  environment is about 1 GB; the Studio is a 72 MB download, about 200 MB
+  unpacked ([The Studio](#the-studio)); the trainer's environment, built
+  by the first `check_task` or training job, is about 1.8 GB on a Mac and
+  6 GB on Linux with CUDA. Both environments live in the plugin's folder,
+  so a new plugin version builds them again.
+- A full training run needs an NVIDIA GPU with CUDA, or a rented one
+  (`tools/cloud-gpu.py`). A smoke run and `check_task` run on a laptop
+  CPU, as does everything else.
 
 Install the plugin. It brings the MCP server (75 tools), seven agents and
 two skills. In a terminal:
@@ -295,11 +298,34 @@ the first training job, or ahead of it with
 
 </details>
 
+### Uninstall or reset
+
+```sh
+claude plugin uninstall trainnr@trainnr
+claude plugin marketplace remove trainnr
+```
+
+Then restart Claude Code: until then, the MCP server it started keeps
+running from the removed folder, and can write to `~/trainnr` again. What
+stays, so a reinstall finds your work:
+
+| What | Where |
+|---|---|
+| Your projects and their download caches | `~/trainnr` (`TRAINNR_HOME`) |
+| The Studio | `~/.cache/trainnr/studio` (Linux), `~/Library/Caches/trainnr/studio` (macOS), `%LOCALAPPDATA%\trainnr\studio` (Windows) |
+| Unitree's reference checkout and scene assets | `~/.cache/trainnr/` |
+| The plugin's copy and its two environments, if Claude Code kept them | `~/.claude/plugins/cache/trainnr/` |
+| uv's package cache | `uv cache dir` prints it |
+
+For a clean machine, delete them; move `~/trainnr` aside instead to keep
+your projects.
+
 ## Platforms
 
 trainnr's simulator is MuJoCo, which runs natively on Apple Silicon, so
-most of the loop runs on a Mac. Training does not, and neither do the two
-steps that use Unitree's DDS stack.
+most of the loop runs on a Mac, a smoke run of training included. A full
+training run does not, and neither do the two steps that use Unitree's
+DDS stack.
 
 | | macOS (Apple Silicon) | Linux (x86_64) | Windows (x86_64) |
 |---|---|---|---|
@@ -307,7 +333,7 @@ steps that use Unitree's DDS stack.
 | Evaluation of a trained walk | yes, on the CPU (slow) | yes, CUDA or CPU | through WSL2 |
 | The sim-to-sim gate on plain MuJoCo | yes | yes | through WSL2 |
 | The gate on Unitree's simulator over DDS, live capture from Unitree's DDS bus | no | yes | through WSL2 |
-| Training (`train_walk`, mjlab on MuJoCo Warp) and `preview_rewards` | no; rent a GPU (`tools/cloud-gpu.py`) | NVIDIA GPU with CUDA | NVIDIA GPU through WSL2 |
+| Training (`train_walk`, mjlab on MuJoCo Warp) and `preview_rewards` | the smoke recipe and `check_task`, on the CPU (20 iterations in 70 s on Apple Silicon, 2026-10-08); a full run: rent a GPU (`tools/cloud-gpu.py`) | NVIDIA GPU with CUDA | NVIDIA GPU through WSL2 |
 | Captured scenes (COLMAP, Gaussian splats) | yes, on Metal | yes, CUDA | through WSL2 |
 | The Studio | prebuilt, downloaded; run on an M1 Pro | prebuilt, downloaded | prebuilt, downloaded; native Windows untested, WSL2 tested |
 
