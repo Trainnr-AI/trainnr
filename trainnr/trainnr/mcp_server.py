@@ -518,13 +518,13 @@ def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each r
             **handle,
             "status": "started",
             "experiment": None,
-            "next": "describe_job(job_id, wait_s=300); a smoke saves nothing",
+            "next": "describe_job(job_id, wait_s=60); a smoke saves nothing",
         }
     return {
         **handle,
         "status": "started",
         "experiment": name,
-        "next": f"describe_job(job_id, wait_s=300), then "
+        "next": f"describe_job(job_id, wait_s=60) until done, then "
         f"evaluate_walk(checkpoint={name!r})",
     }
 
@@ -3754,8 +3754,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "trainer needs."
     )(onboard_robot)
     server.tool(
-        description="A job's state and log tail; `wait_s` (up to 300) waits for "
-        "a running job to end first"
+        description="A job's state and log tail; `wait_s` (up to 300; 60 under "
+        "Claude Code, which backgrounds a call past 120 s) waits for a running "
+        "job to end first"
     )(actions.describe_job)
     server.tool(
         description="Stop a running job and every process it started; refused "

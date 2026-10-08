@@ -85,6 +85,8 @@ VIEWPORT_WALK = "walk"
 # (`status`) before anything else. A refusal names the reason; a handle
 # names the job to poll; `done` carries the door's own fields beside it.
 REFUSED = "refused"
+# The variable an activated venv sets, which a job must not inherit.
+VIRTUAL_ENV = "VIRTUAL_ENV"
 DONE = "done"
 
 
@@ -290,6 +292,10 @@ def _spawn(argv: Sequence[str], cwd: Path, log_path: Path) -> subprocess.Popen:
     # The child adopts this job in `track()`: its stages land in the
     # door's own record (the job id is the log's stem).
     env = {**os.environ, JOB_ID_ENV: log_path.stem, JOBS_DIR_ENV: str(log_path.parent)}
+    # The server's own venv is not the job's: `uv run --project <other>`
+    # warned about it at the top of every job log (fresh-install audit,
+    # 2026-10-08), and uv picks the project's environment anyway.
+    env.pop(VIRTUAL_ENV, None)
     from trainnr.project.locate import PROJECT_ENV, session_project  # noqa: PLC0415
 
     session = session_project()

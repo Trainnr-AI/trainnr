@@ -76,7 +76,11 @@ class WalkTask:
 
     @property
     def stamp(self) -> str:
-        return content_stamp(self.name, asdict(self.task_spec))
+        # The robot is part of the content: with the spec's knobs alone,
+        # go1-walk and go2-walk at their defaults shared one hash
+        # (fresh-install audit, 2026-10-08). A task already declared
+        # keeps the stamp its task.json recorded.
+        return content_stamp(self.name, {"robot": self.robot, **asdict(self.task_spec)})
 
 
 def _walk(name: str, robot: str, spec: WalkSpec, *, bundle: str | None) -> WalkTask:
