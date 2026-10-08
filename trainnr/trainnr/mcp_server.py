@@ -2152,13 +2152,23 @@ def describe_studio() -> dict[str, Any]:
     """What the Studio shows right now — project, page, selected artifact,
     the viewer's recording and time cursor, whether the presenter runs —
     with `alive` (a fresh heartbeat from a live pid) and the presenter's
-    last status. Read from `<project>/.index/studio-state.json`."""
+    last status. Read from `<project>/.index/studio-state.json`. Before
+    any project exists it says so and what to do, rather than failing
+    (fresh-install audit, 2026-10-08)."""
     import json  # noqa: PLC0415
 
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import state  # noqa: PLC0415
 
-    project = current_project()
+    try:
+        project = current_project()
+    except FileNotFoundError:
+        return {
+            "alive": False,
+            "project": None,
+            "next": "create_project(name) makes the first project; "
+            "launch_studio() then opens the Studio on it",
+        }
     out = state(project)
     from trainnr.project.control import present_status_path  # noqa: PLC0415
 
@@ -3244,6 +3254,8 @@ def create_project_dir(
         "root": str(project.root),
         "name": project.name,
         "current": True,
+        "next": "launch_studio() shows it in the Studio; onboard_robot brings "
+        "a robot in",
     }
 
 

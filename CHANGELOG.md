@@ -13,6 +13,7 @@ All notable changes to trainnr. The format follows
 ### Changed
 
 - The README says what a Mac trains: the smoke recipe and `check_task` run on the CPU; a full run needs a GPU. Its disk figures are the ones measured on a fresh install (the server's environment about 1 GB, the Studio about 200 MB unpacked, the trainer's environment 1.8 GB on a Mac and 6 GB on Linux with CUDA, built by the first `check_task`), and a new section says how to uninstall or reset and what stays. The Studio's Compute card no longer names `TRAINNR_ENDPOINT`, which no tool reads.
+- The first session after the install says what to say first (the plugin's session hook, once); `describe_studio` before any project answers with the next step instead of failing; `create_project`'s reply names `launch_studio` as the next step; `onboard_robot` refusing a missing file inside Unitree's repository gives the `git clone` that fetches it.
 - The Studio opens dark on a first launch (`set_studio_theme` and the title-bar switch still choose, and the choice is kept); the README's screenshots follow the reader's GitHub theme, dark and light.
 - The README's Studio section describes the prebuilt download (the plugin's first session, `launch_studio` on demand, `trainnr studio --install`) now that v0.1.0 is published; building from source is CONTRIBUTING's.
 

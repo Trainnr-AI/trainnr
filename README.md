@@ -121,9 +121,11 @@ claude plugin install trainnr@trainnr
 
 or, inside a Claude Code session, `/plugin marketplace add Trainnr-AI/trainnr`
 then `/plugin install trainnr@trainnr`. The next Claude Code session
-prepares the server's environment in the background and tries to download
-the Studio (`TRAINNR_NO_PREFETCH=1` turns that off). Projects live in
-`~/trainnr/projects`, and the tools act only inside the open project.
+prepares the server's environment and downloads the Studio in the
+background (`TRAINNR_NO_PREFETCH=1` turns that off); the Studio opens when
+you ask for it ("open the Studio", `launch_studio`), once a project exists.
+Projects live in `~/trainnr/projects`, and the tools act only inside the
+open project.
 
 Fetch the robot model the example uses, Unitree's own Go2:
 
