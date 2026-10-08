@@ -31,11 +31,6 @@ use crate::widgets::{
     CARD_RADIUS, THUMBNAIL_ASPECT,
 };
 
-/// The environment variable the cloud tools read for a control plane
-/// (`trainnr.cloud`): the Compute card reports whether it is set,
-/// and never whether the endpoint answers — the Studio does not ask it.
-const CLOUD_ENDPOINT_ENV: &str = "TRAINNR_ENDPOINT";
-
 /// The artifact kinds the index writes (`trainnr/project/kinds.py`,
 /// `Kind`), as the Studio spells them once.
 pub mod kind {
@@ -1186,20 +1181,15 @@ fn event_words(event: &Event) -> String {
     }
 }
 
-/// The cloud line of the Compute card: the endpoint this window's
-/// environment names, or that none is named. Whether it answers is not
-/// known here, and not claimed.
+/// The cloud line of the Compute card. It named a TRAINNR_ENDPOINT that
+/// no tool reads (fresh-install audit, 2026-10-08); jobs run on this
+/// machine, and a full training run rents a GPU through the cloud tool.
 fn cloud_line() -> String {
-    match std::env::var(CLOUD_ENDPOINT_ENV) {
-        Ok(url) if !url.trim().is_empty() => {
-            format!(
-                "Cloud: {} (from {CLOUD_ENDPOINT_ENV}; reachability {UNRECORDED} here)",
-                url.trim()
-            )
-        }
-        _ => format!("Cloud: {CLOUD_ENDPOINT_ENV} is not set; jobs run on this machine."),
-    }
+    format!("Jobs run on this machine. A full training run can rent a GPU: {CLOUD_TOOL}.")
 }
+
+/// The tool that rents a GPU for a full training run (README, Platforms).
+const CLOUD_TOOL: &str = "tools/cloud-gpu.py";
 
 /// Where work runs: local by default; a rented machine when the cloud
 /// tools are configured. Honest about what it does not know.
