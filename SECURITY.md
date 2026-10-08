@@ -79,7 +79,7 @@ What trainnr sends or receives, and when:
 | The first use of a robot whose bundle has a `FETCH.json` (today the microduck; off with `TRAINNR_NO_ROBOT_FETCH=1`) | The files it names from their publisher's GitHub repository at a pinned commit, each checked against its git blob id: the microduck's 38 meshes, about 22 MB, from `pollen-robotics/microduck_rl`. `python -m trainnr.bundles.fetch robots/microduck` fetches them ahead |
 | `ingest_public_log` | The named public dataset from its publisher (GitHub, Zenodo) |
 | `evaluate_walk(student=…)` naming a Hugging Face repository | That model from the Hugging Face Hub |
-| `open_sample` (the Studio's samples) the first time a sample is opened | The sample's archive from the Hugging Face dataset `trainnr/trainnr-artifacts` at a pinned commit (the Go2 walk: 12 MB), its size and SHA-256 checked before it is unpacked; unpacked with the standard library's `data` filter, into the projects home only |
+| `open_sample`, `trainnr sample open` or the Studio's Open button, the first time a sample is opened | The sample's archive from the Hugging Face dataset `trainnr/trainnr-artifacts` at a pinned commit (the Go2 walk: 12 MB), its size and SHA-256 checked before it is unpacked; unpacked with the standard library's `data` filter, into the projects home only |
 | `tools/cloud-gpu.py` and the cloud tools | The RunPod API, with the user's key |
 
 What listens:

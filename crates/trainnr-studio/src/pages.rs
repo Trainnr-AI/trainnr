@@ -24,7 +24,7 @@ use crate::control::{
 };
 use crate::model::{
     ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
-    summary_line, Artifact, Index, Job, Model, BASIS_OWN, UNRECORDED,
+    summary_line, Artifact, Index, Job, Model, ProjectSummary, BASIS_OWN, UNRECORDED,
 };
 use crate::widgets::{
     card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_INNER_MARGIN,
@@ -286,7 +286,7 @@ impl Section {
 
 /// The eight loop states, in the field's words, keyed by the index's
 /// state names (`trainnr/project/index.py::STATES`).
-fn stage_label(name: &str) -> &str {
+pub fn stage_label(name: &str) -> &str {
     match name {
         "telemetry recorded" => "Telemetry",
         "asset onboarded" => "Asset",
@@ -367,7 +367,7 @@ pub fn heading(ui: &mut egui::Ui, title: &str) {
     );
 }
 
-fn subheading(ui: &mut egui::Ui, title: &str) {
+pub fn subheading(ui: &mut egui::Ui, title: &str) {
     ui.label(
         egui::RichText::new(title)
             .text_style(DesignTokens::welcome_screen_example_title())
@@ -531,14 +531,19 @@ pub fn problem_page(ui: &mut egui::Ui, problem: &str) {
 // Projects
 
 /// Every project under `projects/` as a picture card: its first artifact's
-/// picture, its name, its stage progress and artifact count. Returns a
-/// project root to switch to when one is clicked.
-pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathBuf> {
+/// picture, its name, its stage progress and artifact count; then the
+/// sample projects. Returns what was clicked: a project root to switch
+/// to, or a sample to open.
+pub fn projects(
+    ui: &mut egui::Ui,
+    model: &mut Model,
+    samples: &crate::onboarding::SampleState,
+) -> Option<crate::onboarding::Pick> {
     // The page is visited, not polled: a walk when it opens (throttled
     // inside), then the cached list.
     model.refresh_projects();
     let list = model.projects();
-    let mut switch_to = None;
+    let mut picked = None;
     page(ui, |ui| {
         ui.horizontal(|ui| {
             heading(ui, "Projects");
@@ -557,54 +562,81 @@ pub fn projects(ui: &mut egui::Ui, model: &mut Model) -> Option<std::path::PathB
                 Section::Projects.icon(),
                 &Section::Projects.guide(),
             );
-            return;
+        } else {
+            picked =
+                project_grid(ui, list, &model.project_root).map(crate::onboarding::Pick::Project);
         }
-        let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
-        egui::Grid::new("projects_grid")
-            .spacing(egui::vec2(GRID_GAP, GRID_GAP))
-            .min_col_width(width)
-            .max_col_width(width)
-            .show(ui, |ui| {
-                for (i, project) in list.iter().enumerate() {
-                    let current = project.root == model.project_root;
-                    let facts = if project.stages > 0 {
-                        format!(
-                            "{} of {} stages · {} artifacts",
-                            project.stages_proved, project.stages, project.artifacts
-                        )
-                    } else {
-                        "not indexed yet".to_owned()
-                    };
-                    let footer = (!project.indexed.is_empty())
-                        .then(|| format!("updated {}", short_time(&project.indexed)));
-                    let response = picture_card(
-                        ui,
-                        width,
-                        if ui.visuals().dark_mode {
-                            project.preview.as_deref()
-                        } else {
-                            project
-                                .preview_light
-                                .as_deref()
-                                .or(project.preview.as_deref())
-                        },
-                        Section::Projects.icon(),
-                        CardText {
-                            title: &project.name,
-                            facts: &facts,
-                            footer,
-                        },
-                        current,
-                    );
-                    if response.clicked() && !current {
-                        switch_to = Some(project.root.clone());
-                    }
-                    if (i + 1) % columns == 0 {
-                        ui.end_row();
-                    }
-                }
-            });
+        ui.add_space(28.0);
+        subheading(ui, "Samples");
+        ui.add_space(2.0);
+        weak_body(
+            ui,
+            "Finished projects to explore before your own: open one and every page has \
+             something on it.",
+        );
+        ui.add_space(12.0);
+        for sample in crate::onboarding::SAMPLES {
+            if crate::onboarding::sample_card(ui, sample, samples, list, &model.project_root) {
+                picked = Some(crate::onboarding::Pick::Sample(sample.name));
+            }
+        }
     });
+    picked
+}
+
+/// The projects as a grid of picture cards, the open one marked; the
+/// root of the one clicked, when it is another.
+pub fn project_grid(
+    ui: &mut egui::Ui,
+    list: &[ProjectSummary],
+    open: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let mut switch_to = None;
+    let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
+    egui::Grid::new("projects_grid")
+        .spacing(egui::vec2(GRID_GAP, GRID_GAP))
+        .min_col_width(width)
+        .max_col_width(width)
+        .show(ui, |ui| {
+            for (i, project) in list.iter().enumerate() {
+                let current = project.root == open;
+                let facts = if project.stages > 0 {
+                    format!(
+                        "{} of {} stages · {} artifacts",
+                        project.stages_proved, project.stages, project.artifacts
+                    )
+                } else {
+                    "not indexed yet".to_owned()
+                };
+                let footer = (!project.indexed.is_empty())
+                    .then(|| format!("updated {}", short_time(&project.indexed)));
+                let response = picture_card(
+                    ui,
+                    width,
+                    if ui.visuals().dark_mode {
+                        project.preview.as_deref()
+                    } else {
+                        project
+                            .preview_light
+                            .as_deref()
+                            .or(project.preview.as_deref())
+                    },
+                    Section::Projects.icon(),
+                    CardText {
+                        title: &project.name,
+                        facts: &facts,
+                        footer,
+                    },
+                    current,
+                );
+                if response.clicked() && !current {
+                    switch_to = Some(project.root.clone());
+                }
+                if (i + 1) % columns == 0 {
+                    ui.end_row();
+                }
+            }
+        });
     switch_to
 }
 

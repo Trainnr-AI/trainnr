@@ -141,6 +141,21 @@ def install(name: str, home: Path) -> Path:
     return target
 
 
+def open_sample(name: str, home: Path | None = None) -> Path:
+    """Install the sample (`install`), make it the current project and
+    index it: what `open_sample`, `trainnr sample open` and the Studio's
+    Open button do. The Studio on its Welcome page follows `.current`
+    to it."""
+    from trainnr.project import index_project, write_index  # noqa: PLC0415
+    from trainnr.project import use_project as choose  # noqa: PLC0415
+    from trainnr.project.locate import projects_home  # noqa: PLC0415
+
+    root = install(name, home or projects_home())
+    project = choose(str(root))
+    write_index(project, index_project(project))
+    return project.root
+
+
 def describe(home: Path) -> list[dict[str, Any]]:
     """Every sample, with where it is installed (None until opened)."""
     rows = []

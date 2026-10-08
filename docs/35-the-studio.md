@@ -172,6 +172,28 @@ title, a sentence and call-free prompts. Sentences use the text colour,
 not the muted one: muted measured 2.7:1 on a dark card, under the 4.5:1
 body text needs; the guides measure 5.1:1 (dark) and 9.7:1 (light).
 
+### 5.3 The Welcome page and the samples (2026-10-09)
+
+A new user's first screen was a finished Go2 walk from the author's own
+projects, or the checkout's empty `sample`, a project they never made.
+With no project the Studio now opens on a **Welcome page** at the
+projects home: no rail, the title bar reads Welcome, and three things to
+do. **Start your own** gives the words for the agent ("Create a project
+called my-robot") and where projects live; **Explore a sample** offers
+the Go2 walk with an Open button; **What a project goes through** numbers
+the loop's nine stages, each saying on hover what its page holds. Your
+projects follow as cards when there are any. The window follows the
+projects home's `.current`, so the project the agent makes or opens
+replaces the Welcome page by itself, within a second.
+
+Open runs `trainnr sample open go2-walk` (`spawn::trainnr_command`, the
+pipeline's environment): the download, the size and SHA-256 checks and
+the unpacking are the Python side's (`trainnr/samples.py`); the Studio
+switches to the folder it prints, or shows its last line when it fails.
+The Projects page lists the samples under its projects, the open one
+marked as open. The Studio's copies of the sample list and the loop's
+stages are pinned to the Python originals by `tests/test_studio_mirrors.py`.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

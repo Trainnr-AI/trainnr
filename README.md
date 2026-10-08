@@ -123,7 +123,9 @@ or, inside a Claude Code session, `/plugin marketplace add Trainnr-AI/trainnr`
 then `/plugin install trainnr@trainnr`. The next Claude Code session
 prepares the server's environment and downloads the Studio in the
 background (`TRAINNR_NO_PREFETCH=1` turns that off); the Studio opens when
-you ask for it ("open the Studio", `launch_studio`), once a project exists.
+you ask for it ("open the Studio", `launch_studio`). Before any project
+exists it opens on a Welcome page: start your own project, or open the
+sample.
 Projects live in `~/trainnr/projects`, and the tools act only inside the
 open project.
 

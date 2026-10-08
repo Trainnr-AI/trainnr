@@ -7,19 +7,22 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import tarfile
 import tempfile
 import unittest
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from trainnr import samples
+from trainnr import cli, samples
+from trainnr.project import locate
 
 
 def _archive(folder: str, extra: dict[str, bytes] | None = None) -> bytes:
     """A tar.gz holding `<folder>/project.json` and any extra members."""
-    members = {f"{folder}/project.json": json.dumps({"name": folder}).encode()}
+    manifest = {"schema": "trainnr-project/1", "name": folder, "created": ""}
+    members = {f"{folder}/project.json": json.dumps(manifest).encode()}
     members.update(extra or {})
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
@@ -109,6 +112,49 @@ class OpeningASample(unittest.TestCase):
     def test_an_unknown_name_is_refused_by_name(self) -> None:
         with self.assertRaisesRegex(KeyError, "no sample 'nope'"):
             samples.resolve("nope")
+
+
+class TheStudiosOpenButton(unittest.TestCase):
+    """`trainnr sample open` is what the Studio's Open runs: it prints the
+    folder (the Studio switches to it) and makes it current (a Studio on
+    its Welcome page follows that), or names why on its last line."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name) / "projects"
+        env = mock.patch.dict(os.environ, {"TRAINNR_PROJECTS": str(self.home)})
+        env.start()
+        self.addCleanup(env.stop)
+        session = mock.patch.object(locate, "_session_root", None)
+        session.start()
+        self.addCleanup(session.stop)
+
+    def test_it_prints_the_folder_and_makes_it_current(self) -> None:
+        out = io.StringIO()
+        with _served(_archive("demo-sample")), redirect_stdout(out):
+            self.assertEqual(cli.main(["sample", "open", "demo"]), 0)
+        root = self.home / "demo-sample"
+        self.assertEqual(out.getvalue().strip(), str(root))
+        self.assertEqual(locate.remembered_project(), root)
+        self.assertTrue((root / ".index" / "project.json").is_file())
+
+    def test_a_failure_is_one_line_naming_why(self) -> None:
+        err = io.StringIO()
+        with redirect_stderr(err):
+            self.assertEqual(cli.main(["sample", "open", "nope"]), 1)
+        self.assertEqual(
+            err.getvalue().strip(),
+            "trainnr sample open: no sample 'nope'; the samples are ['go2-walk']",
+        )
+
+    def test_list_names_each_sample_and_where_it_is(self) -> None:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(cli.main(["sample", "list"]), 0)
+        rows = json.loads(out.getvalue())
+        self.assertEqual([r["name"] for r in rows], sorted(samples.SAMPLES))
+        self.assertIsNone(rows[0]["installed"])
 
 
 if __name__ == "__main__":

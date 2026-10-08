@@ -22,6 +22,8 @@ pub const WALK_PACKAGE_DIR: &str = "trainnr-mjlab";
 pub const TOOLS_DIR: &str = "tools";
 pub const PRESENTER_SCRIPT: &str = "studio-present.py";
 pub const RENDER_STREAM_SCRIPT: &str = "studio-render-stream.py";
+/// The `trainnr` command's module (`trainnr/pyproject.toml`'s script).
+pub const TRAINNR_CLI_MODULE: &str = "trainnr.cli";
 /// The pipeline extras a Studio subprocess needs: MuJoCo (`sim`) and
 /// the Rerun SDK (`viz`, so a script can narrate into this window).
 // `deploy`: onnxruntime, for a deployment's policy in the viewport.
@@ -99,7 +101,23 @@ fn is_repo_root(path: &Path) -> bool {
 /// the python grandchild with the `uv` wrapper. The caller adds the
 /// script's arguments and the stdio it wants.
 pub fn pipeline_command(script: &str) -> Command {
-    let root = repo_root();
+    let mut command = pipeline_python();
+    command.arg(repo_root().join(TOOLS_DIR).join(script));
+    command
+}
+
+/// The `trainnr` command (`python -m trainnr.cli`) in the pipeline's
+/// environment: what the Welcome page's Open runs (`trainnr sample open`).
+/// The caller adds the subcommand.
+pub fn trainnr_command() -> Command {
+    let mut command = pipeline_python();
+    command.args(["-m", TRAINNR_CLI_MODULE]);
+    command
+}
+
+/// `uv run --extra … python` from the pipeline directory, in its own
+/// process group, with the simulator's environment.
+fn pipeline_python() -> Command {
     let mut command = Command::new("uv");
     command.arg("run");
     for extra in PIPELINE_EXTRAS {
@@ -107,8 +125,7 @@ pub fn pipeline_command(script: &str) -> Command {
     }
     command
         .arg("python")
-        .arg(root.join(TOOLS_DIR).join(script))
-        .current_dir(root.join(PIPELINE_DIR));
+        .current_dir(repo_root().join(PIPELINE_DIR));
     own_process_group(&mut command);
     mujoco_environment(&mut command);
     command

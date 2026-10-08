@@ -4,13 +4,20 @@
 //! itself. A fresh-install review (2026-10-09) found every empty page a
 //! single faint sentence, and the first project's Overview nine grey chips
 //! and four zeros with nothing to do next.
+//!
+//! And the Welcome page, the window before any project exists: start your
+//! own project through the agent, or open a finished sample, or one of
+//! your projects. A new user's first screen was a finished Go2 walk, or
+//! the checkout's empty sample, until 2026-10-09.
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use re_ui::{icons, DesignTokens, Icon};
 
+use crate::model::ProjectSummary;
 use crate::pages::Section;
-use crate::widgets::{card, icon_at};
+use crate::widgets::{card, icon_at, tag};
 
 // Sentences use the text colour, never the muted one: muted measured
 // 2.7:1 on a dark card, under the 4.5:1 body text needs (2026-10-09).
@@ -334,6 +341,347 @@ fn step_number(ui: &mut egui::Ui, n: usize) {
         egui::FontId::proportional(13.0),
         palette.text,
     );
+}
+
+/// A sample project, as the Welcome and Projects pages offer it: mirrored
+/// from `trainnr/samples.py::SAMPLES` (pinned by
+/// `tests/test_studio_mirrors.py`); the download and its checks are the
+/// Python side's (`trainnr sample open`).
+pub struct SampleCard {
+    pub name: &'static str,
+    pub title: &'static str,
+    pub summary: &'static str,
+    /// The folder it unpacks to in the projects home.
+    pub project: &'static str,
+    pub bytes: u64,
+}
+
+pub const SAMPLES: &[SampleCard] = &[SampleCard {
+    name: "go2-walk",
+    title: "Go2 walk",
+    summary: "A Unitree Go2 through the whole loop: identified from a public log, a walk declared and accepted, trained by reinforcement, evaluated in seven conditions, exported and gated against Unitree's own runtime in simulation, and checked for drift.",
+    project: "go2-walk-sample",
+    bytes: 11_973_917,
+}];
+
+/// Where opening a sample stands: the one being opened, or the last
+/// failure (the sample's name and why).
+#[derive(Default)]
+pub struct SampleState {
+    pub opening: Option<&'static str>,
+    pub failed: Option<(&'static str, String)>,
+}
+
+/// What a click on the Welcome or Projects page asks for.
+pub enum Pick {
+    Project(PathBuf),
+    Sample(&'static str),
+}
+
+/// The Welcome page's widest pair of cards side by side; narrower, one
+/// above the other.
+const WELCOME_TWO_UP: f32 = 760.0;
+/// Room around an Open button's words.
+const BUTTON_PADDING: egui::Vec2 = egui::vec2(16.0, 8.0);
+/// The two cards' height, so they read as a pair.
+const WELCOME_CARD_HEIGHT: f32 = 270.0;
+/// The loop's stages in order, by the index's names
+/// (`trainnr/project/index.py::STATES`, pinned by
+/// `tests/test_studio_mirrors.py`), with the page each one fills.
+pub const LOOP_STATES: [(&str, Section); 9] = [
+    ("telemetry recorded", Section::Recordings),
+    ("asset onboarded", Section::Robots),
+    ("system identified", Section::Robots),
+    ("environment defined", Section::Environments),
+    ("data generated", Section::Datasets),
+    ("policy trained", Section::Policies),
+    ("policy evaluated", Section::Certificates),
+    ("deployment exported", Section::Deployments),
+    ("drift monitored", Section::Monitoring),
+];
+/// What a user says to start their own project.
+const START_PROMPT: &str = "Create a project called my-robot";
+
+/// The window before any project exists: what trainnr is, start your own
+/// project, or explore a sample; then the projects already there.
+pub fn welcome(
+    ui: &mut egui::Ui,
+    projects: &[ProjectSummary],
+    samples: &SampleState,
+    home: Option<&Path>,
+) -> Option<Pick> {
+    let palette = crate::theme::palette(ui);
+    let mut picked = None;
+    crate::pages::page(ui, |ui| {
+        ui.add_space(16.0);
+        ui.label(
+            egui::RichText::new("Welcome to trainnr")
+                .text_style(DesignTokens::welcome_screen_h1())
+                .strong()
+                .color(ui.visuals().strong_text_color()),
+        );
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new(
+                "The end-to-end robotics platform, run from your coding agent: \
+                 real-to-sim, train, sim-to-real, and back.",
+            )
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(palette.text),
+        );
+        ui.add_space(28.0);
+        let start = |ui: &mut egui::Ui| start_your_own(ui, home);
+        let mut explore = |ui: &mut egui::Ui| {
+            if explore_a_sample(ui, samples, projects) {
+                picked = Some(Pick::Sample(SAMPLES[0].name));
+            }
+        };
+        if ui.available_width() >= WELCOME_TWO_UP {
+            ui.columns(2, |cols| {
+                start(&mut cols[0]);
+                explore(&mut cols[1]);
+            });
+        } else {
+            start(ui);
+            ui.add_space(16.0);
+            explore(ui);
+        }
+        ui.add_space(16.0);
+        the_loop(ui);
+        if !projects.is_empty() {
+            ui.add_space(32.0);
+            crate::pages::subheading(ui, "Your projects");
+            ui.add_space(12.0);
+            if let Some(root) = crate::pages::project_grid(ui, projects, Path::new("")) {
+                picked = Some(Pick::Project(root));
+            }
+        }
+    });
+    picked
+}
+
+/// What every project goes through: the loop's stages, numbered, each
+/// saying on hover what its page holds.
+fn the_loop(ui: &mut egui::Ui) {
+    let palette = crate::theme::palette(ui);
+    card(ui, None).show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        crate::pages::subheading(ui, "What a project goes through");
+        ui.add_space(2.0);
+        ui.label(
+            egui::RichText::new(
+                "Each stage lights up on the project's Overview as its result lands. \
+                 A walk trained by reinforcement needs no dataset.",
+            )
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(palette.text),
+        );
+        ui.add_space(12.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 10.0);
+            for (number, (state, section)) in LOOP_STATES.iter().enumerate() {
+                if number > 0 {
+                    ui.label(egui::RichText::new("›").color(palette.muted));
+                }
+                ui.horizontal(|ui| {
+                    step_number(ui, number + 1);
+                    ui.label(
+                        egui::RichText::new(crate::pages::stage_label(state))
+                            .text_style(DesignTokens::welcome_screen_body())
+                            .color(palette.text),
+                    );
+                })
+                .response
+                .on_hover_text(section.guide().body);
+            }
+        });
+    });
+}
+
+/// The left card: a project of one's own, through the agent.
+fn start_your_own(ui: &mut egui::Ui, home: Option<&Path>) {
+    let palette = crate::theme::palette(ui);
+    welcome_card(ui, Section::Robots.icon(), "Start your own", |ui| {
+        ui.label(
+            egui::RichText::new(
+                "A project holds one robot effort: its model, its data, and \
+                 everything trained from them. Your agent makes it, and this \
+                 window opens it the moment it exists.",
+            )
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(palette.text),
+        );
+        ui.add_space(16.0);
+        ask_your_agent(ui, &[START_PROMPT]);
+        if let Some(home) = home {
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(format!(
+                    "Projects live in {}.",
+                    crate::widgets::home_relative(&home.display().to_string())
+                ))
+                .color(palette.text),
+            );
+        }
+    });
+}
+
+/// The right card: the first sample, with its Open button.
+fn explore_a_sample(ui: &mut egui::Ui, samples: &SampleState, projects: &[ProjectSummary]) -> bool {
+    let mut clicked = false;
+    welcome_card(ui, &icons::PLAY, "Explore a sample", |ui| {
+        clicked = sample_body(ui, &SAMPLES[0], samples, projects);
+    });
+    clicked
+}
+
+/// A Welcome card: an icon, a title, and what goes under them, at the
+/// pair's height.
+fn welcome_card(ui: &mut egui::Ui, icon: &Icon, title: &str, add: impl FnOnce(&mut egui::Ui)) {
+    let palette = crate::theme::palette(ui);
+    card(ui, None).show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.set_min_height(WELCOME_CARD_HEIGHT);
+        // Left-aligned and unjustified: `ui.columns` justifies, which
+        // spread a wrapped line's words and stretched the button.
+        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+            ui.horizontal(|ui| {
+                icon_at(ui, icon, 22.0, palette.muted);
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(title)
+                        .text_style(DesignTokens::welcome_screen_h2())
+                        .strong()
+                        .color(ui.visuals().strong_text_color()),
+                );
+            });
+            ui.add_space(10.0);
+            add(ui);
+        });
+    });
+}
+
+/// A sample on the Projects page: a card with its title, what it shows
+/// and its Open button, or a word that it is the project open now.
+/// Whether Open was clicked.
+pub fn sample_card(
+    ui: &mut egui::Ui,
+    sample: &SampleCard,
+    samples: &SampleState,
+    projects: &[ProjectSummary],
+    open: &Path,
+) -> bool {
+    let mut clicked = false;
+    card(ui, None).show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        if open.file_name().is_some_and(|n| n == sample.project) {
+            sample_text(ui, sample);
+            ui.add_space(12.0);
+            ui.label(
+                egui::RichText::new("This is the project open now.")
+                    .color(crate::theme::palette(ui).text),
+            );
+        } else {
+            clicked = sample_body(ui, sample, samples, projects);
+        }
+    });
+    clicked
+}
+
+/// A sample's title, its tag, and what it shows.
+fn sample_text(ui: &mut egui::Ui, sample: &SampleCard) {
+    let palette = crate::theme::palette(ui);
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(sample.title)
+                .text_style(DesignTokens::welcome_screen_example_title())
+                .strong()
+                .color(palette.text),
+        );
+        tag(ui, "sample");
+    });
+    ui.add_space(4.0);
+    ui.label(
+        egui::RichText::new(sample.summary)
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(palette.text),
+    );
+}
+
+/// A sample's title, summary, and Open (or where its opening stands).
+fn sample_body(
+    ui: &mut egui::Ui,
+    sample: &SampleCard,
+    samples: &SampleState,
+    projects: &[ProjectSummary],
+) -> bool {
+    let palette = crate::theme::palette(ui);
+    let here = projects
+        .iter()
+        .any(|p| p.root.file_name().is_some_and(|n| n == sample.project));
+    sample_text(ui, sample);
+    ui.add_space(16.0);
+    let mut clicked = false;
+    if samples.opening == Some(sample.name) {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(
+                egui::RichText::new(if here {
+                    "Opening…"
+                } else {
+                    "Downloading and checking…"
+                })
+                .color(palette.text),
+            );
+        });
+    } else {
+        let label = if here {
+            format!("Open the {}", sample.title)
+        } else {
+            format!(
+                "Open the {} · {:.0} MB",
+                sample.title,
+                sample.bytes as f64 / 1e6
+            )
+        };
+        ui.spacing_mut().button_padding = BUTTON_PADDING;
+        let button = egui::Button::new(
+            egui::RichText::new(label)
+                .text_style(DesignTokens::welcome_screen_body())
+                .strong()
+                .color(ui.visuals().strong_text_color()),
+        )
+        .fill(palette.accent_soft)
+        .stroke(egui::Stroke::new(1.0, palette.link))
+        .corner_radius(8.0)
+        .min_size(egui::vec2(0.0, 36.0));
+        clicked = ui
+            .add_enabled(samples.opening.is_none(), button)
+            .on_hover_text(if here {
+                "Open it: it is in your projects"
+            } else {
+                "Download it, check its SHA-256, and open it as a project"
+            })
+            .clicked();
+    }
+    if let Some((name, why)) = &samples.failed {
+        if *name == sample.name {
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(format!("It did not open: {why}"))
+                    .color(ui.visuals().warn_fg_color),
+            );
+        }
+    }
+    ui.add_space(8.0);
+    ui.label(
+        egui::RichText::new(
+            "It opens as a project of your own: look through every page, or ask \
+             your agent to evaluate or retrain it.",
+        )
+        .color(palette.text),
+    );
+    clicked
 }
 
 #[cfg(test)]

@@ -42,6 +42,9 @@ class AFreshHome(unittest.TestCase):
         self.assertIsNone(answer["project"])
         self.assertIn("create_project", answer["next"])
         self.assertIn("launch_studio", answer["next"])
+        self.assertIn("open_sample", answer["next"])
+        self.assertTrue(answer["welcome"])
+        self.assertEqual(answer["projects_home"], str(locate.projects_home()))
 
     def test_create_project_names_the_studio_as_the_next_step(self) -> None:
         from trainnr.mcp_server import create_project_dir  # noqa: PLC0415

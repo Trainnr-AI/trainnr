@@ -365,7 +365,8 @@ impl eframe::App for StudioShell {
             self.shell.show_requested = true;
         }
         let full = self.viewport_full && self.shell.section == Section::Live;
-        if !full {
+        // The Welcome page has no rail: no project, nothing to list.
+        if !full && !self.shell.model.welcome {
             self.shell.rail(ui);
         }
 

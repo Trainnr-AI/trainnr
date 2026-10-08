@@ -986,6 +986,17 @@ parameter's shift against its reference and a reading (A7, 2026-09-13).
 Only a fit record, which rides inside its bundle, has no presentation of
 its own (tested by name in `tests/test_present.py`).
 
+*Build note (2026-10-09), the Welcome page:* before any project exists
+the Studio opens at the projects home (`control.welcome_root`), whose
+`.index/` holds its control files, and shows a Welcome page instead of a
+project. `launch_studio`, `trainnr studio` and the page, theme, panel,
+screenshot, events and quit doors work there; `describe_studio` answers
+`project: null`, `welcome: true` and the next step. The window follows
+the projects home's `.current` to the first project made or opened
+(`create_project`, `use_project`, `open_sample`), leaving the usual
+pointer at the home; a project no Studio has run on looks for the window
+from the home, so its doors find it and `launch_studio` moves it there.
+
 *Build notes (2026-09-27), after the end-to-end review:* (1) a Studio that switches
 project leaves a pointer in the old project's `studio-state.json`
 (`moved_to`, the new root; never a live heartbeat), and `control.state`

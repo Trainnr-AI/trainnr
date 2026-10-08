@@ -33,7 +33,22 @@ from trainnr.project.control import (
     state_path,
     wait,
 )
-from trainnr.project.locate import INDEX_DIR
+from trainnr.project.locate import INDEX_DIR, PROJECT_ENV, PROJECTS_ENV, Project
+
+# Every test here runs against its own empty projects home: a project no
+# Studio has run on looks for a window on the Welcome page there
+# (`control.welcome_root`), and the developer's own may be open.
+_HOME = tempfile.TemporaryDirectory()
+_ISOLATED = mock.patch.dict(os.environ, {PROJECTS_ENV: _HOME.name})
+
+
+def setUpModule() -> None:
+    _ISOLATED.start()
+
+
+def tearDownModule() -> None:
+    _ISOLATED.stop()
+    _HOME.cleanup()
 
 
 def _write_state(project, *, pid=None, age_s=0.0, **more):
@@ -225,6 +240,66 @@ class State(unittest.TestCase):
             self.assertEqual([e["kind"] for e in events(project)], ["open", "select"])
             self.assertEqual([e["t"] for e in events(project, since_ns=10)], [20])
             self.assertEqual(len(events(project, limit=1)), 1)
+
+
+class TheWelcomePage(unittest.TestCase):
+    """A Studio opened before any project waits at the projects home on
+    its Welcome page; the first project's doors find it there (the
+    onboarding work, 2026-10-09)."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name) / "projects"
+        self.home.mkdir()
+        env = mock.patch.dict(os.environ, {PROJECTS_ENV: str(self.home)})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def test_a_new_projects_doors_find_the_window_on_the_welcome_page(self) -> None:
+        welcome = control.welcome_root()
+        self.assertEqual(welcome.root, self.home)
+        _write_state(welcome)
+        project = create_project(self.home / "mine", "mine")
+        found = state(project)
+        self.assertTrue(found["alive"])
+        self.assertTrue(found["elsewhere"])
+        self.assertEqual(found["project"], str(self.home))
+        # A page goes to the window; launching moves it to the project.
+        answer = command(project, "open", section="robots", timeout_s=0.05)
+        self.assertEqual(answer["project"], str(self.home))
+        answer = launch(project)
+        self.assertEqual(answer["switched_from"], str(self.home))
+        sent = sorted(commands_dir(welcome).glob("*-open.json"))
+        self.assertEqual(json.loads(sent[-1].read_text())["project"], str(project.root))
+
+    def test_a_project_a_studio_has_run_on_is_judged_on_its_own(self) -> None:
+        _write_state(control.welcome_root())
+        project = create_project(self.home / "mine", "mine")
+        _write_state(project, pid=2**22 + 12345)  # its own Studio, gone
+        self.assertFalse(state(project)["alive"])
+        self.assertIn("gone", state(project)["reason"])
+
+    def test_no_project_launches_on_the_welcome_page(self) -> None:
+        from trainnr.project import control as ctl  # noqa: PLC0415
+
+        seen = self.home / "env.txt"
+        fake = Path(self._tmp.name) / "trainnr-studio"
+        fake.write_text(f'#!/bin/sh\nenv > "{seen}"\nexit 3\n')
+        fake.chmod(0o755)
+        with (
+            mock.patch.dict(os.environ, {PROJECT_ENV: str(self.home / "stale")}),
+            mock.patch.object(ctl, "VIEWER_PORT", 0),
+        ):
+            answer = launch(None, binary=fake)
+        self.assertEqual(answer["status"], "failed")
+        self.assertEqual(Path(answer["log"]), self.home / INDEX_DIR / "studio.log")
+        lines = seen.read_text().splitlines()
+        self.assertFalse([line for line in lines if line.startswith(f"{PROJECT_ENV}=")])
+        self.assertIn(f"{PROJECTS_ENV}={self.home}", lines)
+
+    def test_the_welcome_root_is_the_projects_home(self) -> None:
+        self.assertEqual(control.welcome_root(), Project(self.home))
 
 
 class Screenshot(unittest.TestCase):
