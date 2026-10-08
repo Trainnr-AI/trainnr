@@ -452,7 +452,7 @@
       "destructiveHint": false,
       "readOnlyHint": true
     },
-    "description": "A job's state and log tail; `wait_s` (up to 300) waits for a running job to end first",
+    "description": "A job's state and log tail; `wait_s` (up to 300; 60 under Claude Code, which backgrounds a call past 120 s) waits for a running job to end first",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

@@ -161,7 +161,7 @@ agent  create_task("trainnr/go2-walk", "go2-walk"), check_task("go2-walk")
                                                     → accepted: learnability check
        train_walk(recipe="full", fit="fit@…", iterations=150)
                                                     → experiment go2-walk-<date-time>
-       describe_job(job_id, wait_s=300)             → done
+       describe_job(job_id, wait_s=60), until done  → done
        evaluate_walk(checkpoint="<experiment>", trials=8)
                                                     → survived 8/8, tracked 0/8, CP95 [0.00, 0.37]
        export_deployment, gate_deployment           → ONNX + manifest, sim-to-sim gate passed
