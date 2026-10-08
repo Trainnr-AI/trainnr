@@ -198,9 +198,26 @@ def projects_home() -> Path:
 
 def checkout_projects() -> Path | None:
     """A checkout's own `projects/`, when it has one: the maintainers'
-    working projects and the committed sample are listed from it too."""
+    working projects and the committed sample are listed from it too.
+    None for a plugin install: its copy of the repository is replaced on
+    every update, and its sample read as a project of the user's that
+    was not under the projects home (fresh-install audit, 2026-10-08)."""
+    if _is_plugin_install(checkout()):
+        return None
     folder = checkout() / PROJECTS_DIR_NAME
     return folder if folder.is_dir() else None
+
+
+# Claude Code installs a plugin under its configuration folder
+# (`~/.claude`, or `$CLAUDE_CONFIG_DIR`), in `plugins/`.
+CLAUDE_CONFIG_ENV = "CLAUDE_CONFIG_DIR"
+CLAUDE_PLUGINS_DIR = "plugins"
+
+
+def _is_plugin_install(root: Path) -> bool:
+    config = os.environ.get(CLAUDE_CONFIG_ENV, "").strip()
+    base = Path(config).expanduser() if config else Path.home() / ".claude"
+    return (base / CLAUDE_PLUGINS_DIR).resolve() in root.resolve().parents
 
 
 def projects_dir() -> Path:
