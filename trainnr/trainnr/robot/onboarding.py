@@ -56,6 +56,23 @@ MODEL_FOLDER_MAX_BYTES = 2 * 1024**3
 MODEL_FOLDER_MAX_FILES = 20_000
 
 
+# The quickstart's Go2 comes from Unitree's own repository, which the
+# plugin does not carry; a refusal for a path inside it says how to get it
+# (fresh-install audit, 2026-10-08).
+UNITREE_RL_MJLAB = "unitree_rl_mjlab"
+UNITREE_RL_MJLAB_URL = "https://github.com/unitreerobotics/unitree_rl_mjlab"
+
+
+def _where_from(path: Path) -> str:
+    for parent in path.parents:
+        if parent.name == UNITREE_RL_MJLAB:
+            return (
+                f"; {parent} is Unitree's repository: "
+                f"git clone --depth 1 {UNITREE_RL_MJLAB_URL} {parent}"
+            )
+    return ""
+
+
 def copy_model_folder(source_dir: Path, destination: Path) -> None:
     """Copy a robot model's folder, refusing by name a link that points
     outside it and a folder past MODEL_FOLDER_MAX_BYTES or _FILES."""
@@ -160,7 +177,9 @@ def onboard(
     the caller above this tier."""
     source_path = Path(source_path).expanduser()
     if not source_path.is_file():
-        raise FileNotFoundError(f"no model file at {source_path}")
+        raise FileNotFoundError(
+            f"no model file at {source_path}{_where_from(source_path)}"
+        )
     destination = Path(destination)
     if destination.exists():
         raise FileExistsError(
