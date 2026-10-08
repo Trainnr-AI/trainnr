@@ -15,6 +15,13 @@ All notable changes to trainnr. The format follows
 - The Studio opens dark on a first launch (`set_studio_theme` and the title-bar switch still choose, and the choice is kept); the README's screenshots follow the reader's GitHub theme, dark and light.
 - The README's Studio section describes the prebuilt download (the plugin's first session, `launch_studio` on demand, `trainnr studio --install`) now that v0.1.0 is published; building from source is CONTRIBUTING's.
 
+### Fixed
+
+- A walk's stamp hashes its robot with its knobs: `go1-walk` and `go2-walk` at their defaults shared one hash. A walk already declared keeps the stamp its `task.json` recorded.
+- A plugin install lists no projects from its own copy of the repository: `list_projects` on a fresh install showed `sample` from the plugin's cache folder.
+- A job no longer inherits the server's `VIRTUAL_ENV`; every job log began with uv's warning about it.
+- The `describe_job` hints wait 60 s, not 300: Claude Code moves a call past 120 s to the background.
+
 ## [0.1.0] - 2026-10-06
 
 Not yet released; the repository is being prepared for its first public release. trainnr is licensed under the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2, `LICENSE`): any use other than a competing product or service; each version is also licensed under Apache-2.0 two years after it is made available.
