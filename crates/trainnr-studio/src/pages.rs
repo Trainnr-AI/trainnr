@@ -950,7 +950,9 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                     hover.push_str(basis);
                 }
                 if let Some(note) = &state.note {
-                    hover.push_str("\nnot needed: ");
+                    // A skipped stage's note says why; a needed one's says
+                    // what is missing (a task declared, not yet accepted).
+                    hover.push_str(if state.needed { "\n" } else { "\nnot needed: " });
                     hover.push_str(note);
                 }
                 if !state.proved_by.is_empty() {

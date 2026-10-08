@@ -256,14 +256,14 @@ def index_project(project: Project) -> ProjectIndex:
     _link_cited_by(artifacts)
     loop = manifest.loop or _loop_of(artifacts, project.root)
     states = _states(artifacts, loop)
-    missing = [s.name for s in states if not s.present and s.needed]
+    missing = [s for s in states if not s.present and s.needed]
     # Telemetry is the loop's first state but not a prerequisite: a robot
     # that entered as a model (a Menagerie bundle) has no recording yet
     # and does not need one before a task is declared. The next move is
     # the first missing state AFTER the first proved one.
     first_proved = next((i for i, s in enumerate(states) if s.present), None)
     if first_proved is not None:
-        missing = [s.name for s in states[first_proved:] if not s.present and s.needed]
+        missing = [s for s in states[first_proved:] if not s.present and s.needed]
     return ProjectIndex(
         schema=INDEX_SCHEMA,
         project=manifest.name,
@@ -271,7 +271,9 @@ def index_project(project: Project) -> ProjectIndex:
         indexed=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         artifacts=sorted(artifacts, key=lambda a: (a.kind, a.path)),
         states=states,
-        next_move=NEXT_MOVE[missing[0]] if missing else None,
+        # A stage's own note (a task declared but not accepted) is the
+        # nearer next move than the stage's general one.
+        next_move=(missing[0].note or NEXT_MOVE[missing[0].name]) if missing else None,
         refused=refused,
         in_progress=in_progress + _live_capture(project),
     )
@@ -1126,7 +1128,20 @@ def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
     for name, kind in STATES:
         proof = list(by_kind.get(kind.value, []))
         basis = None
-        if kind is Kind.FIT:
+        note = skipped.get(name)
+        if kind is Kind.TASK:
+            # Declared is not defined: a task proves the stage once
+            # check_task accepted it. The Studio lit "Environment" right
+            # after create_task (fresh-install audit, 2026-10-08).
+            tasks = [a for a in artifacts if a.kind == kind.value]
+            proof = [a.stamp for a in tasks if a.summary.get("acceptance") == ACCEPTED]
+            waiting = [a.stamp.split("@", 1)[0] for a in tasks if a.stamp not in proof]
+            if waiting and not proof:
+                note = (
+                    f"declared, not yet accepted: {', '.join(waiting)}; "
+                    f"check_task({waiting[0]!r}) accepts it"
+                )
+        elif kind is Kind.FIT:
             carriers = [
                 a
                 for a in artifacts
@@ -1153,7 +1168,7 @@ def _states(artifacts: list[Artifact], loop: str = "") -> list[State]:
                 proved_by=proof,
                 present=bool(proof),
                 needed=name not in skipped,
-                note=skipped.get(name),
+                note=note,
                 basis=basis,
             )
         )
