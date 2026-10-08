@@ -25,7 +25,7 @@ from trainnr.project import (
     write_task_reference,
 )
 from trainnr.project.index import STATES, UNRECORDED
-from trainnr.project.kinds import UnknownKindError
+from trainnr.project.kinds import ACCEPTANCE_FILE, UnknownKindError
 from trainnr.project.locate import FOLDERS
 
 
@@ -285,6 +285,13 @@ class Indexing(unittest.TestCase):
             task = index.by_kind(Kind.TASK)[0]
             self.assertEqual(task.summary["template"], "kitting")
             self.assertEqual(task.summary["acceptance"], "unreviewed")
+            # Declared is not defined: the stage waits for check_task, and
+            # says so (fresh-install audit, 2026-10-08).
+            stage = next(s for s in index.states if s.name == "environment defined")
+            self.assertFalse(stage.present)
+            self.assertIn("check_task('trainnr--kitting')", stage.note or "")
+            (out.parent / ACCEPTANCE_FILE).write_text(json.dumps({"accepted": True}))
+            index = index_project(project)
             self.assertIn(
                 "environment defined", {s.name for s in index.states if s.present}
             )

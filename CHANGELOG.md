@@ -22,6 +22,7 @@ All notable changes to trainnr. The format follows
 - A plugin install lists no projects from its own copy of the repository: `list_projects` on a fresh install showed `sample` from the plugin's cache folder.
 - A job no longer inherits the server's `VIRTUAL_ENV`; every job log began with uv's warning about it.
 - The `describe_job` hints wait 60 s, not 300: Claude Code moves a call past 120 s to the background.
+- The environment stage is proved by an accepted task, not a declared one: after `create_task` the Studio and the index say "declared, not yet accepted" and name the `check_task` call, until it accepts. `list_robots` says each robot's `scope` (`project` or `library`), and `list_projects` counts the stages the project's loop passes through, as the Studio does.
 
 ## [0.1.0] - 2026-10-06
 

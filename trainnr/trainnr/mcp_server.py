@@ -50,7 +50,7 @@ else:
     from typing_extensions import TypedDict
 
 from trainnr.bundles.hashing import FITS_DIR, stamp
-from trainnr.bundles.locate import bundle_dirs, find_bundle
+from trainnr.bundles.locate import bundle_dirs, find_bundle, robots_dir
 from trainnr.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from trainnr.deploy.runtimes import DEFAULT_RUNTIME
 from trainnr.mcp_actions import JUDGE_ALL_AXES
@@ -107,6 +107,10 @@ def bundle_names() -> list[str]:
     return sorted(name for name in bundle_dirs() if name not in NOT_A_BUNDLE)
 
 
+# Where a listed robot comes from (`list_robots`).
+PROJECT_SCOPE, LIBRARY_SCOPE = "project", "library"
+
+
 def _use_project_if_any() -> None:
     """Search the current project's robots first, when there is one."""
     from trainnr.project import current_project  # noqa: PLC0415
@@ -116,8 +120,13 @@ def _use_project_if_any() -> None:
 
 
 def list_robots() -> list[dict[str, Any]]:
-    """Every robot the project or the library holds: name@hash identity
-    and a file census."""
+    """Every robot the project or the library holds: name@hash identity,
+    a file census, and `scope` — `project` for a robot onboarded into the
+    open project, `library` for one the repository ships (the Studio's
+    Robots count is the project's; a fresh-install audit read the two as
+    disagreeing, 2026-10-08)."""
+    _use_project_if_any()
+    library = robots_dir().resolve()
     described = []
     for name in bundle_names():
         root = bundle_dirs()[name]
@@ -125,6 +134,9 @@ def list_robots() -> list[dict[str, Any]]:
         described.append(
             {
                 "name": name,
+                "scope": LIBRARY_SCOPE
+                if root.resolve().parent == library
+                else PROJECT_SCOPE,
                 "stamp": stamp(name, root),
                 "files": files,
                 "has_profile": "profile.json" in files,
@@ -1932,10 +1944,11 @@ def list_project_dirs() -> list[dict[str, Any]]:
         }
         if project.index_path.is_file():
             raw = json.loads(project.index_path.read_text())
-            entry["stages_proved"] = sum(
-                1 for s in raw.get("states", []) if s.get("present")
-            )
-            entry["stages"] = len(raw.get("states", []))
+            # The stages the project's loop passes through, as the Studio's
+            # "N of M stages" counts them: a walk has no dataset stage.
+            needed = [s for s in raw.get("states", []) if s.get("needed", True)]
+            entry["stages_proved"] = sum(1 for s in needed if s.get("present"))
+            entry["stages"] = len(needed)
             entry["artifacts"] = len(raw.get("artifacts", []))
             entry["indexed"] = raw.get("indexed")
         listed.append(entry)
