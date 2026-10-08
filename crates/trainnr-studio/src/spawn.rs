@@ -272,11 +272,14 @@ mod tests {
         );
         // The working directory is the next guess.
         assert_eq!(resolve_repo_root(None, None, Some(deep)), checkout);
-        // Nothing named, nothing found: the checkout this was built in.
-        assert_eq!(
-            resolve_repo_root(None, Some(std::env::temp_dir()), None),
-            checkout
-        );
+        // Nothing named, nothing found: a debug build falls back to the
+        // checkout it was built in; a release build trusts no baked path.
+        let fallback = resolve_repo_root(None, Some(std::env::temp_dir()), None);
+        if cfg!(debug_assertions) {
+            assert_eq!(fallback, checkout);
+        } else {
+            assert_ne!(fallback, checkout);
+        }
     }
 
     #[test]
