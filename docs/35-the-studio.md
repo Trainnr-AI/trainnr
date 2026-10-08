@@ -192,7 +192,7 @@ These are the ones that cost real time and are worth not rediscovering:
 ## 7. Where the Studio sits in the loop
 
 The Studio is the window, not the workflow. The workflow is the MCP
-surface: 75 tools registered as of 2026-10-05, every one callable by an
+surface: 77 tools registered as of 2026-10-09, every one callable by an
 agent. The loop they walk is docs/76. The app's jobs:
 
 - **Launched by a tool.** `launch_studio` starts it; anything speaking

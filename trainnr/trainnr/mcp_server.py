@@ -3247,6 +3247,40 @@ def create_project_dir(
     }
 
 
+def list_samples() -> list[dict[str, Any]]:
+    """The sample projects: finished projects to explore before your own
+    (the Go2 walk, the whole loop), each with its download size and where
+    it is installed once opened."""
+    from trainnr.project.locate import projects_home  # noqa: PLC0415
+    from trainnr.samples import describe  # noqa: PLC0415
+
+    return describe(projects_home())
+
+
+def open_sample(name: str = "go2-walk") -> dict[str, Any] | Refusal:
+    """Open a sample project: downloaded the first time (its size and
+    SHA-256 checked), unpacked into the projects home as an ordinary
+    project, indexed, and made current; after that, opened as it is."""
+    from trainnr.project import index_project, write_index  # noqa: PLC0415
+    from trainnr.project import use_project as choose  # noqa: PLC0415
+    from trainnr.project.locate import projects_home  # noqa: PLC0415
+    from trainnr.samples import SampleError, install  # noqa: PLC0415
+
+    try:
+        root = install(name, projects_home())
+    except (KeyError, SampleError) as why:
+        return refusal(_reason(why))
+    project = choose(str(root))
+    write_index(project, index_project(project))
+    return {
+        "status": DONE,
+        "root": str(project.root),
+        "name": project.name,
+        "current": True,
+        "next": "launch_studio() shows it; describe_project summarises it",
+    }
+
+
 def use_project(project: str) -> dict[str, Any] | Refusal:
     """Choose the current project by name or path: later tool calls, and
     later sessions, act on it until another is chosen."""
@@ -3288,6 +3322,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_identification_methods",
         "list_jobs",
         "list_projects",
+        "list_samples",
         "list_public_logs",
         "list_robot_adapters",
         "list_robots",
@@ -3584,6 +3619,14 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         description="Choose the current project by name or path; later calls "
         "and later sessions act on it."
     )(use_project)
+    server.tool(
+        description="The sample projects to explore (the Go2 walk, the whole "
+        "loop): size and whether opened."
+    )(list_samples)
+    server.tool(
+        description="Open a sample project: downloaded once (checked), "
+        "unpacked into the projects home, made current."
+    )(open_sample)
 
     # The Studio's control surface: every door a file under <project>/.index
     # (commands in, state and events out), so the agent drives the window
