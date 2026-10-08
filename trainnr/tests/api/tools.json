@@ -1185,6 +1185,19 @@
       "destructiveHint": false,
       "readOnlyHint": true
     },
+    "description": "The sample projects to explore (the Go2 walk, the whole loop): size and whether opened.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_samples"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
     "description": "The families an environment can be declared over, with every spec field, type and default.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1314,6 +1327,24 @@
       "type": "object"
     },
     "name": "open_in_studio"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Open a sample project: downloaded once (checked), unpacked into the projects home, made current.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "go2-walk",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "open_sample"
   },
   {
     "annotations": {

@@ -48,6 +48,17 @@ biped's walk-c1 arms (269 MB; their counts are in the records). Local
 project directories (`projects/…`) are untracked; where a record cites
 one and a copy exists here, the copy is named first.
 
+## Sample projects
+
+The sample projects `open_sample` opens are in the same dataset, under
+`samples/`: each a tar.gz that `tools/make-sample.py` built from a real
+project, deterministically and with nothing private in it, and that
+`trainnr/trainnr/samples.py` pins by the dataset's commit, its size and
+its SHA-256. Today: `samples/go2-walk-sample.tar.gz` (12 MB, 40 MB
+unpacked), the Go2 walk through the whole loop, published at commit
+`9f61659a2f912a0298c48e699fbdb08c6acc6203`. A new sample, or a new
+build of one, is a new commit and a new pin.
+
 ## Large files
 
 The model checkpoints (`*.pt`) and the study logs (`*.log`) are not in the

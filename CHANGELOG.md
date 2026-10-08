@@ -8,6 +8,7 @@ All notable changes to trainnr. The format follows
 
 ### Added
 
+- Sample projects: `list_samples` and `open_sample` open a finished project to explore before your own. The Go2 walk (12 MB) is the whole loop, from identification to a gated deployment and a drift check, downloaded once from the Hugging Face dataset at a pinned commit, size and SHA-256 checked, and unpacked into the projects home. `tools/make-sample.py` builds a sample from a real project, deterministically, refusing any file with a private marker.
 - The Python packages are uploaded to PyPI by `.github/workflows/pypi.yml` when a release is published (the release's own attested files, trusted publishing, a maintainer's approval per package); a release candidate goes to TestPyPI. `uvx --from "trainnr[sim,mcp]" trainnr mcp` runs the server with no checkout.
 
 ### Changed

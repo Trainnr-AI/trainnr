@@ -15,7 +15,7 @@
   <a href="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml"><img src="https://github.com/Trainnr-AI/trainnr/raw/badges/coverage.svg" alt="coverage"></a>
   <a href="#licence"><img src="https://img.shields.io/badge/licence-FSL--1.1--ALv2-blue" alt="licence: FSL-1.1-ALv2"></a>
   <a href="trainnr/pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-blue" alt="python 3.11 to 3.13"></a>
-  <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-75%20tools-6f42c1" alt="MCP server: 75 tools"></a>
+  <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-77%20tools-6f42c1" alt="MCP server: 77 tools"></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/DCO-signed--off-green" alt="DCO"></a>
   <!-- After the repository is public and the scorecard workflow has run once:
@@ -91,7 +91,7 @@ desktop app, shows each stage as it lands.
 | **Evaluation** | Paired, seed-matched trials, exact Clopper-Pearson intervals, milestone funnels, sensitivity tables, mismatch matrices across the sim-to-real gap |
 | **Deployment, up to sim-to-real** | ONNX export with a manifest, a sim-to-sim gate on MuJoCo and on Unitree's own simulator over DDS, failure attribution (latency first), pre-flight checks, soft stops: everything before the first tick on a real robot |
 | **Telemetry and monitoring** | A robot's new telemetry re-identified against its fitted intervals: drift named per parameter, re-identification recommended, and the new fit available to the next training run |
-| **Agents and tools** | One MCP server with 75 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
+| **Agents and tools** | One MCP server with 77 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
 
 ## Quickstart
 
@@ -111,7 +111,7 @@ desktop app, shows each stage as it lands.
   (`tools/cloud-gpu.py`). A smoke run and `check_task` run on a laptop
   CPU, as does everything else.
 
-Install the plugin. It brings the MCP server (75 tools), seven agents and
+Install the plugin. It brings the MCP server (77 tools), seven agents and
 two skills. In a terminal:
 
 ```sh
@@ -124,6 +124,10 @@ then `/plugin install trainnr@trainnr`. The next Claude Code session
 prepares the server's environment in the background and tries to download
 the Studio (`TRAINNR_NO_PREFETCH=1` turns that off). Projects live in
 `~/trainnr/projects`, and the tools act only inside the open project.
+
+To see a finished project before starting your own, ask for the sample:
+"open the Go2 sample" (`open_sample`, a 12 MB download) is the Go2 walk
+taken through the whole loop, from identification to a gated deployment.
 
 Fetch the robot model the example uses, Unitree's own Go2:
 
