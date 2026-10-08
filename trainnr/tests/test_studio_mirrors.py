@@ -29,6 +29,7 @@ CONTROL_RS = (SHELL_SRC / "control.rs").read_text(encoding="utf-8")
 DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
 PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 RUNNING_RS = (SHELL_SRC / "running.rs").read_text(encoding="utf-8")
+ONBOARDING_RS = (SHELL_SRC / "onboarding.rs").read_text(encoding="utf-8")
 
 
 # The kinds the index writes that no Studio page lists by kind.
@@ -225,6 +226,35 @@ class WireConstants(unittest.TestCase):
         assert python
         names = [n.strip().strip('"') for n in python.group(1).split(",") if n.strip()]
         self.assertEqual(rust, dict(enumerate(names)))
+
+
+class TheWelcomePage(unittest.TestCase):
+    """The Welcome page offers the samples and draws the loop from its own
+    copies (`onboarding.rs`); the Python side owns both (2026-10-09)."""
+
+    def test_the_samples_agree(self) -> None:
+        from trainnr.samples import SAMPLES  # noqa: PLC0415
+
+        names = re.findall(r'^\s+name: "([^"]+)",$', ONBOARDING_RS, flags=re.MULTILINE)
+        self.assertEqual(names, list(SAMPLES))
+        for sample in SAMPLES.values():
+            for field in ("title", "summary", "project"):
+                value = getattr(sample, field)
+                self.assertIn(f'{field}: "{value}",', ONBOARDING_RS, field)
+            self.assertIn(f"bytes: {sample.bytes:_},", ONBOARDING_RS)
+
+    def test_the_loops_stages_agree(self) -> None:
+        from trainnr.project.index import STATES  # noqa: PLC0415
+
+        block = re.search(
+            r"pub const LOOP_STATES: \[\(&str, Section\); (\d+)\] = \[(.*?)\];",
+            ONBOARDING_RS,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(block)
+        named = re.findall(r'\("([^"]+)", Section::', block.group(2))
+        self.assertEqual(named, [name for name, _ in STATES])
+        self.assertEqual(int(block.group(1)), len(STATES))
 
 
 if __name__ == "__main__":

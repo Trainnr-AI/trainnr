@@ -25,14 +25,18 @@ use crate::detail::Detail;
 /// (`INDEX_SCHEMA`). The family (before the `/`) must match; a newer
 /// minor version is read, its unknown fields ignored.
 pub const INDEX_SCHEMA: &str = "trainnr-project-index/1";
-/// Mirrored from `trainnr/project/locate.py`.
+/// Mirrored from `trainnr/project/locate.py` (`INDEX_DIR`).
+pub const INDEX_DIR: &str = ".index";
 const INDEX_RELATIVE: &str = ".index/project.json";
 pub const MANIFEST_FILE: &str = "project.json";
-/// Where projects live in a checkout (`PROJECTS_DIR_NAME`), and the two
-/// the Studio opens when none is named.
+/// Where projects live in a checkout (`PROJECTS_DIR_NAME`), the default
+/// one the Studio opens when none is named, and the empty one a checkout
+/// carries (never listed beside others, nor on the Welcome page).
 pub const PROJECTS_HOME: &str = "projects";
 const DEFAULT_PROJECT_NAME: &str = "default";
 const SAMPLE_PROJECT_NAME: &str = "sample";
+/// What the title bar names while no project is open.
+const WELCOME_NAME: &str = "Welcome";
 /// Mirrored from `trainnr/mcp_jobs.py` (`JOBS_DIR_NAME`).
 const JOBS_DIR: &str = "mcp-jobs";
 /// Mirrored from `trainnr/project/present.py` (`INTENT_FILE`): the
@@ -416,15 +420,20 @@ pub struct Model {
     present_seen: Option<std::time::SystemTime>,
     /// Why there is no index, when there is none.
     pub problem: Option<String>,
+    /// No project is open: the window is on its Welcome page, rooted at
+    /// the projects home (its control files live there), and follows the
+    /// home's `.current` to the first project made or opened.
+    pub welcome: bool,
     last_poll: Option<std::time::Instant>,
 }
 
 impl Model {
     /// The project the Studio opens: `$TRAINNR_PROJECT`, else the one
     /// last created or chosen (the projects home's `.current`), else the
-    /// checkout's default, else the committed sample — the rule the
-    /// Python side applies, plus the sample so a fresh clone shows a page
-    /// instead of an error.
+    /// checkout's default — the rule the Python side applies — else none:
+    /// the Welcome page, at the projects home. A fresh install opened on
+    /// the checkout's empty sample until 2026-10-09, a project the user
+    /// never made.
     pub fn open(repo_root: &Path) -> Self {
         let in_checkout = repo_root.join(PROJECTS_HOME);
         let user_home = user_projects_home();
@@ -440,12 +449,13 @@ impl Model {
                 let default = in_checkout.join(DEFAULT_PROJECT_NAME);
                 default.join(MANIFEST_FILE).is_file().then_some(default)
             })
-            .unwrap_or_else(|| in_checkout.join(SAMPLE_PROJECT_NAME));
+            .unwrap_or_else(|| user_home.clone().unwrap_or(in_checkout));
         Self::at(root, homes)
     }
 
     /// Open a specific project directory.
     pub fn at(root: PathBuf, projects_homes: Vec<PathBuf>) -> Self {
+        let welcome = !root.join(MANIFEST_FILE).is_file() && projects_homes.contains(&root);
         let mut model = Self {
             projects_home_seen: vec![None; projects_homes.len()],
             projects_homes,
@@ -461,6 +471,7 @@ impl Model {
             present_status: None,
             present_seen: None,
             problem: None,
+            welcome,
             project_root: root,
             last_poll: None,
         };
@@ -586,10 +597,13 @@ impl Model {
             .join(PROJECTS_HOME)
             .join(SAMPLE_PROJECT_NAME);
         let is_sample = |p: &PathBuf| p.canonicalize().ok() == sample.canonicalize().ok();
+        // On the Welcome page it is never one: "Explore a sample" offers
+        // a finished project there (2026-10-09).
         let others = roots.iter().filter(|p| !is_sample(p)).count();
+        let keep_sample = others == 0 && !self.welcome;
         let roots: Vec<PathBuf> = roots
             .into_iter()
-            .filter(|p| others == 0 || !is_sample(p))
+            .filter(|p| keep_sample || !is_sample(p))
             .collect();
         let mut found: Vec<ProjectSummary> = roots
             .into_iter()
@@ -644,7 +658,19 @@ impl Model {
     }
 
     /// The project's display name: the index's, else the directory's.
+    /// The project the tools made or chose since this window opened on
+    /// its Welcome page (the projects home's `.current`), to follow.
+    pub fn followed_project(&self) -> Option<PathBuf> {
+        if !self.welcome {
+            return None;
+        }
+        user_projects_home().and_then(|home| remembered_project(&home))
+    }
+
     pub fn name(&self) -> String {
+        if self.welcome {
+            return WELCOME_NAME.to_owned();
+        }
         self.index()
             .map(|i| i.project.clone())
             .filter(|n| !n.is_empty())
@@ -980,6 +1006,28 @@ mod tests {
             .as_deref()
             .is_some_and(|p| p.contains("somebody-else/1") && p.contains(INDEX_SCHEMA)));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn with_no_project_the_studio_waits_at_the_projects_home() {
+        let base = std::env::temp_dir().join(format!("studio-welcome-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let home = base.join("projects");
+        let mine = home.join("mine");
+        std::fs::create_dir_all(&mine).unwrap();
+        let welcome = Model::at(home.clone(), vec![home.clone()]);
+        assert!(welcome.welcome, "the projects home is the Welcome page");
+        assert_eq!(welcome.name(), WELCOME_NAME);
+        std::fs::write(mine.join(MANIFEST_FILE), "{}").unwrap();
+        let project = Model::at(mine.clone(), vec![home.clone()]);
+        assert!(!project.welcome, "a project is never the Welcome page");
+        assert_eq!(project.followed_project(), None, "only Welcome follows");
+        let elsewhere = Model::at(base.join("gone"), vec![home.clone()]);
+        assert!(
+            !elsewhere.welcome,
+            "a missing project is a problem, not Welcome"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

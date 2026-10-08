@@ -166,14 +166,18 @@ def _read_state(root: Path) -> dict[str, Any]:
     return raw
 
 
-def state(project: Project) -> dict[str, Any]:
-    """What the Studio shows, plus `alive`: a fresh heartbeat from a live
-    pid. A Studio that switched to another project leaves a pointer
-    behind (`moved_to`); it is followed, and the live state comes back
-    with `elsewhere: True` and `asked` naming the project this was called
-    under, so a door called under the old project finds the window
-    instead of reading it as dead (2026-09-27)."""
-    root = project.root
+def welcome_root() -> Project:
+    """Where the Studio's control files live before any project exists:
+    the projects home. The Studio opens there on its Welcome page and
+    follows the home's `.current` to the first project the tools create
+    or choose; every Studio door works there too (a new user saw a
+    finished Go2 walk as their first screen until 2026-10-09)."""
+    return Project(projects_home())
+
+
+def _follow(root: Path) -> tuple[dict[str, Any], set[str]]:
+    """The state at `root`, followed through the pointers a project
+    switch leaves while their Studio lives; and the roots it passed."""
     seen: set[str] = set()
     current = _read_state(root)
     while (
@@ -186,6 +190,26 @@ def state(project: Project) -> dict[str, Any]:
             break
         seen.add(target)
         current = _read_state(Path(target))
+    return current, seen
+
+
+def state(project: Project) -> dict[str, Any]:
+    """What the Studio shows, plus `alive`: a fresh heartbeat from a live
+    pid. A Studio that switched to another project leaves a pointer
+    behind (`moved_to`); it is followed, and the live state comes back
+    with `elsewhere: True` and `asked` naming the project this was called
+    under, so a door called under the old project finds the window
+    instead of reading it as dead (2026-09-27). A project no Studio has
+    run on looks for one started before any project existed, from the
+    welcome root, so the first project's doors find that window."""
+    root = project.root
+    current, seen = _follow(root)
+    welcome = welcome_root().root
+    never_run = not (root / INDEX_DIR / STATE_FILE).is_file()
+    if not current.get("alive") and not seen and root != welcome and never_run:
+        found, hops = _follow(welcome)
+        if found.get("alive"):
+            current, seen = found, hops | {str(welcome)}
     if seen:
         if current.get("alive"):
             current["elsewhere"] = True
@@ -636,13 +660,18 @@ def wsl_display_environment(
 
 
 def launch(  # noqa: PLR0911 - each refusal names its own reason
-    project: Project, binary: Path | None = None
+    project: Project | None, binary: Path | None = None
 ) -> dict[str, Any]:
-    """Start the Studio on the project; wait for its first heartbeat.
+    """Start the Studio on the project, or on its Welcome page when there
+    is none yet (`None`: the welcome root); wait for its first heartbeat.
     Waits for the viewer's port first: a window quit a moment ago can
     still hold it, and a Studio started then runs without a viewer
     server ("Address already in use" in its log; nothing streams in —
     seen 2026-09-09)."""
+    welcome = project is None
+    if project is None:
+        project = welcome_root()
+        project.root.mkdir(parents=True, exist_ok=True)
     current = state(project)
     if current.get("alive"):
         return _already_running(project, current)
@@ -667,7 +696,11 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)
     env = wsl_display_environment(wsl_gpu_environment(dict(os.environ)))
-    env[PROJECT_ENV] = str(project.root)
+    if welcome:
+        # no project: the Studio opens on its Welcome page, at the home
+        env.pop(PROJECT_ENV, None)
+    else:
+        env[PROJECT_ENV] = str(project.root)
     # the projects home the switcher lists, the one the tools create in
     env.setdefault(PROJECTS_ENV, str(projects_home()))
     # A downloaded Studio lives in the user's cache, not in the checkout:

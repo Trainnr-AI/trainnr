@@ -50,7 +50,7 @@ else:
     from typing_extensions import TypedDict
 
 from trainnr.bundles.hashing import FITS_DIR, stamp
-from trainnr.bundles.locate import bundle_dirs, find_bundle
+from trainnr.bundles.locate import bundle_dirs, find_bundle, robots_dir
 from trainnr.deploy.manifest import TWIST_RELEASE, TWIST_SHORT
 from trainnr.deploy.runtimes import DEFAULT_RUNTIME
 from trainnr.mcp_actions import JUDGE_ALL_AXES
@@ -107,6 +107,10 @@ def bundle_names() -> list[str]:
     return sorted(name for name in bundle_dirs() if name not in NOT_A_BUNDLE)
 
 
+# Where a listed robot comes from (`list_robots`).
+PROJECT_SCOPE, LIBRARY_SCOPE = "project", "library"
+
+
 def _use_project_if_any() -> None:
     """Search the current project's robots first, when there is one."""
     from trainnr.project import current_project  # noqa: PLC0415
@@ -116,8 +120,13 @@ def _use_project_if_any() -> None:
 
 
 def list_robots() -> list[dict[str, Any]]:
-    """Every robot the project or the library holds: name@hash identity
-    and a file census."""
+    """Every robot the project or the library holds: name@hash identity,
+    a file census, and `scope` — `project` for a robot onboarded into the
+    open project, `library` for one the repository ships (the Studio's
+    Robots count is the project's; a fresh-install audit read the two as
+    disagreeing, 2026-10-08)."""
+    _use_project_if_any()
+    library = robots_dir().resolve()
     described = []
     for name in bundle_names():
         root = bundle_dirs()[name]
@@ -125,6 +134,9 @@ def list_robots() -> list[dict[str, Any]]:
         described.append(
             {
                 "name": name,
+                "scope": LIBRARY_SCOPE
+                if root.resolve().parent == library
+                else PROJECT_SCOPE,
                 "stamp": stamp(name, root),
                 "files": files,
                 "has_profile": "profile.json" in files,
@@ -1932,10 +1944,11 @@ def list_project_dirs() -> list[dict[str, Any]]:
         }
         if project.index_path.is_file():
             raw = json.loads(project.index_path.read_text())
-            entry["stages_proved"] = sum(
-                1 for s in raw.get("states", []) if s.get("present")
-            )
-            entry["stages"] = len(raw.get("states", []))
+            # The stages the project's loop passes through, as the Studio's
+            # "N of M stages" counts them: a walk has no dataset stage.
+            needed = [s for s in raw.get("states", []) if s.get("needed", True)]
+            entry["stages_proved"] = sum(1 for s in needed if s.get("present"))
+            entry["stages"] = len(needed)
             entry["artifacts"] = len(raw.get("artifacts", []))
             entry["indexed"] = raw.get("indexed")
         listed.append(entry)
@@ -2148,17 +2161,45 @@ def ingest_public_log(
 # -- the Studio's control surface (docs/76 §10.1) ----------------------------------
 
 
+def _studio_project() -> Any:
+    """The project the Studio doors act on: the current one, else the
+    welcome root, where a Studio waits on its Welcome page before any
+    project exists (the onboarding work, 2026-10-09)."""
+    from trainnr.project import current_project  # noqa: PLC0415
+    from trainnr.project.control import welcome_root  # noqa: PLC0415
+
+    try:
+        return current_project()
+    except FileNotFoundError:
+        return welcome_root()
+
+
 def describe_studio() -> dict[str, Any]:
     """What the Studio shows right now — project, page, selected artifact,
     the viewer's recording and time cursor, whether the presenter runs —
     with `alive` (a fresh heartbeat from a live pid) and the presenter's
-    last status. Read from `<project>/.index/studio-state.json`."""
+    last status. Read from `<project>/.index/studio-state.json`. Before
+    any project exists it says so and what to do, rather than failing
+    (fresh-install audit, 2026-10-08)."""
     import json  # noqa: PLC0415
 
-    from trainnr.project import current_project  # noqa: PLC0415
-    from trainnr.project.control import state  # noqa: PLC0415
+    from trainnr.project import Project, current_project  # noqa: PLC0415
+    from trainnr.project.control import state, welcome_root  # noqa: PLC0415
 
-    project = current_project()
+    try:
+        project = current_project()
+    except FileNotFoundError:
+        root = welcome_root().root
+        out = state(Project(root))
+        # no project is open, whatever the window's control root is
+        out.update(project=None, welcome=True, projects_home=str(root))
+        out["next"] = (
+            "no project yet: create_project(name) makes the first one, "
+            "open_sample() opens the finished Go2 sample; launch_studio() "
+            "meanwhile opens the Studio on its Welcome page, and it follows "
+            "to the first project made or opened"
+        )
+        return out
     out = state(project)
     from trainnr.project.control import present_status_path  # noqa: PLC0415
 
@@ -2178,22 +2219,26 @@ def describe_studio() -> dict[str, Any]:
 
 
 def launch_studio() -> dict[str, Any]:
-    """Start the Studio window on the current project (the built binary:
-    `$TRAINNR_STUDIO`, else crates/trainnr-studio/target/release) and wait
-    for its first heartbeat. Refuses when one already runs."""
+    """Start the Studio window on the current project, or on its Welcome
+    page before any project exists (the built binary: `$TRAINNR_STUDIO`,
+    else crates/trainnr-studio/target/release) and wait for its first
+    heartbeat. A Studio already open elsewhere is moved to the project."""
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import launch  # noqa: PLC0415
 
-    return launch(current_project())
+    try:
+        project = current_project()
+    except FileNotFoundError:
+        project = None
+    return launch(project)
 
 
 def quit_studio() -> dict[str, Any]:
     """Close the Studio: a `quit` command first; past the timeout, the
     process is terminated by pid."""
-    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import quit as quit_  # noqa: PLC0415
 
-    return quit_(current_project())
+    return quit_(_studio_project())
 
 
 def _studio_artifact(artifact: str | None) -> str | Refusal | None:
@@ -2235,7 +2280,6 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     two or more conditions: policies by condition). `search` opens the
     command palette (the user's ⌘K) with that query typed, to point the
     user at something by name."""
-    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import SECTIONS, command  # noqa: PLC0415
 
     if section is not None and section.strip().lower() not in SECTIONS:
@@ -2244,7 +2288,7 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     if _refused(resolved):
         return resolved  # type: ignore[return-value]
     return command(
-        current_project(),
+        _studio_project(),
         "open",
         section=section,
         artifact=resolved,
@@ -2379,7 +2423,6 @@ def set_studio_panels(
     """The viewer's side panels: `expand` or `toggle` the blueprint panel
     (left: what each view shows) and the selection panel (right: the
     selected entity's properties)."""
-    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import PANEL_ACTIONS, command  # noqa: PLC0415
 
     for name, value in (("blueprint", blueprint), ("selection", selection)):
@@ -2388,7 +2431,7 @@ def set_studio_panels(
                 f"{name}: {value!r} is not one of {', '.join(PANEL_ACTIONS)}"
             )
     return command(
-        current_project(), "panels", blueprint=blueprint, selection=selection
+        _studio_project(), "panels", blueprint=blueprint, selection=selection
     )
 
 
@@ -2399,12 +2442,11 @@ def set_studio_theme(theme: str) -> dict[str, Any] | Refusal:
     """The Studio's theme: `dark` (the default), `light`, or `system`
     (follow the desktop). The embedded viewer, the pages and the card
     pictures follow; the choice is kept across launches."""
-    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import command  # noqa: PLC0415
 
     if theme not in THEMES:
         return refusal(f"theme: {theme!r} is not one of {', '.join(THEMES)}")
-    return command(current_project(), "theme", theme=theme)
+    return command(_studio_project(), "theme", theme=theme)
 
 
 def run_simulation(scene: str | None = None) -> dict[str, Any] | Refusal:
@@ -2562,14 +2604,13 @@ def screenshot_studio(
     """See the window: capture the whole Studio as a PNG (scaled to `width`,
     never upscaled) and return its path — read that file to look at it.
     Pass a page name or an artifact version to navigate there first."""
-    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import screenshot  # noqa: PLC0415
 
     resolved = _studio_artifact(artifact)
     if resolved is not None and not isinstance(resolved, str):
         return resolved  # type: ignore[return-value]  # a refusal is the reply
     return screenshot(
-        current_project(), section=section, artifact=resolved, width=width
+        _studio_project(), section=section, artifact=resolved, width=width
     )
 
 
@@ -2577,10 +2618,9 @@ def read_studio_events(since_ns: int = 0, limit: int = 200) -> list[dict[str, An
     """What the human did in the Studio after `since_ns` (epoch nanoseconds;
     0 for everything): page opened, artifact selected, artifact shown,
     project switched, time scrubbed. The agent's context for 'look at this'."""
-    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import events  # noqa: PLC0415
 
-    return events(current_project(), since_ns=since_ns, limit=limit)
+    return events(_studio_project(), since_ns=since_ns, limit=limit)
 
 
 # -- import what exists: experiments, policies, evaluations, findings ------------
@@ -3244,6 +3284,40 @@ def create_project_dir(
         "root": str(project.root),
         "name": project.name,
         "current": True,
+        "next": "launch_studio() shows it in the Studio; onboard_robot brings "
+        "a robot in",
+    }
+
+
+def list_samples() -> list[dict[str, Any]]:
+    """The sample projects: finished projects to explore before your own
+    (the Go2 walk, the whole loop), each with its download size and where
+    it is installed once opened."""
+    from trainnr.project.locate import projects_home  # noqa: PLC0415
+    from trainnr.samples import describe  # noqa: PLC0415
+
+    return describe(projects_home())
+
+
+def open_sample(name: str = "go2-walk") -> dict[str, Any] | Refusal:
+    """Open a sample project: downloaded the first time (its size and
+    SHA-256 checked), unpacked into the projects home as an ordinary
+    project, indexed, and made current; after that, opened as it is."""
+    from trainnr.project import Project  # noqa: PLC0415
+    from trainnr.samples import SampleError  # noqa: PLC0415
+    from trainnr.samples import open_sample as open_  # noqa: PLC0415
+
+    try:
+        project = Project(open_(name))
+    except (KeyError, SampleError) as why:
+        return refusal(_reason(why))
+    return {
+        "status": DONE,
+        "root": str(project.root),
+        "name": project.name,
+        "current": True,
+        "next": "launch_studio() shows it (a Studio on its Welcome page "
+        "opens it by itself); describe_project summarises it",
     }
 
 
@@ -3288,6 +3362,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_identification_methods",
         "list_jobs",
         "list_projects",
+        "list_samples",
         "list_public_logs",
         "list_robot_adapters",
         "list_robots",
@@ -3584,6 +3659,14 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         description="Choose the current project by name or path; later calls "
         "and later sessions act on it."
     )(use_project)
+    server.tool(
+        description="The sample projects to explore (the Go2 walk, the whole "
+        "loop): size and whether opened."
+    )(list_samples)
+    server.tool(
+        description="Open a sample project: downloaded once (checked), "
+        "unpacked into the projects home, made current."
+    )(open_sample)
 
     # The Studio's control surface: every door a file under <project>/.index
     # (commands in, state and events out), so the agent drives the window

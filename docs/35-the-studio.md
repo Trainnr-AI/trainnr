@@ -157,6 +157,43 @@ picks the set of its theme, so a switch is instant. Under WSLg the app
 takes winit's own window path (Wayland) since 2026-10-03; the X11 path
 (`TRAINNR_X11=1`) presents a frame in half a second there (measured 2026-10-03).
 
+### 5.2 Empty pages and the first project (2026-10-09)
+
+A fresh-install review found every empty page one faint sentence in a box
+and a new project's Overview nine grey stage chips and four zeros, with
+nothing to do next. Each page now has a guide (`onboarding.rs`, one per
+section): its icon, a title, one sentence on what the page holds, and the
+words to say to the agent, each in a chip that copies itself on a click.
+An empty project's Overview keeps the pipeline and shows **Start here**
+instead of the zeros: three numbered steps (bring in the robot, give it
+data, fit its dynamics), each with its words. The prompts are sentences a
+person would type, never tool calls; a test holds every rail page to a
+title, a sentence and call-free prompts. Sentences use the text colour,
+not the muted one: muted measured 2.7:1 on a dark card, under the 4.5:1
+body text needs; the guides measure 5.1:1 (dark) and 9.7:1 (light).
+
+### 5.3 The Welcome page and the samples (2026-10-09)
+
+A new user's first screen was a finished Go2 walk from the author's own
+projects, or the checkout's empty `sample`, a project they never made.
+With no project the Studio now opens on a **Welcome page** at the
+projects home: no rail, the title bar reads Welcome, and three things to
+do. **Start your own** gives the words for the agent ("Create a project
+called my-robot") and where projects live; **Explore a sample** offers
+the Go2 walk with an Open button; **What a project goes through** numbers
+the loop's nine stages, each saying on hover what its page holds. Your
+projects follow as cards when there are any. The window follows the
+projects home's `.current`, so the project the agent makes or opens
+replaces the Welcome page by itself, within a second.
+
+Open runs `trainnr sample open go2-walk` (`spawn::trainnr_command`, the
+pipeline's environment): the download, the size and SHA-256 checks and
+the unpacking are the Python side's (`trainnr/samples.py`); the Studio
+switches to the folder it prints, or shows its last line when it fails.
+The Projects page lists the samples under its projects, the open one
+marked as open. The Studio's copies of the sample list and the loop's
+stages are pinned to the Python originals by `tests/test_studio_mirrors.py`.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:
@@ -192,7 +229,7 @@ These are the ones that cost real time and are worth not rediscovering:
 ## 7. Where the Studio sits in the loop
 
 The Studio is the window, not the workflow. The workflow is the MCP
-surface: 75 tools registered as of 2026-10-05, every one callable by an
+surface: 77 tools registered as of 2026-10-09, every one callable by an
 agent. The loop they walk is docs/76. The app's jobs:
 
 - **Launched by a tool.** `launch_studio` starts it; anything speaking

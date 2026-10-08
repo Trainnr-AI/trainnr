@@ -11,12 +11,15 @@
 use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::model::Model;
+use crate::onboarding::{Pick, SampleState};
 use crate::pages::{self, Section, RAIL_ICON};
-use crate::spawn::{end_tree, pipeline_command, PRESENTER_SCRIPT};
+use crate::spawn::{end_tree, pipeline_command, trainnr_command, PRESENTER_SCRIPT};
 use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
 const RAIL_WIDTH: f32 = 196.0;
+/// The log a sample's opening writes, in the projects home's `.index`.
+const SAMPLE_LOG: &str = "sample-open.log";
 /// Width of the macOS traffic-light cluster the top bar must clear.
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHTS_INSET: f32 = 72.0;
@@ -82,6 +85,11 @@ pub struct Shell {
     /// A run's viewer file to load into the viewer, taken by the frame
     /// loop that owns the viewer.
     pub viewer_request: Option<std::path::PathBuf>,
+    /// A sample being opened (`trainnr sample open`): its name, the
+    /// process, and the log its errors go to.
+    sample_job: Option<(&'static str, std::process::Child, std::path::PathBuf)>,
+    /// What the sample cards show: the one opening, the last failure.
+    pub samples: SampleState,
 }
 
 impl Shell {
@@ -111,6 +119,8 @@ impl Shell {
             runs_listed: false,
             stop_note: None,
             viewer_request: None,
+            sample_job: None,
+            samples: SampleState::default(),
         }
     }
 
@@ -121,7 +131,76 @@ impl Shell {
     /// console log into its record and re-indexes (the Go2 run was
     /// invisible until a Show, 2026-09-10).
     pub fn open_project(&mut self) {
-        self.ensure_presenter();
+        if !self.model.welcome {
+            self.ensure_presenter();
+        }
+    }
+
+    /// Open a sample: `trainnr sample open <name>` downloads, checks,
+    /// unpacks and indexes it and makes it current; `tick` switches to
+    /// the folder it prints. Not killed with the window: a download cut
+    /// short leaves its temporary folder in the projects home.
+    pub fn open_sample(&mut self, name: &'static str) {
+        if self.sample_job.is_some() {
+            return;
+        }
+        let dir = crate::model::user_projects_home()
+            .unwrap_or_else(std::env::temp_dir)
+            .join(crate::model::INDEX_DIR);
+        let log = dir.join(SAMPLE_LOG);
+        let sink = std::fs::create_dir_all(&dir).and_then(|()| std::fs::File::create(&log));
+        let mut command = trainnr_command();
+        command
+            .args(["sample", "open", name])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped());
+        if let Ok(sink) = sink {
+            command.stderr(sink);
+        }
+        self.samples.failed = None;
+        match command.spawn() {
+            Ok(child) => {
+                self.samples.opening = Some(name);
+                self.sample_job = Some((name, child, log));
+            }
+            Err(why) => self.samples.failed = Some((name, format!("uv did not start: {why}"))),
+        }
+    }
+
+    /// The sample's opening, when it ended: switch to its folder, or say
+    /// why it did not open (the log's last line).
+    fn reap_sample(&mut self) {
+        let Some((name, child, log)) = self.sample_job.as_mut() else {
+            return;
+        };
+        let status = match child.try_wait() {
+            Ok(None) => return,
+            Ok(Some(status)) => Some(status),
+            Err(_) => None,
+        };
+        let mut printed = String::new();
+        if let Some(mut out) = child.stdout.take() {
+            use std::io::Read as _;
+            let _ = out.read_to_string(&mut printed);
+        }
+        let name = *name;
+        let root = std::path::PathBuf::from(printed.trim());
+        if status.is_some_and(|s| s.success()) && root.join(crate::model::MANIFEST_FILE).is_file() {
+            self.switch_to = Some(root);
+        } else {
+            let why = std::fs::read_to_string(&*log)
+                .ok()
+                .and_then(|text| {
+                    text.lines()
+                        .rev()
+                        .find(|l| !l.trim().is_empty())
+                        .map(str::to_owned)
+                })
+                .unwrap_or_else(|| "it exited without saying why".to_owned());
+            self.samples.failed = Some((name, why));
+        }
+        self.samples.opening = None;
+        self.sample_job = None;
     }
 
     pub fn show(&mut self, stamp: &str) {
@@ -215,8 +294,10 @@ impl Shell {
                     // and its switcher are where it changes.
                     let crumb = ui.visuals().weak_text_color();
                     ui.label(egui::RichText::new(self.model.name()).color(crumb));
-                    ui.label(egui::RichText::new("›").color(crumb));
-                    ui.label(egui::RichText::new(self.section.title()).color(crumb));
+                    if !self.model.welcome {
+                        ui.label(egui::RichText::new("›").color(crumb));
+                        ui.label(egui::RichText::new(self.section.title()).color(crumb));
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if custom_chrome {
                             // re_ui's caption buttons: close, maximize,
@@ -291,7 +372,7 @@ impl Shell {
                             self.close_log();
                         }
                     }
-                    if !self.presenter_running() {
+                    if !self.model.welcome && !self.presenter_running() {
                         ui.add_space(8.0);
                         ui.label(
                             egui::RichText::new("presenter stopped")
@@ -469,6 +550,18 @@ impl Shell {
     /// The page for the current section, except Live, which the caller
     /// renders (it owns the viewer and the viewport).
     pub fn page(&mut self, ui: &mut egui::Ui) {
+        if self.model.welcome {
+            self.model.refresh_projects();
+            let home = crate::model::user_projects_home();
+            let picked = crate::onboarding::welcome(
+                ui,
+                self.model.projects(),
+                &self.samples,
+                home.as_deref(),
+            );
+            self.pick(picked);
+            return;
+        }
         if let Some(problem) = self.model.problem.clone() {
             if self.section != Section::Projects {
                 pages::problem_page(ui, &problem);
@@ -477,9 +570,8 @@ impl Shell {
         }
         match self.section {
             Section::Projects => {
-                if let Some(root) = pages::projects(ui, &mut self.model) {
-                    self.switch_to = Some(root);
-                }
+                let picked = pages::projects(ui, &mut self.model, &self.samples);
+                self.pick(picked);
             }
             Section::Overview => {
                 let mut go_to = None;
@@ -556,6 +648,12 @@ impl Shell {
     /// the jobs, the events, the presenter's answer) — on every page,
     /// the Simulator included, not only where a page is drawn.
     pub fn tick(&mut self, ctx: &egui::Context) {
+        self.reap_sample();
+        if self.switch_to.is_none() {
+            // On the Welcome page: the first project the agent makes or
+            // opens is the one to show.
+            self.switch_to = self.model.followed_project();
+        }
         if let Some(root) = self.switch_to.take() {
             self.kill_presenter();
             self.model.switch(root);
@@ -566,6 +664,16 @@ impl Shell {
         }
         self.model.refresh();
         ctx.request_repaint_after(crate::model::RELOAD_EVERY);
+    }
+
+    /// A click on the Welcome or Projects page: a project to switch to,
+    /// or a sample to open.
+    fn pick(&mut self, picked: Option<Pick>) {
+        match picked {
+            Some(Pick::Project(root)) => self.switch_to = Some(root),
+            Some(Pick::Sample(name)) => self.open_sample(name),
+            None => {}
+        }
     }
 
     /// What floats over every page, the Simulator included: the keys and

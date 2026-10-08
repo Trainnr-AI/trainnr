@@ -8,11 +8,15 @@ All notable changes to trainnr. The format follows
 
 ### Added
 
+- The Studio opens on a Welcome page before any project exists: start your own project through the agent, open the Go2 sample with one click, and the loop's nine stages; it follows to the first project the agent makes or opens. `launch_studio`, `trainnr studio` and the Studio's doors work before the first project; `trainnr sample list` and `trainnr sample open` do from a shell what the sample tools do. The Projects page lists the samples.
+- Sample projects: `list_samples` and `open_sample` open a finished project to explore before your own. The Go2 walk (12 MB) is the whole loop, from identification to a gated deployment and a drift check, downloaded once from the Hugging Face dataset at a pinned commit, size and SHA-256 checked, and unpacked into the projects home. `tools/make-sample.py` builds a sample from a real project, deterministically, refusing any file with a private marker.
 - The Python packages are uploaded to PyPI by `.github/workflows/pypi.yml` when a release is published (the release's own attested files, trusted publishing, a maintainer's approval per package); a release candidate goes to TestPyPI. `uvx --from "trainnr[sim,mcp]" trainnr mcp` runs the server with no checkout.
 
 ### Changed
 
+- The Studio's empty pages say what each page holds and what to ask the agent, in prompts that copy on a click; an empty project's Overview shows a Start here card with the first three steps instead of a row of zeros; the Overview's next step for an empty project is one short line.
 - The README says what a Mac trains: the smoke recipe and `check_task` run on the CPU; a full run needs a GPU. Its disk figures are the ones measured on a fresh install (the server's environment about 1 GB, the Studio about 200 MB unpacked, the trainer's environment 1.8 GB on a Mac and 6 GB on Linux with CUDA, built by the first `check_task`), and a new section says how to uninstall or reset and what stays. The Studio's Compute card no longer names `TRAINNR_ENDPOINT`, which no tool reads.
+- The first session after the install says what to say first (the plugin's session hook, once); `describe_studio` before any project answers with the next step instead of failing; `create_project`'s reply names `launch_studio` as the next step; `onboard_robot` refusing a missing file inside Unitree's repository gives the `git clone` that fetches it.
 - The Studio opens dark on a first launch (`set_studio_theme` and the title-bar switch still choose, and the choice is kept); the README's screenshots follow the reader's GitHub theme, dark and light.
 - The README's Studio section describes the prebuilt download (the plugin's first session, `launch_studio` on demand, `trainnr studio --install`) now that v0.1.0 is published; building from source is CONTRIBUTING's.
 
@@ -22,6 +26,7 @@ All notable changes to trainnr. The format follows
 - A plugin install lists no projects from its own copy of the repository: `list_projects` on a fresh install showed `sample` from the plugin's cache folder.
 - A job no longer inherits the server's `VIRTUAL_ENV`; every job log began with uv's warning about it.
 - The `describe_job` hints wait 60 s, not 300: Claude Code moves a call past 120 s to the background.
+- The environment stage is proved by an accepted task, not a declared one: after `create_task` the Studio and the index say "declared, not yet accepted" and name the `check_task` call, until it accepts. `list_robots` says each robot's `scope` (`project` or `library`), and `list_projects` counts the stages the project's loop passes through, as the Studio does.
 
 ## [0.1.0] - 2026-10-06
 
