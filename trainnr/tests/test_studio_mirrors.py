@@ -467,3 +467,44 @@ class RunningNow(unittest.TestCase):
         self.assertLessEqual(job_keys, record)
         self.assertIn("stage", status_keys)
         self.assertLessEqual(status_keys, status)
+
+
+class AgentLinkFile(unittest.TestCase):
+    """The connection file (`trainnr.mcp_link`) the Studio reads to say
+    whether an agent is there: one name, one schema, one staleness."""
+
+    def test_the_name_schema_and_staleness_agree(self) -> None:
+        from trainnr import mcp_link  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(MODEL_RS, r'const LINK_FILE: &str = "([^"]+)";'),
+            mcp_link.LINK_FILE,
+        )
+        self.assertEqual(
+            constant(MODEL_RS, r'const LINK_SCHEMA: &str = "([^"]+)";'),
+            mcp_link.SCHEMA,
+        )
+        self.assertEqual(
+            float(constant(MODEL_RS, r"const LINK_STALE_S: f64 = ([0-9.]+);")),
+            mcp_link.STALE_S,
+        )
+
+    def test_the_keys_rust_reads_are_written(self) -> None:
+        """Every field the Studio deserialises is one the writer writes."""
+        import json  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        from trainnr import mcp_link  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / mcp_link.LINK_FILE
+            mcp_link.AgentLink(path).touch("list_robots")
+            written = set(json.loads(path.read_text(encoding="utf-8")))
+        self.assertLessEqual(_serde_fields(MODEL_RS, "LinkFile"), written)
+
+    def test_the_home_variable_agrees(self) -> None:
+        from trainnr import paths  # noqa: PLC0415
+
+        self.assertEqual(
+            constant(MODEL_RS, r'const HOME_ENV: &str = "([^"]+)";'), paths.HOME_ENV
+        )

@@ -3407,9 +3407,35 @@ def _guarded(fn: Any) -> Any:
     return call
 
 
+class _Connection:
+    """Where the serving process keeps its connection file open, so a tool
+    call can note itself on it. A holder rather than a rebound module
+    global: the query functions are also called directly, by the suite and
+    by the CLI, and then there is nothing to note."""
+
+    link: Any = None
+
+
+_LINK = _Connection()
+
+
+def _recorded(tool_name: str, fn: Any) -> Any:
+    """`fn` with the call noted on the connection file, so the Studio shows
+    a live agent and the tool it last ran. Never fails the call."""
+
+    @functools.wraps(fn)
+    def call(*args: Any, **kwargs: Any) -> Any:
+        if _LINK.link is not None:
+            _LINK.link.touch(tool_name)
+        return fn(*args, **kwargs)
+
+    return call
+
+
 def _guard_tools(server: Any) -> None:
     """Every tool registered on `server` from here on, the built-ins and
-    the plugins' alike, is guarded and annotated (read-only, destructive)."""
+    the plugins' alike, is guarded, recorded and annotated (read-only,
+    destructive)."""
     from mcp.types import ToolAnnotations  # noqa: PLC0415
 
     register = server.tool
@@ -3424,7 +3450,7 @@ def _guard_tools(server: Any) -> None:
                     destructive_hint=tool_name in DESTRUCTIVE_TOOLS,
                 ),
             )
-            register(name=tool_name, **kwargs)(_guarded(fn))
+            register(name=tool_name, **kwargs)(_recorded(tool_name, _guarded(fn)))
             return fn
 
         return apply
@@ -3979,4 +4005,12 @@ def register_plugin_tools(server: Any) -> list[str]:
 
 
 def main() -> None:
-    build_server().run("stdio")
+    from trainnr.mcp_link import AgentLink  # noqa: PLC0415
+
+    server = build_server()
+    with AgentLink() as link:
+        _LINK.link = link
+        try:
+            server.run("stdio")
+        finally:
+            _LINK.link = None

@@ -194,6 +194,56 @@ The Projects page lists the samples under its projects, the open one
 marked as open. The Studio's copies of the sample list and the loop's
 stages are pinned to the Python originals by `tests/test_studio_mirrors.py`.
 
+### 5.4 Whether an agent is connected (2026-10-10)
+
+The Welcome page says trainnr is "run from your coding agent", and an
+empty project's Overview says each stage "lights up as its result lands".
+Neither said whether an agent was there. A user whose MCP configuration
+had not taken — the wrong session root, a client not restarted — saw
+exactly the window a correctly wired user saw, and the only way to tell
+them apart was to call a tool and watch for a change. A first-run report
+on a clean Mac (2026-10-10) spent most of its setup time there.
+
+The **status bar** now carries a dot and one word on every page, at every
+stage of a project: an agent can drop at any time, and the two screens
+that spell it out are only shown while a project is empty. Its hover
+gives the call count and the last tool, or the command to run.
+
+Those two screens — the Welcome page and an empty project's **Start
+here** card — carry the fuller line: a dot and **Agent connected**, with
+the last tool it called, or **No agent connected** followed by the
+command from the README and a chip that copies it. They are where the
+promise is made, so they are where the fix is spelled out. None of this
+is a chat panel and none of it wants to become one (§8, §10.2).
+
+**How it is known, without the Studio speaking MCP.** An MCP server over
+stdio lives exactly as long as the client session that spawned it, so the
+server's liveness *is* the answer. `trainnr mcp` writes
+`<user home>/agent.json` while it serves (`trainnr/trainnr/mcp_link.py`), with its
+pid, a heartbeat refreshed every second on a daemon thread, the number of
+tool calls and the last tool's name; it removes the file on the way out.
+The Studio polls that file once a second and judges it the way the Python
+side judges the Studio's own state file: connected needs a fresh
+heartbeat **and** a live pid, so a session killed hard reads as gone
+rather than as an agent that will never answer.
+
+The heartbeat cannot wait for a tool call: an agent that has asked for
+nothing in an hour is still connected. It is a thread, not a tool hook,
+for that reason.
+
+The file sits under the user's home and not in a project because an agent
+is connected to the machine, not to a project — the Welcome page is shown
+before any project exists, and that is exactly where the answer is
+needed. It joins the index and the job table as the third file in the
+contract between the halves; its name, schema and staleness are pinned to
+the writer's by `tests/test_studio_mirrors.py`.
+
+**Not done here:** naming the client (Claude Code, Cursor) would mean
+reading the MCP handshake's `clientInfo`, and detecting a client that is
+installed but not running would mean reading other tools' configuration
+files. Neither is needed to answer "is my agent there", and the second
+has a privacy cost; both are left until someone asks.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:
