@@ -372,6 +372,14 @@ impl Shell {
                             self.close_log();
                         }
                     }
+                    // Whether the agent driving all of this is still
+                    // there. On every page and at every stage of a
+                    // project: a session can drop at any time, and the
+                    // pages that spell it out are only shown while a
+                    // project is empty (2026-10-10).
+                    ui.add_space(8.0);
+                    let link = crate::agent::link(ui);
+                    crate::agent::status_bar_chip(ui, &link);
                     if !self.model.welcome && !self.presenter_running() {
                         ui.add_space(8.0);
                         ui.label(

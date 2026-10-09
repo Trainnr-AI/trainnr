@@ -5,11 +5,16 @@
 //! `trainnr.project.write_index` and the `describe_project` MCP tool.
 //! The job table (`<project>/mcp-jobs/<id>.json` + `<id>.exit`) is written
 //! by `trainnr.mcp_jobs.JobManager` for every act tool the agent
-//! calls. The Studio never speaks MCP itself and never walks the project's
-//! artifact files: these two are the whole contract between the halves
-//! (decision 2026-09-08), re-read whenever their modification times move,
-//! so a tool call from the developer's agent updates this window with no
-//! protocol in between. The files are the truth; this is a cache.
+//! calls. The connection file (`<user home>/agent.json`) is written by
+//! `trainnr.mcp_link` while `trainnr mcp` serves, and answers whether an
+//! agent is connected at all — the one fact that belongs to the machine
+//! rather than to a project, so the Welcome page can show it before any
+//! project exists (2026-10-10). The Studio never speaks MCP itself and
+//! never walks the project's artifact files: these three are the whole
+//! contract between the halves (decision 2026-09-08, extended
+//! 2026-10-10), re-read whenever their modification times move, so a tool
+//! call from the developer's agent updates this window with no protocol
+//! in between. The files are the truth; this is a cache.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -70,6 +75,81 @@ pub fn user_projects_home() -> Option<PathBuf> {
     named("HOME")
         .or_else(|| named("USERPROFILE"))
         .map(|home| home.join(HOME_DIR).join(PROJECTS_HOME))
+}
+
+/// Where the user's own data lives: `$TRAINNR_HOME`, else `~/trainnr`
+/// (`trainnr/paths.py::user_home`). Not `$TRAINNR_PROJECTS`, which moves
+/// the projects alone.
+pub fn user_home() -> Option<PathBuf> {
+    let named = |var: &str| {
+        std::env::var_os(var)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    if let Some(root) = named(HOME_ENV) {
+        return Some(root);
+    }
+    named("HOME")
+        .or_else(|| named("USERPROFILE"))
+        .map(|home| home.join(HOME_DIR))
+}
+
+/// Mirrored from `trainnr/mcp_link.py` (`LINK_FILE`, `SCHEMA`, `STALE_S`):
+/// the file `trainnr mcp` keeps while it serves, under the user's home.
+const LINK_FILE: &str = "agent.json";
+const LINK_SCHEMA: &str = "trainnr-agent-link/1";
+/// A heartbeat older than this is nobody's. The writer refreshes every
+/// second, so this is ten missed beats.
+const LINK_STALE_S: f64 = 10.0;
+
+/// What `trainnr mcp` wrote about itself. Its fields are pinned against
+/// the writer's by `tests/test_studio_mirrors.py`.
+#[derive(Debug, Default, Deserialize)]
+pub struct LinkFile {
+    #[serde(default)]
+    pub schema: String,
+    #[serde(default)]
+    pub pid: u32,
+    #[serde(default)]
+    pub heartbeat: f64,
+    #[serde(default)]
+    pub calls: u64,
+    #[serde(default)]
+    pub last_tool: Option<String>,
+}
+
+/// Whether an agent is connected, and what it last did.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct AgentLink {
+    pub connected: bool,
+    pub calls: u64,
+    pub last_tool: Option<String>,
+}
+
+/// Read the connection file and judge it the way the Python side judges
+/// the Studio's own state (`project/control.py`): a fresh heartbeat AND a
+/// live pid, so a session killed hard reads as gone rather than as an
+/// agent that will never answer.
+pub fn read_agent_link(home: Option<&Path>) -> AgentLink {
+    let Some(path) = home.map(|h| h.join(LINK_FILE)) else {
+        return AgentLink::default();
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return AgentLink::default();
+    };
+    let Ok(raw) = serde_json::from_str::<LinkFile>(&text) else {
+        return AgentLink::default();
+    };
+    let family = |s: &str| s.split('/').next().unwrap_or_default().to_owned();
+    if family(&raw.schema) != family(LINK_SCHEMA) {
+        return AgentLink::default();
+    }
+    let age = now_epoch() - raw.heartbeat;
+    AgentLink {
+        connected: age < LINK_STALE_S && raw.pid > 0 && crate::running::pid_alive(raw.pid),
+        calls: raw.calls,
+        last_tool: raw.last_tool,
+    }
 }
 
 /// The project last created or chosen through the tools, when it is one.
@@ -906,6 +986,55 @@ pub fn elapsed(seconds: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A connection file with the fields `trainnr.mcp_link` writes.
+    fn link_file(dir: &Path, pid: u32, heartbeat_age: f64) -> PathBuf {
+        std::fs::create_dir_all(dir).expect("dir");
+        let path = dir.join(LINK_FILE);
+        let text = format!(
+            r#"{{"schema":"{LINK_SCHEMA}","pid":{pid},"started":0.0,
+               "heartbeat":{},"calls":7,"last_tool":"identify_system"}}"#,
+            now_epoch() - heartbeat_age,
+        );
+        std::fs::write(&path, text).expect("write");
+        path
+    }
+
+    #[test]
+    fn a_live_process_with_a_fresh_heartbeat_is_connected() {
+        let dir = std::env::temp_dir().join(format!("studio-link-ok-{}", std::process::id()));
+        link_file(&dir, std::process::id(), 0.0);
+        let link = read_agent_link(Some(&dir));
+        assert!(link.connected, "this very process is alive");
+        assert_eq!(link.calls, 7);
+        assert_eq!(link.last_tool.as_deref(), Some("identify_system"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stale_heartbeat_reads_as_gone() {
+        let dir = std::env::temp_dir().join(format!("studio-link-old-{}", std::process::id()));
+        link_file(&dir, std::process::id(), LINK_STALE_S + 1.0);
+        assert!(!read_agent_link(Some(&dir)).connected);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_foreign_schema_and_a_missing_file_read_as_gone() {
+        let dir = std::env::temp_dir().join(format!("studio-link-odd-{}", std::process::id()));
+        assert!(!read_agent_link(Some(&dir)).connected, "no file");
+        assert!(!read_agent_link(None).connected, "no home");
+        std::fs::create_dir_all(&dir).expect("dir");
+        std::fs::write(
+            dir.join(LINK_FILE),
+            r#"{"schema":"someone-else/1","pid":1}"#,
+        )
+        .expect("write");
+        assert!(!read_agent_link(Some(&dir)).connected, "foreign schema");
+        std::fs::write(dir.join(LINK_FILE), "{not json").expect("write");
+        assert!(!read_agent_link(Some(&dir)).connected, "truncated");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn the_index_shape_round_trips() {
