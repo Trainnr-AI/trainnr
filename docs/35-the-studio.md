@@ -315,7 +315,7 @@ Fixed here:
   colours. Dark muted text takes Rerun's own subdued text, `Gray.550`
   (`DARK_MUTED`; `Gray.500`, the first pick, read 4.4:1 on a card),
   dark tags Rerun's `text_default`, and the highlight token (a
-  background) is no longer used as text: `Palette::accent_text` is the
+  background) is no longer used as text: the palette's `accent_text` is the
   link blue in light and Rerun's `info_text_color` in dark. The light
   link blue went one notch darker (0, 96, 196) to clear 4.5:1 on every
   surface. Measured after: secondary text 6.1:1 on the page and 5.7:1
@@ -346,7 +346,7 @@ The second round, the same day:
 - **The Overview** of a project with results leads with the best policy
   per condition; the four count tiles repeated the rail's counts.
 - **Forms** show a problem under its own field, in the warning colour
-  (`Palette::warn`: Rerun's orange in dark, a deeper one in light, where
+  (the palette's `warn`: Rerun's orange in dark, a deeper one in light, where
   Rerun's measured 2.6:1), a bad number as it is typed and an empty
   required field only after Run. A click outside no longer discards a
   half-filled form or the New project dialog (`widgets::escape_closes`:
