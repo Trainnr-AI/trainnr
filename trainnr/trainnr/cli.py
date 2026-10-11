@@ -18,6 +18,8 @@ import argparse
 import sys
 from importlib.metadata import PackageNotFoundError, version
 
+from trainnr.mcp_jobs import REFUSED
+
 PACKAGE = "trainnr"
 DEFAULT_SAMPLE = "go2-walk"
 REFUSED_EXIT = 3  # `trainnr call`: the tool ran and refused, with its reason
@@ -137,7 +139,7 @@ def _call(tool: str | None, raw: str, *, listing: bool) -> int:
         print(f"trainnr call {tool}: {why}", file=sys.stderr)
         return 1
     print(json.dumps(result, indent=1, default=str))
-    refused = isinstance(result, dict) and result.get("status") == "refused"
+    refused = isinstance(result, dict) and result.get("status") == REFUSED
     return REFUSED_EXIT if refused else 0
 
 

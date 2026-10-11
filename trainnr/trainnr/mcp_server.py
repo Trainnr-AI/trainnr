@@ -3269,7 +3269,12 @@ def create_project_dir(
     from trainnr.project import create_project, remember_project  # noqa: PLC0415
     from trainnr.project.locate import projects_home  # noqa: PLC0415
 
-    target = Path(path if path is not None else name).expanduser()
+    # Only a path someone gave is expanded: a name is a folder in the home,
+    # and `~root` typed as a name expanded to /root (review, 2026-10-11).
+    try:
+        target = Path(path).expanduser() if path is not None else Path(name)
+    except RuntimeError as why:  # `~nosuchuser`
+        return refusal(f"path {path!r}: {why}")
     home = projects_home().resolve()
     root = target if target.is_absolute() else home / target
     if not target.is_absolute() and not root.resolve().is_relative_to(home):
@@ -3882,27 +3887,26 @@ def call_tool(
     in the app and an agent over MCP share one tool surface (the desktop
     app plan, docs/85, 2026-10-11). Returns the tool's structured result
     (a refusal comes back as the dict the tool returned); raises
-    ToolCallError for an unknown tool, bad arguments or a failed call."""
+    ToolCallError for an unknown tool, bad arguments or a failed call,
+    which the SDK reports as ToolError."""
     import asyncio  # noqa: PLC0415
 
     from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
 
     server = server or build_server()
-    known = {tool.name for tool in server._tool_manager.list_tools()}
-    if name not in known:
-        raise ToolCallError(f"no tool {name!r}; `trainnr call --list` lists them")
     try:
         result = asyncio.run(server.call_tool(name, arguments or {}))
     except ToolError as why:
+        if str(why).startswith("Unknown tool"):
+            raise ToolCallError(
+                f"no tool {name!r}; `trainnr call --list` lists them"
+            ) from why
         raise ToolCallError(str(why)) from why
-    text = " ".join(
-        getattr(part, "text", "") for part in getattr(result, "content", None) or []
-    ).strip()
-    if getattr(result, "is_error", False):
-        raise ToolCallError(text or f"{name} failed")
     content = result.structured_content
-    if content is None:
-        return text
+    if content is None:  # a tool that answers in text alone
+        return " ".join(
+            getattr(part, "text", "") for part in result.content or []
+        ).strip()
     return content.get("result", content)
 
 

@@ -421,8 +421,12 @@ pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
         if ui.memory(|m| m.focused().is_none()) {
             field.request_focus();
         }
-        // Enter anywhere in the dialog: it has one field.
-        let entered = ui.input(|i| i.key_pressed(egui::Key::Enter));
+        // Enter in the field creates; Enter on Cancel cancels. egui 0.36
+        // keeps the field focused the frame Enter is pressed (measured in
+        // the test below), so the field's focus, kept or just given up,
+        // tells the two apart.
+        let in_field = field.has_focus() || field.lost_focus();
+        let entered = in_field && ui.input(|i| i.key_pressed(egui::Key::Enter));
         ui.add_space(14.0);
         ui.horizontal(|ui| {
             let ready = !name.trim().is_empty();
@@ -458,7 +462,7 @@ pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Re
 }
 
 /// A failure line under a button, when the last run under `key` failed.
-fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &str) {
+pub fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &str) {
     if let Some((failed, why)) = &state.failed {
         if *failed == key {
             ui.add_space(8.0);

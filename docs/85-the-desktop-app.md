@@ -159,8 +159,8 @@ Each phase ends with a check on a fresh machine, not with code merged.
 - **Metered MCP calls.** Paper's free plan allows 100 tool calls a week.
   trainnr's tools run on the user's machine and are not counted.
 - **Writing other apps' configuration unasked.** Spline writes its MCP
-  entry into every client it finds at launch. trainnr asks first, per
-  client.
+  entry into every client it finds at launch. trainnr will ask first,
+  per client: phase 3, not built yet, so not a claim until it ships.
 
 ## 7. Open questions for Prakhar
 

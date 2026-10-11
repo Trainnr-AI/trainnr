@@ -51,7 +51,22 @@ class CallingAToolByName(unittest.TestCase):
         self.assertEqual(code, 0)
         made = json.loads(out)
         self.assertEqual(made["status"], "done")
-        self.assertEqual(Path(made["root"]), self.home / "projects" / "mine")
+        # Places, not spellings: macOS's /var is a link to /private/var.
+        self.assertEqual(
+            Path(made["root"]).resolve(), (self.home / "projects" / "mine").resolve()
+        )
+
+    def test_a_name_is_never_a_home_folder(self) -> None:
+        """`~root` typed as a project name expanded to /root (review,
+        2026-10-11); a name is a folder in the projects home, refused when
+        it is not one."""
+        for name in ("~root", "~no-such-user-here"):
+            arguments = json.dumps({"name": name})
+            code, out, _ = self.run_cli("create_project", "--args", arguments)
+            with self.subTest(name=name):
+                self.assertEqual(code, cli.REFUSED_EXIT)
+                self.assertIn("plain word", json.loads(out)["reason"])
+        self.assertFalse((Path.home() / "project.json").exists())
 
     def test_a_refusal_is_a_result_with_its_own_exit_code(self) -> None:
         code, out, _ = self.run_cli("use_project", "--args", '{"project": "none"}')

@@ -550,12 +550,23 @@ pub fn projects(
             ui.add_space(8.0);
             tag(ui, &list.len().to_string());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let busy = samples.running.is_some();
-                if crate::onboarding::primary_button(ui, "New project", !busy).clicked() {
-                    picked = Some(crate::onboarding::Pick::NewProject);
+                if samples.running == Some(crate::onboarding::NEW_PROJECT) {
+                    ui.label("Creating…");
+                    ui.spinner();
+                } else {
+                    let busy = samples.running.is_some();
+                    if crate::onboarding::primary_button(ui, "New project", !busy).clicked() {
+                        picked = Some(crate::onboarding::Pick::NewProject);
+                    }
                 }
             });
         });
+        crate::onboarding::failure_line(
+            ui,
+            samples,
+            crate::onboarding::NEW_PROJECT,
+            "It was not created",
+        );
         ui.add_space(4.0);
         weak_body(
             ui,

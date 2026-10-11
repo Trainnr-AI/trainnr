@@ -200,11 +200,16 @@ The app is becoming one people use on their own (docs/85). Its buttons
 run the same tools the agent calls, through `trainnr call <tool> --args
 '<json>'` (`spawn::trainnr_command`): one runner in the shell
 (`run_action`), one button at a time, its errors in the projects home's
-`.index/studio-action.log`. A finished command names the project to open:
+`.index/studio-action.log` and what it prints in `studio-action.out`: a
+file, never a pipe, because a pipe read only after the exit fills at
+about 64 KB and the command then waits forever. A finished command names the project to open:
 `sample open` prints its folder, `call` prints the tool's JSON, whose
 `root` names it; a refusal (exit 3) shows its reason under the button.
-**New project** is the first: a dialog asks for the name, and
-`create_project` checks it and refuses by name. Gotcha: a dialog that
+**New project** is the first: a dialog asks for the name, sent alone
+(never as a path), and `create_project` checks it with the shared name
+rule (`plain_name`) and refuses by name. The review of 2026-10-11 found
+`~root` typed as a name expanded to /root; a leading `~` is now refused,
+with the characters Windows cannot hold and a trailing dot. Gotcha: a dialog that
 asks for focus every frame takes it back the frame Enter releases it, so
 Enter never submitted; it now takes focus once and reads Enter itself
 (a headless test draws it).

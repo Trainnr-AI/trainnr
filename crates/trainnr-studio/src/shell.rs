@@ -18,9 +18,12 @@ use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
 const RAIL_WIDTH: f32 = 196.0;
-/// The log a button's `trainnr` command writes its errors to, in the
-/// projects home's `.index`.
+/// The files a button's `trainnr` command writes, in the projects home's
+/// `.index`: its errors, and what it prints. A file, never a pipe: a
+/// pipe read only after the exit fills at about 64 KB and the command
+/// then waits forever on its write (review, 2026-10-11).
 const ACTION_LOG: &str = "studio-action.log";
+const ACTION_OUT: &str = "studio-action.out";
 /// `trainnr call`'s exit code for a tool that ran and refused
 /// (`trainnr/cli.py::REFUSED_EXIT`).
 const REFUSED_EXIT: i32 = 3;
@@ -92,6 +95,8 @@ pub struct Shell {
     /// A button's `trainnr` command while it runs (a sample opening, a
     /// new project): its key, the process, and the log its errors go to.
     action_job: Option<(&'static str, std::process::Child, std::path::PathBuf)>,
+    /// What the running command prints (`ACTION_OUT`), read when it ends.
+    action_out: std::path::PathBuf,
     /// What the buttons show: the command running, the last failure.
     pub actions: ActionState,
     /// The New project dialog's name, while the dialog is open.
@@ -126,6 +131,7 @@ impl Shell {
             stop_note: None,
             viewer_request: None,
             action_job: None,
+            action_out: std::path::PathBuf::new(),
             actions: ActionState::default(),
             new_project_name: None,
         }
@@ -154,7 +160,9 @@ impl Shell {
     /// agent calls (`trainnr call`), which checks the name and refuses by
     /// name; `tick` switches to the project it made.
     pub fn create_project(&mut self, name: &str) {
-        let arguments = serde_json::json!({ "path": name, "name": name }).to_string();
+        // The name alone: create_project makes it a folder in the projects
+        // home, and refuses a name that is not one.
+        let arguments = serde_json::json!({ "name": name }).to_string();
         self.run_action(
             crate::onboarding::NEW_PROJECT,
             &["call", "create_project", "--args", &arguments],
@@ -172,15 +180,20 @@ impl Shell {
             .unwrap_or_else(std::env::temp_dir)
             .join(crate::model::INDEX_DIR);
         let log = dir.join(ACTION_LOG);
-        let sink = std::fs::create_dir_all(&dir).and_then(|()| std::fs::File::create(&log));
+        let out = dir.join(ACTION_OUT);
+        let files = std::fs::create_dir_all(&dir)
+            .and_then(|()| Ok((std::fs::File::create(&log)?, std::fs::File::create(&out)?)));
+        let Ok((errors, printed)) = files else {
+            self.actions.failed = Some((key, format!("cannot write in {}", dir.display())));
+            return;
+        };
         let mut command = trainnr_command();
         command
             .args(args)
             .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped());
-        if let Ok(sink) = sink {
-            command.stderr(sink);
-        }
+            .stdout(printed)
+            .stderr(errors);
+        self.action_out = out;
         self.actions.failed = None;
         match command.spawn() {
             Ok(child) => {
@@ -203,11 +216,7 @@ impl Shell {
             Ok(Some(status)) => Some(status),
             Err(_) => None,
         };
-        let mut printed = String::new();
-        if let Some(mut out) = child.stdout.take() {
-            use std::io::Read as _;
-            let _ = out.read_to_string(&mut printed);
-        }
+        let printed = std::fs::read_to_string(&self.action_out).unwrap_or_default();
         let key = *key;
         let outcome = action_outcome(status.and_then(|s| s.code()), &printed);
         match outcome {
@@ -718,6 +727,8 @@ impl Shell {
                     self.create_project(&name);
                 }
             }
+            // The dialog has the keys: no palette, no page moves under it.
+            return;
         }
         self.keys(ctx);
         if let Some(palette) = self.palette.as_mut() {
@@ -1079,7 +1090,8 @@ mod tests {
         let project = dir.join("mine");
         std::fs::create_dir_all(&project).unwrap();
         std::fs::write(project.join(crate::model::MANIFEST_FILE), "{}").unwrap();
-        let called = format!(r#"{{"status": "done", "root": "{}"}}"#, project.display());
+        // Built by serde, so a Windows path's backslashes are escaped.
+        let called = serde_json::json!({ "status": "done", "root": project }).to_string();
         assert_eq!(
             action_outcome(Some(0), &called),
             Ok(project.clone()),
