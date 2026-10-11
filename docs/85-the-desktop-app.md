@@ -99,6 +99,18 @@ pieces it needs, so the app's buttons and the agent's tools fetch the
 same way: an agent that calls `export_deployment` on a machine without
 the deploy piece gets it fetched, not an import error.
 
+**A Python the user already has is reused, never changed.** `uv` looks
+for a compatible interpreter on the machine before it downloads one, so
+a user with a fitting Python saves its 85 MB, and a user with `uv` saves
+its 39 MB. Fitting is strict: the tools need Python 3.11 to 3.13 and the
+trainer exactly 3.12. A default `python3` is often too old (3.10 on the
+WSL box, 3.9 on macOS) or a Store shortcut on Windows, and then a
+managed Python is fetched. Packages always go into the engine's own
+environment, never into the user's Python: that would change their other
+projects, and many systems refuse it. A user who already works with `uv`
+gets packages they have cached linked from that cache, not downloaded
+again.
+
 **The sample needs no engine.** The sample's archive ships with its
 index already built, and the app downloads, checks (size and SHA-256)
 and unpacks it itself. A new user goes from the download to a finished
