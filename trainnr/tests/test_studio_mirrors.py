@@ -30,6 +30,8 @@ DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
 PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 RUNNING_RS = (SHELL_SRC / "running.rs").read_text(encoding="utf-8")
 ONBOARDING_RS = (SHELL_SRC / "onboarding.rs").read_text(encoding="utf-8")
+AGENT_RS = (SHELL_SRC / "agent.rs").read_text(encoding="utf-8")
+README = (REPO / "README.md").read_text(encoding="utf-8")
 
 
 # The kinds the index writes that no Studio page lists by kind.
@@ -470,15 +472,15 @@ class RunningNow(unittest.TestCase):
 
 
 class AgentLinkFile(unittest.TestCase):
-    """The connection file (`trainnr.mcp_link`) the Studio reads to say
-    whether an agent is there: one name, one schema, one staleness."""
+    """The connection files (`trainnr.mcp_link`) the Studio reads to say
+    whether an agent is there: one folder, one schema, two thresholds."""
 
-    def test_the_name_schema_and_staleness_agree(self) -> None:
+    def test_the_folder_schema_and_thresholds_agree(self) -> None:
         from trainnr import mcp_link  # noqa: PLC0415
 
         self.assertEqual(
-            constant(MODEL_RS, r'const LINK_FILE: &str = "([^"]+)";'),
-            mcp_link.LINK_FILE,
+            constant(MODEL_RS, r'const LINK_DIR: &str = "([^"]+)";'),
+            mcp_link.LINK_DIR,
         )
         self.assertEqual(
             constant(MODEL_RS, r'const LINK_SCHEMA: &str = "([^"]+)";'),
@@ -488,6 +490,19 @@ class AgentLinkFile(unittest.TestCase):
             float(constant(MODEL_RS, r"const LINK_STALE_S: f64 = ([0-9.]+);")),
             mcp_link.STALE_S,
         )
+        # A heartbeat from the future read as connected for ever until
+        # both sides bounded it (review, 2026-10-11).
+        self.assertEqual(
+            float(constant(MODEL_RS, r"const LINK_FUTURE_SLACK_S: f64 = ([0-9.]+);")),
+            mcp_link.FUTURE_SLACK_S,
+        )
+
+    def test_the_future_slack_matches_the_judge_it_mirrors(self) -> None:
+        """The same rule the Studio's own state file is judged by."""
+        from trainnr import mcp_link  # noqa: PLC0415
+        from trainnr.project import control  # noqa: PLC0415
+
+        self.assertEqual(control.HEARTBEAT_FUTURE_SLACK_S, mcp_link.FUTURE_SLACK_S)
 
     def test_the_keys_rust_reads_are_written(self) -> None:
         """Every field the Studio deserialises is one the writer writes."""
@@ -497,9 +512,12 @@ class AgentLinkFile(unittest.TestCase):
         from trainnr import mcp_link  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / mcp_link.LINK_FILE
-            mcp_link.AgentLink(path).touch("list_robots")
+            path = Path(tmp) / mcp_link.LINK_DIR / "1.json"
+            link = mcp_link.AgentLink(path)
+            link.touch("list_robots")
+            link.open()  # writes once, straight away
             written = set(json.loads(path.read_text(encoding="utf-8")))
+            link.close()
         self.assertLessEqual(_serde_fields(MODEL_RS, "LinkFile"), written)
 
     def test_the_home_variable_agrees(self) -> None:
@@ -508,3 +526,15 @@ class AgentLinkFile(unittest.TestCase):
         self.assertEqual(
             constant(MODEL_RS, r'const HOME_ENV: &str = "([^"]+)";'), paths.HOME_ENV
         )
+
+    def test_the_connect_commands_are_the_readme_s(self) -> None:
+        """The Studio tells a user with no agent how to get one. A window
+        that teaches an install the project no longer documents is worse
+        than one that says nothing (review, 2026-10-11)."""
+        for name in ("PLUGIN_MARKETPLACE", "PLUGIN_INSTALL"):
+            shown = constant(AGENT_RS, rf'pub const {name}: &str = "([^"]+)";')
+            self.assertIn(
+                shown,
+                README,
+                f"{name} is not a command the README gives",
+            )
