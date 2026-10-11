@@ -76,12 +76,33 @@ its arguments, their types and what they mean. The app's forms for
 onboarding, ingesting, training and the rest are drawn from those
 schemas, so a new tool, or a plugin's, gets its form without app code.
 
-**The engine.** The app owns a Python environment of its own (the
-"engine"): a pinned `uv` and `trainnr[sim,mcp]` at the app's version,
-installed on first run into the user's trainnr folder, with a progress
-page. The Studio and the jobs run from there, never from a checkout. The
-agent's MCP entry points at the engine's `trainnr mcp`, a stable path as
-Paper's `~/.paper/bin/paper` is.
+**The engine, downloaded as it is needed.** Rule (Prakhar, 2026-10-11):
+*we download things for the user when they are needed; lean from the
+start, for adoption.* The app is the only thing a person downloads. The
+Python environment that does the work (the "engine") is fetched in
+pieces, each the first time something needs it, with its size shown on
+the button that triggers it and a progress line while it lands. Sizes
+measured on 2026-10-11 (installed on disk, Linux x86-64; the downloads are compressed and smaller, not yet measured):
+
+| Piece | Fetched when | What it holds | Size |
+|---|---|---|---|
+| The app | the download | the Studio, the Rerun viewer, the Welcome page, browsing any project | 63 to 71 MB archive |
+| Core | the first action (New project, Add robot, Identify) | `uv`, Python, `trainnr`, the MCP server, MuJoCo, numpy, scipy | about 380 MB: packages 254, Python 85, `uv` 39 |
+| Viewer stream | the first Show or simulator scene | `rerun-sdk` (it carries its own viewer binary) | 253 MB |
+| Deploy | the first export or gate | `onnx`, `onnxruntime` | 89 MB |
+| Local training | the first training run on this machine | the trainer: mjlab, PyTorch, Warp (CUDA on Linux and Windows) | 1.8 GB on a Mac, 6.5 GB on Linux with CUDA |
+| Imitation, USD, scenes | the first use of each | LeRobot; Newton's USD reader; Open3D and CoACD | per extra |
+
+A user who trains on a rented GPU (`tools/cloud-gpu.py`) never fetches
+the local trainer. The Python side owns the map from a tool to the
+pieces it needs, so the app's buttons and the agent's tools fetch the
+same way: an agent that calls `export_deployment` on a machine without
+the deploy piece gets it fetched, not an import error.
+
+**The sample needs no engine.** The sample's archive ships with its
+index already built, and the app downloads, checks (size and SHA-256)
+and unpacks it itself. A new user goes from the download to a finished
+project on screen with nothing else fetched.
 
 **MCP stays stdio.** The agent starts `trainnr mcp`; it acts on the
 project files and drives the open app through the control files. Agent
@@ -98,11 +119,15 @@ Each phase ends with a check on a fresh machine, not with code merged.
    Evaluate, Export and gate, Check for drift, each a form from its schema
    and a job in Running now. *Check:* a person walks the Go2 quickstart in
    the app with no agent.
-2. **The engine without a checkout.** The scripts jobs run move into the
-   package (`python -m trainnr.…`), `trainnr-mjlab` comes from PyPI, and
-   the app installs and finds its engine. *Check:* the release's Studio,
-   alone on a fresh Mac and a fresh Windows machine, opens the sample and
-   trains a smoke run.
+2. **The engine, on demand and without a checkout.** The scripts jobs
+   run move into the package (`python -m trainnr.…`); `trainnr-mjlab`
+   comes from PyPI; `onnx` and `onnxruntime` leave the base dependencies
+   for the deploy piece; the tool-to-piece map lands in the package; the
+   app fetches each piece the first time it is needed, and the sample
+   opens with none. *Check:* on a fresh Mac and a fresh Windows machine,
+   the release's Studio alone opens the sample with no engine, then
+   creates a project, then trains a smoke run, fetching only what each
+   step needs, each size shown before it downloads.
 3. **Connect your agent.** A panel with one click for Claude Code (the
    plugin), and the entry to copy for Cursor, Codex and others; the
    connection status (PR #32 once fixed). It asks before writing another
@@ -130,7 +155,4 @@ Each phase ends with a check on a fresh machine, not with code merged.
 - **Signing:** an Apple Developer account (99 USD a year) for notarised
   macOS builds, and a Windows code-signing certificate. Without them the
   first launch shows the operating system's warning.
-- **The engine:** install on first run (a smaller download, needs the
-  network once) or ship it inside the installer (about 1 GB, works
-  offline). First run is the plan.
 - **The site:** when trainnr.ai gets its download page (phase 4).
