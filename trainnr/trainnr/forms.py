@@ -13,6 +13,7 @@ prints `describe()` for the Studio, which runs each submitted form as
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,13 +27,15 @@ class Hint:
     """What an argument is beyond its type. `kind`: an artifact of the
     open project of this kind, picked from a list. `files`: a file to
     choose, with these extensions (`*`: any file); `folder`: a folder may
-    be chosen too
-    (a LeRobot dataset, a ROS 2 bag). `choices`: one of these words."""
+    be chosen too (a LeRobot dataset, a ROS 2 bag). `choices`: one of these
+    words; `choices_from`: the words a registry holds when the forms are
+    described (task families, public logs, runtimes: plugins add to them)."""
 
     kind: Kind | None = None
     files: tuple[str, ...] = ()
     folder: bool = False
     choices: tuple[str, ...] = ()
+    choices_from: Callable[[], tuple[str, ...]] | None = None
     label: str = ""
 
 
@@ -48,6 +51,24 @@ class Form:
     label: str
     fields: tuple[str, ...]
     hints: dict[str, Hint] = field(default_factory=dict)
+
+
+def _task_families() -> tuple[str, ...]:
+    from trainnr.tasks.overlay import families  # noqa: PLC0415
+
+    return tuple(sorted(families()))
+
+
+def _public_logs() -> tuple[str, ...]:
+    from trainnr.robots.public_logs import PUBLIC_LOGS  # noqa: PLC0415
+
+    return tuple(sorted(PUBLIC_LOGS))
+
+
+def _runtimes() -> tuple[str, ...]:
+    from trainnr.deploy.runtimes import runtime_names  # noqa: PLC0415
+
+    return tuple(runtime_names())
 
 
 ROBOT_FILES = ("xml", "mjcf", "urdf", "usd", "usda", "usdc", "usdz")
@@ -79,6 +100,20 @@ FORMS: tuple[Form, ...] = (
         {"source": Hint(files=ANY_FILE, folder=True, label="Telemetry")},
     ),
     Form(
+        "ingest_public_log",
+        "recordings",
+        "Add public log",
+        ("log", "name", "accept_unlicensed"),
+        {"log": Hint(choices_from=_public_logs, label="Public log")},
+    ),
+    Form(
+        "create_task",
+        "environments",
+        "Define environment",
+        ("family", "name"),
+        {"family": Hint(choices_from=_task_families, label="Task family")},
+    ),
+    Form(
         "check_task",
         "environments",
         "Check environment",
@@ -89,7 +124,7 @@ FORMS: tuple[Form, ...] = (
         "train_walk",
         "experiments",
         "Train",
-        ("task", "recipe"),
+        ("task", "recipe", "iterations"),
         {
             "task": Hint(kind=Kind.TASK, label="Environment"),
             "recipe": Hint(choices=("smoke", "full")),
@@ -110,6 +145,26 @@ FORMS: tuple[Form, ...] = (
         {"experiment": Hint(kind=Kind.RUN)},
     ),
     Form(
+        "gate_deployment",
+        "deployments",
+        "Run gate",
+        ("deployment", "runtime", "trials"),
+        {
+            "deployment": Hint(kind=Kind.DEPLOY),
+            "runtime": Hint(choices_from=_runtimes),
+        },
+    ),
+    Form(
+        "preflight_deployment",
+        "deployments",
+        "Pre-flight",
+        ("deployment", "runtime"),
+        {
+            "deployment": Hint(kind=Kind.DEPLOY),
+            "runtime": Hint(choices_from=_runtimes),
+        },
+    ),
+    Form(
         "check_drift",
         "monitoring",
         "Check for drift",
@@ -117,6 +172,17 @@ FORMS: tuple[Form, ...] = (
         {"robot": Hint(kind=Kind.ROBOT), "recording": Hint(kind=Kind.RECORDING)},
     ),
 )
+
+
+def _called(source: Callable[[], tuple[str, ...]] | None) -> list[str]:
+    """A registry's words, or none when it cannot be read (the field is
+    then free text, and the tool refuses a wrong word by name)."""
+    if source is None:
+        return []
+    try:
+        return list(source())
+    except Exception:  # a registry that fails leaves a text field, never no form
+        return []
 
 
 def _first_sentence(text: str) -> str:
@@ -156,7 +222,7 @@ def describe(api: list[dict[str, Any]]) -> dict[str, Any]:
                     "kind": hint.kind.value if hint.kind else None,
                     "files": list(hint.files),
                     "folder": hint.folder,
-                    "choices": list(hint.choices),
+                    "choices": list(hint.choices) or _called(hint.choices_from),
                 }
             )
         forms.append(

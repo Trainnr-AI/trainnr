@@ -61,6 +61,23 @@ class EveryForm(unittest.TestCase):
         drift = next(f for f in described["forms"] if f["tool"] == "check_drift")
         self.assertEqual([f["kind"] for f in drift["fields"]], ["robot", "recording"])
 
+    def test_registry_choices_are_filled_when_described(self) -> None:
+        described = forms.describe(list(self.api.values()))["forms"]
+        choices = {
+            (form["tool"], f["name"]): f["choices"]
+            for form in described
+            for f in form["fields"]
+        }
+        self.assertIn("iit-go2-chirp", choices[("ingest_public_log", "log")])
+        self.assertIn("mujoco", choices[("gate_deployment", "runtime")])
+        self.assertIn("trainnr/go2-walk", choices[("create_task", "family")])
+
+    def test_a_registry_that_fails_leaves_a_text_field(self) -> None:
+        def broken() -> tuple[str, ...]:
+            raise RuntimeError("no registry")
+
+        self.assertEqual(forms._called(broken), [])
+
     def test_a_missing_tool_leaves_no_dead_button(self) -> None:
         api = [t for n, t in self.api.items() if n != "train_walk"]
         tools = [f["tool"] for f in forms.describe(api)["forms"]]

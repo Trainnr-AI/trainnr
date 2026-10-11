@@ -125,14 +125,21 @@ local HTTP port, no tokens to manage.
 
 Each phase ends with a check on a fresh machine, not with code merged.
 
-1. **Actions in the app.** Done on this branch: New project and Open
-   sample; forms over eight tools (Add robot, Identify dynamics, Add
-   recording, Check environment, Train, Evaluate, Export, Check for
-   drift), each drawn from the tool's schema with the hints in
-   `trainnr/forms.py`, a job opening Running now. Left: Define an
-   environment (`create_task` takes a family and a settings object, which
-   needs its own form), the deployment gates, and a fresh-machine walk. *Check:* a person walks the Go2 quickstart in
-   the app with no agent.
+1. **Actions in the app.** Done: New project and Open sample; forms over
+   twelve tools in the page headers (Add robot, Identify dynamics, Add
+   recording, Add public log, Define environment, Check environment,
+   Train, Evaluate, Export, Run gate, Pre-flight, Check for drift), each
+   drawn from the tool's schema with the hints in `trainnr/forms.py`;
+   choices a registry holds (task families, public logs, runtimes) are
+   read when the forms are described, so plugins' entries appear. *Check,
+   2026-10-11:* the Go2 quickstart through `trainnr call` alone, as the
+   buttons run it, on a fresh home with no agent: create, onboard Unitree's
+   Go2, ingest the IIT chirp (3 s), identify (31 of 36 parameters in
+   2.7 s), define and check the walk (accepted, 27 s), a smoke training
+   run (29 s), ingest the leg-odometry log and check drift: five of nine
+   stages. Train, evaluate, export and the gates wait on a full training
+   run, which is the user's to start.
+
 2. **The engine, on demand and without a checkout.** The scripts jobs
    run move into the package (`python -m trainnr.…`); `trainnr-mjlab`
    comes from PyPI; `onnx` and `onnxruntime` leave the base dependencies
