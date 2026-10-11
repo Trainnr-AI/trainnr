@@ -239,6 +239,29 @@ their own thread, so the window keeps drawing. When `trainnr forms`
 cannot run, the status bar says "buttons unavailable" with the reason;
 the agent can still run every tool.
 
+### 5.6 The engine, and the sample with none (2026-10-11)
+
+A Studio downloaded from a release has no checkout beside it. `spawn.rs`
+roots every process in a checkout when there is one, else in the
+engine's runtime under `<trainnr home>/engine/` once it is set up
+(`engine.rs`), else nowhere: then the first action that runs a tool sets
+the engine up on its own thread, the button shows each step (uv, the
+runtime, the core), and the action runs when it is ready. The presenter
+and the simulator wait the same way; until the engine can list them, the
+pages show the forms built into this build (`forms.json`, pinned by
+`tests/test_forms.py`). The uv the engine runs is named to every child
+(`TRAINNR_UV`) and so to every job.
+
+Open sample needs none of it: `sample.rs` downloads the archive over
+HTTPS, checks its size and SHA-256, unpacks it (plain files and folders,
+nothing out of the folder, nothing kept of a refused archive), writes
+the index's `root` (the archive carries its index with the root empty)
+and the projects home's `.current`, and opens it. Gotchas: a test binary
+runs from the checkout, so the tests that play a fresh machine hide it
+(`spawn::hide_checkout`, test builds only); and the `tar` crate refuses
+to write a `..` path, so the test of a hostile archive writes the name's
+bytes into the header itself.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

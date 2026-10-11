@@ -13,8 +13,9 @@ use std::sync::OnceLock;
 
 /// Names the checkout explicitly; wins over every guess below.
 pub const REPO_ENV: &str = "TRAINNR_REPO";
-/// The file whose presence marks a checkout: the pipeline's manifest.
-const REPO_MARKER: &str = "trainnr/pyproject.toml";
+/// The file whose presence marks a checkout, or the engine's runtime: the
+/// pipeline's manifest.
+pub const REPO_MARKER: &str = "trainnr/pyproject.toml";
 /// The Python packages, relative to the repo root.
 pub const PIPELINE_DIR: &str = "trainnr";
 pub const WALK_PACKAGE_DIR: &str = "trainnr-mjlab";
@@ -24,9 +25,11 @@ pub const PRESENTER_SCRIPT: &str = "studio-present.py";
 pub const RENDER_STREAM_SCRIPT: &str = "studio-render-stream.py";
 /// The `trainnr` command's module (`trainnr/pyproject.toml`'s script).
 pub const TRAINNR_CLI_MODULE: &str = "trainnr.cli";
-/// The pipeline extras a Studio subprocess needs: MuJoCo (`sim`) and
-/// the Rerun SDK (`viz`, so a script can narrate into this window).
-// `deploy`: onnxruntime, for a deployment's policy in the viewport.
+/// The pipeline extras the presenter and the simulator stream need: MuJoCo
+/// (`sim`) and the Rerun SDK (`viz`, so a script can narrate into this
+/// window). `deploy`: onnxruntime, for a deployment's policy in the
+/// viewport. `uv run` adds them the first time a stream runs and keeps
+/// what is there (its sync is inexact): the viewer piece, on demand.
 const PIPELINE_EXTRAS: &[&str] = &["sim", "viz", "deploy"];
 
 /// The WSL-only environment for MuJoCo's offscreen GL (the WSL machine's
@@ -44,11 +47,48 @@ pub fn on_wsl() -> bool {
         || Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
 }
 
+/// Where the Python side is: a checkout, else the engine's runtime once
+/// it is set up (`engine.rs`), else an empty path, when nothing that runs
+/// a tool can start yet.
+pub fn repo_root() -> PathBuf {
+    let checkout = checkout_root();
+    if !checkout.as_os_str().is_empty() && !checkout_hidden() {
+        return checkout.to_path_buf();
+    }
+    crate::engine::installed_runtime().unwrap_or_default()
+}
+
+/// A test that plays a machine with no checkout hides the one its binary
+/// runs from (`hide_checkout`); a build that is not a test never does.
+#[cfg(test)]
+static HIDE_CHECKOUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(test)]
+pub fn hide_checkout() {
+    HIDE_CHECKOUT.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn checkout_hidden() -> bool {
+    #[cfg(test)]
+    {
+        HIDE_CHECKOUT.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    #[cfg(not(test))]
+    {
+        false
+    }
+}
+
+/// Whether anything can run a tool: a checkout, or the engine set up.
+pub fn engine_ready() -> bool {
+    !repo_root().as_os_str().is_empty()
+}
+
 /// The checkout, resolved once: `$TRAINNR_REPO`, else the nearest
 /// ancestor of the executable or of the working directory that holds
 /// `trainnr/pyproject.toml`, else — for `cargo run` from a checkout —
 /// the crate's own manifest directory two levels down from the root.
-pub fn repo_root() -> &'static Path {
+fn checkout_root() -> &'static Path {
     static ROOT: OnceLock<PathBuf> = OnceLock::new();
     ROOT.get_or_init(|| {
         let root = resolve_repo_root(
@@ -56,7 +96,7 @@ pub fn repo_root() -> &'static Path {
             std::env::current_exe().ok(),
             std::env::current_dir().ok(),
         );
-        rerun::external::re_log::info!("repo root: {}", root.display());
+        rerun::external::re_log::info!("checkout: {}", root.display());
         root
     })
 }
@@ -110,22 +150,36 @@ pub fn pipeline_command(script: &str) -> Command {
 /// environment: what the Welcome page's Open runs (`trainnr sample open`).
 /// The caller adds the subcommand.
 pub fn trainnr_command() -> Command {
-    let mut command = pipeline_python();
+    // The core alone: a button needs the tools, not the viewer stream.
+    let mut command = python_with(crate::engine::CORE_EXTRAS);
     command.args(["-m", TRAINNR_CLI_MODULE]);
     command
 }
 
-/// `uv run --extra … python` from the pipeline directory, in its own
-/// process group, with the simulator's environment.
+/// `uv run --extra … python` from the pipeline directory with the
+/// presenter's extras, in its own process group, with the simulator's
+/// environment.
 fn pipeline_python() -> Command {
-    let mut command = Command::new("uv");
+    python_with(PIPELINE_EXTRAS)
+}
+
+/// `uv run --extra <extras> python` from the pipeline directory: the uv
+/// the engine runs, named to the child (`TRAINNR_UV`) so the jobs it
+/// starts run the same one, and the root named (`TRAINNR_REPO`) so the
+/// Python side finds the same checkout or runtime.
+fn python_with(extras: &[&str]) -> Command {
+    let root = repo_root();
+    let uv = crate::engine::uv_program();
+    let mut command = Command::new(&uv);
     command.arg("run");
-    for extra in PIPELINE_EXTRAS {
+    for extra in extras {
         command.args(["--extra", extra]);
     }
     command
         .arg("python")
-        .current_dir(repo_root().join(PIPELINE_DIR));
+        .current_dir(root.join(PIPELINE_DIR))
+        .env(crate::engine::UV_ENV, &uv)
+        .env(REPO_ENV, &root);
     own_process_group(&mut command);
     mujoco_environment(&mut command);
     command
@@ -134,10 +188,14 @@ fn pipeline_python() -> Command {
 /// `uv run --offline python -m <module>` from the walk package's
 /// directory: the trainnr_mjlab venv (torch, warp, mjlab), not the pipeline's.
 pub fn walk_command(module: &str) -> Command {
-    let mut command = Command::new("uv");
+    let root = repo_root();
+    let uv = crate::engine::uv_program();
+    let mut command = Command::new(&uv);
     command
         .args(["run", "--offline", "python", "-m", module])
-        .current_dir(repo_root().join(WALK_PACKAGE_DIR));
+        .current_dir(root.join(WALK_PACKAGE_DIR))
+        .env(crate::engine::UV_ENV, &uv)
+        .env(REPO_ENV, &root);
     own_process_group(&mut command);
     mujoco_environment(&mut command);
     command

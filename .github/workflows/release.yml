@@ -10,6 +10,8 @@
 #     beside it, which the installer checks;
 #   - the Python packages, trainnr and trainnr-mjlab, each as an sdist and
 #     a wheel carrying the same licence files;
+#   - the engine's runtime, the archive the desktop app sets up from
+#     (tools/runtime-archive.py), with its SHA-256;
 #   - a CycloneDX SBOM for each package and the Studio (tools/sbom.py);
 #   - SHA256SUMS over every file.
 #
@@ -197,6 +199,11 @@ jobs:
             (cd "$package" && uv build --out-dir "$GITHUB_WORKSPACE/dist")
           done
           ls -la dist
+      # The engine's runtime: what the desktop app downloads, the first
+      # time an action needs it, to run the tools with no checkout
+      # (tools/runtime-archive.py, docs/85). Its SHA-256 sits beside it.
+      - name: the engine's runtime
+        run: python3 tools/runtime-archive.py "$(python3 tools/release.py show)" --out dist
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-packages
@@ -283,6 +290,9 @@ jobs:
               "Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and "
               "THIRD_PARTY_LICENSES.md, with its SHA-256 beside it.\n"
               "- The Python packages `trainnr` and `trainnr-mjlab`, as an sdist and a wheel each.\n"
+              "- The engine's runtime (`trainnr-runtime-v*.tar.gz`): what the Studio "
+              "downloads the first time an action needs it, to run the tools without "
+              "a checkout, with its SHA-256 beside it.\n"
               "- A CycloneDX SBOM (`*.cdx.json`) for each package and the Studio.\n"
               "- `SHA256SUMS` over every file.\n\n"
               "## Verify what you downloaded\n\n"

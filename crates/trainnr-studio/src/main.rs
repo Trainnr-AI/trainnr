@@ -25,6 +25,7 @@
 mod chrome;
 mod control;
 mod detail;
+mod engine;
 mod forms;
 mod keys;
 mod listing;
@@ -34,6 +35,7 @@ mod pages;
 mod palette;
 mod pictures;
 mod running;
+mod sample;
 mod shell;
 mod simulator;
 mod spawn;
@@ -227,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cc.egui_ctx.set_theme(chosen);
 
             let viewport = ViewportFeed::idle();
-            let mut shell = Shell::new(Model::open(repo_root()));
+            let mut shell = Shell::new(Model::open(&repo_root()));
             shell.open_project();
             let mut control = control::Control::new(shell.model.project_root.clone());
             control.watch(cc.egui_ctx.clone());
@@ -244,6 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 viewport_full: false,
                 closing: false,
                 theme_preference: chosen,
+                pending_scene: None,
                 frames: FrameClock::default(),
             }))
         }),
@@ -252,6 +255,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 struct StudioShell {
+    /// A scene asked for before the engine was set up: it starts the
+    /// moment the engine is ready (`engine.rs`).
+    pending_scene: Option<String>,
     /// The theme preference as of this frame (system, dark or light),
     /// persisted by `save`.
     theme_preference: egui::ThemePreference,
@@ -311,6 +317,12 @@ impl eframe::App for StudioShell {
         self.fullscreen_keys(ui.ctx());
         self.leave_fullscreen_before_close(ui.ctx());
         self.shell.tick(ui.ctx());
+        if self.pending_scene.is_some() && spawn::engine_ready() {
+            if let Some(task) = self.pending_scene.take() {
+                self.viewport =
+                    ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+            }
+        }
         self.answer_screenshot(ui);
         self.apply_commands(ui);
         self.before = (
@@ -576,8 +588,17 @@ impl StudioShell {
     fn spawn_or_stop(&mut self, ui: &egui::Ui, action: Option<simulator::Action>) {
         match action {
             Some(simulator::Action::Spawn(task)) => {
-                self.viewport =
-                    ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+                if self.shell.ensure_engine() {
+                    self.viewport =
+                        ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+                } else {
+                    // The first scene sets the engine up, then starts.
+                    self.viewport = ViewportFeed::errored(format!(
+                        "Setting up the engine for the {task} scene (once); it starts \
+                         when the engine is ready."
+                    ));
+                    self.pending_scene = Some(task);
+                }
             }
             Some(simulator::Action::Stop) => self.stop_scene(),
             Some(simulator::Action::ToggleFullscreen) => {

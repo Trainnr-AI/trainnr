@@ -19,6 +19,9 @@ import sys
 from pathlib import Path
 
 CHECKOUT_ENV = "TRAINNR_REPO"
+# The uv a job runs under: the desktop app's engine installs its own when
+# none is on PATH, and names it here for every process it starts.
+UV_ENV = "TRAINNR_UV"
 HOME_ENV = "TRAINNR_HOME"  # the user's own data: projects, caches
 HOME_DIR = "trainnr"  # ~/trainnr
 # The file that marks the checkout, relative to its root.
@@ -103,3 +106,9 @@ TRAIN_VENV = Path("trainnr") / ".venv-train"
 def train_python() -> Path:
     """The train environment's interpreter in this checkout."""
     return venv_python(checkout() / TRAIN_VENV)
+
+
+def uv_program() -> str:
+    """The uv to run jobs with: `$TRAINNR_UV` (the app's engine names its
+    own when none is on PATH), else `uv`, found on PATH by the OS."""
+    return os.environ.get(UV_ENV, "").strip() or "uv"

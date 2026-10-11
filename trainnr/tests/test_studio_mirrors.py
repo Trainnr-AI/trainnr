@@ -243,6 +243,8 @@ class TheWelcomePage(unittest.TestCase):
                 value = getattr(sample, field)
                 self.assertIn(f'{field}: "{value}",', ONBOARDING_RS, field)
             self.assertIn(f"bytes: {sample.bytes:_},", ONBOARDING_RS)
+            self.assertIn(f'sha256: "{sample.sha256}",', ONBOARDING_RS)
+            self.assertIn(f'url: "{sample.url}",', ONBOARDING_RS)
 
     def test_the_loops_stages_agree(self) -> None:
         from trainnr.project.index import STATES  # noqa: PLC0415

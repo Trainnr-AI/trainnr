@@ -83,6 +83,14 @@ class EveryForm(unittest.TestCase):
         tools = [f["tool"] for f in forms.describe(api)["forms"]]
         self.assertNotIn("train_walk", tools)
 
+    def test_the_studios_built_in_copy_is_this_build(self) -> None:
+        """The Studio shows `forms.json` until the engine can list the live
+        forms; it is `trainnr forms`, written down: regenerate it with
+        `uv run --directory trainnr --extra sim --extra mcp trainnr forms >
+        crates/trainnr-studio/src/forms.json`."""
+        built_in = json.loads((STUDIO_SRC / "forms.json").read_text(encoding="utf-8"))
+        self.assertEqual(built_in, forms.describe(list(self.api.values())))
+
     def test_the_command_prints_them(self) -> None:
         out = io.StringIO()
         with redirect_stdout(out):

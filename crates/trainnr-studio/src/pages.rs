@@ -553,7 +553,7 @@ pub fn projects(
             tag(ui, &list.len().to_string());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if samples.is_running(crate::onboarding::NEW_PROJECT) {
-                    ui.label("Creating…");
+                    ui.label(samples.busy_word("Creating…"));
                     ui.spinner();
                 } else {
                     let busy = samples.running.is_some();
@@ -1359,7 +1359,7 @@ pub fn section(
                     // one, ends up rightmost; the others are plain.
                     for (i, form) in forms.iter().enumerate() {
                         if state.is_running(&form.tool) {
-                            ui.label("Running…");
+                            ui.label(state.busy_word("Running…"));
                             ui.spinner();
                             continue;
                         }

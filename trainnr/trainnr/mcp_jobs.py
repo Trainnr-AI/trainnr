@@ -402,7 +402,8 @@ def uv_prepare_argv(argv: Sequence[str]) -> list[str] | None:
     """The sync a `uv run --no-sync ... python <rest>` launch needs: the same
     `uv run` flags (project, env file, extras) with the sync left on, running
     nothing. None for any other command line."""
-    if list(argv[:3]) != ["uv", "run", UV_NO_SYNC] or "python" not in argv:
+    is_uv = bool(argv) and Path(argv[0]).stem == "uv"  # on PATH, or the engine's own
+    if not is_uv or list(argv[1:3]) != ["run", UV_NO_SYNC] or "python" not in argv:
         return None
     head = list(argv[: list(argv).index("python") + 1])
     return [head[0], head[1], *head[3:], "-c", "pass"]

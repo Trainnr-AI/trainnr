@@ -2,7 +2,8 @@
 """Build a sample project's archive from a real project: the files a
 sample shows, nothing private, deterministic, with its SHA-256.
 
-    python3 tools/make-sample.py go2-walk --source <project> --out dist/samples
+    uv run --directory trainnr --extra sim python ../tools/make-sample.py \
+        go2-walk --source <project> --out dist/samples
 
 A sample is a finished project a new user opens to see the whole loop
 (`open_sample`, the Studio's Projects page). Only the paths SAMPLES
@@ -14,7 +15,12 @@ name tensorboard writes into it. The archive is a tar.gz with sorted
 members and zero ids; each file keeps its source's time (the index dates
 artifacts by them; zero read as 1970) and a folder takes its newest
 file's, so the same source gives the same bytes.
-Stdlib only.
+
+The sample carries its index (`.index/`: the index, each artifact's
+detail, the card pictures), so the Studio opens it with no engine at all
+(docs/85, 2026-10-11): the index's `root` is left empty and its time is
+the newest source file's, and whoever unpacks it writes the folder's
+own path in. Indexing needs the trainnr package, so this runs under uv.
 """
 
 from __future__ import annotations
@@ -190,6 +196,28 @@ def write_manifest(sample: Sample, source: Path, root: Path) -> None:
     )
 
 
+# The index's fields that hold this machine and this moment: written over
+# so the archive is the same on every build, and the reader fills them in.
+INDEX_FILE = Path(".index") / "project.json"
+
+
+def write_prebuilt_index(root: Path, newest: float) -> list[Path]:
+    """The sample's index, as `write_index` writes it, with `root` empty
+    and `indexed` the newest source file's time. Returns its files."""
+    from datetime import datetime, timezone  # noqa: PLC0415
+
+    from trainnr.project import Project, index_project, write_index  # noqa: PLC0415
+
+    project = Project(root)
+    write_index(project, index_project(project))
+    index = root / INDEX_FILE
+    data = json.loads(index.read_text(encoding="utf-8"))
+    data["root"] = ""
+    data["indexed"] = datetime.fromtimestamp(newest, tz=timezone.utc).isoformat()
+    index.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+    return sorted(p for p in (root / ".index").rglob("*") if p.is_file())
+
+
 def fetch_licences(sample: Sample, root: Path) -> None:
     import urllib.request  # noqa: PLC0415
 
@@ -249,7 +277,9 @@ def main(argv: list[str] | None = None) -> int:
         # The files written here take the newest copied file's time, so a
         # rebuild of the same source gives the same bytes.
         newest = max(p.stat().st_mtime for p in copied)
-        for written in (p for p in root.iterdir() if p.is_file()):
+        indexed = write_prebuilt_index(root, newest)
+        refuse_private(indexed, root)
+        for written in [*(p for p in root.iterdir() if p.is_file()), *indexed]:
             os.utime(written, (newest, newest))
         out = args.out / f"{sample.name}.tar.gz"
         deterministic_tar(root, out)

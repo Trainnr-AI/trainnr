@@ -354,6 +354,10 @@ pub struct SampleCard {
     /// The folder it unpacks to in the projects home.
     pub project: &'static str,
     pub bytes: u64,
+    /// The archive's SHA-256, and where it is (`trainnr/samples.py`'s
+    /// dataset at its pinned commit): the Studio opens it itself.
+    pub sha256: &'static str,
+    pub url: &'static str,
 }
 
 pub const SAMPLES: &[SampleCard] = &[SampleCard {
@@ -361,7 +365,9 @@ pub const SAMPLES: &[SampleCard] = &[SampleCard {
     title: "Go2 walk",
     summary: "A Unitree Go2 through the whole loop: identified from a public log, a walk declared and accepted, trained by reinforcement, evaluated in seven conditions, exported and gated against Unitree's own runtime in simulation, and checked for drift.",
     project: "go2-walk-sample",
-    bytes: 11_973_917,
+    bytes: 12_555_361,
+    sha256: "8b0b3fb5a029c41ad674984c6b152df9ae0d637abc210c57d6a3dca8ad182cc5",
+    url: "https://huggingface.co/datasets/trainnr/trainnr-artifacts/resolve/e5879a2709763f23967fff911e3fbb39d9e6a074/samples/go2-walk-sample.tar.gz",
 }];
 
 /// Where a button's `trainnr` command stands (a sample opening, a new
@@ -373,12 +379,21 @@ pub struct ActionState {
     pub failed: Option<(String, String)>,
     /// The last command that finished well: its key and a word on it.
     pub done: Option<(String, String)>,
+    /// What the engine's setup is doing while the running command waits
+    /// on it (`engine.rs`): shown in place of the button's own word.
+    pub progress: Option<String>,
 }
 
 impl ActionState {
     /// Whether the command under `key` is the one running.
     pub fn is_running(&self, key: &str) -> bool {
         self.running.as_deref() == Some(key)
+    }
+
+    /// What a running button says: the engine's step while it sets up,
+    /// else its own word.
+    pub fn busy_word<'a>(&'a self, own: &'a str) -> &'a str {
+        self.progress.as_deref().unwrap_or(own)
     }
 }
 
@@ -651,7 +666,7 @@ fn start_your_own(ui: &mut egui::Ui, actions: &ActionState, home: Option<&Path>)
         if actions.is_running(NEW_PROJECT) {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label(egui::RichText::new("Creating…").color(palette.text));
+                ui.label(egui::RichText::new(actions.busy_word("Creating…")).color(palette.text));
             });
         } else {
             clicked = primary_button(ui, "New project", actions.running.is_none()).clicked();
@@ -773,11 +788,11 @@ fn sample_body(
         ui.horizontal(|ui| {
             ui.spinner();
             ui.label(
-                egui::RichText::new(if here {
+                egui::RichText::new(samples.busy_word(if here {
                     "Opening…"
                 } else {
                     "Downloading and checking…"
-                })
+                }))
                 .color(palette.text),
             );
         });

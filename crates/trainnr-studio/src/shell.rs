@@ -105,6 +105,19 @@ pub struct Shell {
     pub forms: crate::forms::Catalog,
     /// A form being filled in.
     open_form: Option<crate::forms::Open>,
+    /// The engine's setup, started by the first action that needs it.
+    engine: crate::engine::Installer,
+    /// The action that waits on the engine's setup, run when it is ready.
+    pending: Option<(String, Vec<String>, After)>,
+    /// The engine's setup finished in this session: the project's presenter
+    /// and forms have been started once for it.
+    engine_settled: bool,
+    /// A sample being opened by the Studio itself: its name, and where the
+    /// answer arrives.
+    sample_wait: Option<(
+        String,
+        std::sync::mpsc::Receiver<Result<std::path::PathBuf, String>>,
+    )>,
 }
 
 /// A button's `trainnr` command while it runs.
@@ -156,6 +169,10 @@ impl Shell {
             new_project_name: None,
             forms: crate::forms::Catalog::default(),
             open_form: None,
+            engine: crate::engine::Installer::default(),
+            pending: None,
+            engine_settled: false,
+            sample_wait: None,
         }
     }
 
@@ -166,19 +183,97 @@ impl Shell {
     /// console log into its record and re-indexes (the Go2 run was
     /// invisible until a Show, 2026-09-10).
     pub fn open_project(&mut self) {
-        if !self.model.welcome {
+        if !self.model.welcome && crate::spawn::engine_ready() {
             self.ensure_presenter();
-            if let Some(home) = crate::model::user_projects_home() {
-                self.forms.load(&home.join(crate::model::INDEX_DIR));
+            self.load_forms();
+        }
+    }
+
+    /// The forms over this build's tools, once the engine can list them;
+    /// until then the pages show the ones built in (`forms::built_in`).
+    fn load_forms(&mut self) {
+        if let Some(home) = crate::model::user_projects_home() {
+            self.forms.load(&home.join(crate::model::INDEX_DIR));
+        }
+    }
+
+    /// Whether the engine can run a tool now; when it cannot, its setup
+    /// starts (the first action that needs it), and false is returned.
+    pub fn ensure_engine(&mut self) -> bool {
+        if crate::spawn::engine_ready() {
+            return true;
+        }
+        self.engine.start();
+        false
+    }
+
+    /// The engine's setup, each frame while it runs: its step shown on the
+    /// waiting button; when it is done, the waiting action runs (or says
+    /// why it cannot), and the project's presenter and forms start.
+    fn follow_engine(&mut self) {
+        use crate::engine::Setup;
+        match self.engine.state() {
+            Setup::Idle => {}
+            Setup::Working(step) => self.actions.progress = Some(step),
+            Setup::Ready => {
+                self.actions.progress = None;
+                if let Some((key, args, after)) = self.pending.take() {
+                    self.actions.running = None;
+                    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+                    self.run_action(&key, &args, after);
+                }
+                if !self.engine_settled {
+                    self.engine_settled = true;
+                    self.open_project();
+                }
+            }
+            Setup::Failed(why) => {
+                self.actions.progress = None;
+                if let Some((key, _, _)) = self.pending.take() {
+                    self.actions.running = None;
+                    self.actions.failed = Some((key, format!("the engine did not set up: {why}")));
+                }
             }
         }
     }
 
-    /// Open a sample: `trainnr sample open <name>` downloads, checks,
-    /// unpacks and indexes it and makes it current; `tick` switches to
-    /// the folder it prints.
+    /// Open a sample with no engine: the Studio downloads, checks and
+    /// unpacks it itself (`sample.rs`), and `tick` switches to it.
     pub fn open_sample(&mut self, name: &'static str) {
-        self.run_action(name, &["sample", "open", name], After::OpenProject);
+        if self.action_job.is_some() || self.pending.is_some() || self.sample_wait.is_some() {
+            return;
+        }
+        let Some(sample) = crate::onboarding::SAMPLES.iter().find(|s| s.name == name) else {
+            return;
+        };
+        let Some(home) = crate::model::user_projects_home() else {
+            self.actions.failed = Some((name.to_owned(), "no projects home".to_owned()));
+            return;
+        };
+        self.actions.failed = None;
+        self.actions.done = None;
+        self.actions.running = Some(name.to_owned());
+        self.sample_wait = Some((
+            name.to_owned(),
+            crate::sample::open_in_background(sample, home),
+        ));
+    }
+
+    /// The sample's opening, when it has ended: switch to it, or say why not.
+    fn follow_sample(&mut self) {
+        let Some((key, receive)) = &self.sample_wait else {
+            return;
+        };
+        let Ok(outcome) = receive.try_recv() else {
+            return;
+        };
+        let key = key.clone();
+        self.sample_wait = None;
+        self.actions.running = None;
+        match outcome {
+            Ok(root) => self.switch_to = Some(root),
+            Err(why) => self.actions.failed = Some((key, why)),
+        }
     }
 
     /// Make a project without an agent: the same `create_project` tool an
@@ -207,7 +302,16 @@ impl Shell {
     /// window does not move. Not killed with the window: a sample's
     /// download cut short leaves its temporary folder in the home.
     fn run_action(&mut self, key: &str, args: &[&str], after: After) {
-        if self.action_job.is_some() {
+        if self.action_job.is_some() || self.pending.is_some() {
+            return;
+        }
+        if !self.ensure_engine() {
+            // The first action: it runs once the engine is set up.
+            self.actions.failed = None;
+            self.actions.done = None;
+            self.actions.running = Some(key.to_owned());
+            let args = args.iter().map(|a| (*a).to_owned()).collect();
+            self.pending = Some((key.to_owned(), args, after));
             return;
         }
         let dir = crate::model::user_projects_home()
@@ -337,6 +441,9 @@ impl Shell {
     }
 
     fn ensure_presenter(&mut self) {
+        if !self.ensure_engine() {
+            return; // started with the project once the engine is ready
+        }
         if let Some(child) = self.presenter.as_mut() {
             if matches!(child.try_wait(), Ok(None)) {
                 return;
@@ -483,7 +590,8 @@ impl Shell {
                              Your agent can still run every tool."
                         ));
                     }
-                    if !self.model.welcome && !self.presenter_running() {
+                    let presenting = self.presenter_running() || !crate::spawn::engine_ready();
+                    if !self.model.welcome && !presenting {
                         ui.add_space(8.0);
                         ui.label(
                             egui::RichText::new("presenter stopped")
@@ -767,6 +875,8 @@ impl Shell {
     /// the Simulator included, not only where a page is drawn.
     pub fn tick(&mut self, ctx: &egui::Context) {
         self.reap_action();
+        self.follow_sample();
+        self.follow_engine();
         self.forms.poll();
         if self.switch_to.is_none() {
             // On the Welcome page: the first project the agent makes or
@@ -1211,6 +1321,81 @@ fn refusal_reason(reply: Option<&serde_json::Value>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A shell on a machine with no checkout and no engine, its projects
+    /// home under `TRAINNR_TEST_FRESH_HOME` (an empty folder).
+    fn fresh_shell() -> Shell {
+        let home = std::path::PathBuf::from(
+            std::env::var("TRAINNR_TEST_FRESH_HOME").expect("an empty home"),
+        );
+        std::env::set_var("TRAINNR_HOME", &home);
+        std::env::remove_var("TRAINNR_PROJECTS");
+        std::env::remove_var(crate::spawn::REPO_ENV);
+        crate::spawn::hide_checkout();
+        let projects = home.join("projects");
+        std::fs::create_dir_all(&projects).unwrap();
+        let shell = Shell::new(Model::at(projects.clone(), vec![projects]));
+        assert!(shell.model.welcome);
+        assert!(
+            !crate::spawn::engine_ready(),
+            "a fresh machine has no engine"
+        );
+        shell
+    }
+
+    /// Frames until the running button is done, its steps printed.
+    fn run_frames(shell: &mut Shell) {
+        let ctx = egui::Context::default();
+        let started = std::time::Instant::now();
+        let mut said = String::new();
+        while started.elapsed() < std::time::Duration::from_secs(900) {
+            shell.tick(&ctx);
+            if let Some(step) = shell.actions.progress.clone() {
+                if step != said {
+                    eprintln!("{:>6.1}s  {step}", started.elapsed().as_secs_f32());
+                    said = step;
+                }
+            }
+            if shell.actions.running.is_none() {
+                shell.tick(&ctx); // the switch lands on the next frame
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        eprintln!("{:>6.1}s  done", started.elapsed().as_secs_f32());
+    }
+
+    /// Open sample on a machine with nothing: the Studio downloads, checks
+    /// and opens it, and no engine is set up. By hand, alone (network):
+    /// `TRAINNR_TEST_FRESH_HOME=<empty dir> cargo test --release --
+    /// --ignored a_sample_opens --nocapture`.
+    #[test]
+    #[ignore = "downloads the sample; run by hand"]
+    fn a_sample_opens_with_no_engine() {
+        let mut shell = fresh_shell();
+        shell.open_sample("go2-walk");
+        run_frames(&mut shell);
+        assert_eq!(shell.actions.failed, None);
+        assert!(shell.model.project_root.ends_with("go2-walk-sample"));
+        assert!(shell.model.index().is_some_and(|i| !i.artifacts.is_empty()));
+        assert!(!crate::spawn::engine_ready(), "no engine was needed");
+    }
+
+    /// The first tool on a machine with nothing: New project sets the engine
+    /// up (its steps shown on the button), then creates the project. By
+    /// hand, alone: `TRAINNR_TEST_FRESH_HOME=<empty dir>
+    /// TRAINNR_RUNTIME_URL=<archive> cargo test --release -- --ignored
+    /// a_first_tool --nocapture`.
+    #[test]
+    #[ignore = "sets an engine up; run by hand"]
+    fn a_first_tool_sets_the_engine_up_then_runs() {
+        let mut shell = fresh_shell();
+        shell.create_project("lab-arm");
+        run_frames(&mut shell);
+        assert_eq!(shell.actions.failed, None);
+        assert!(crate::spawn::engine_ready());
+        assert!(shell.model.project_root.ends_with("lab-arm"));
+    }
 
     #[test]
     fn a_forms_command_opens_its_job_or_says_it_is_done() {

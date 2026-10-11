@@ -1,0 +1,516 @@
+//! The engine: the Python side the Studio runs its tools with, set up the
+//! first time an action needs it when no checkout is there (the desktop
+//! app plan, docs/85, 2026-10-11).
+//!
+//! A Studio downloaded from a release has no repository beside it, and
+//! every tool, job and stream runs from one. The engine is that, made
+//! lean: the release's runtime archive (`tools/runtime-archive.py`: the
+//! Python packages, the job scripts and the robot library, about 9 MB),
+//! unpacked under `<trainnr home>/engine/`, then `uv sync` of the core
+//! (Python, the tools, MuJoCo). `uv` comes from PATH when it is there and
+//! is downloaded otherwise, at a pinned version checked by its SHA-256.
+//! Nothing is fetched before a button needs it, and each piece after the
+//! core (the viewer stream, the trainer) arrives the first time it is
+//! used, by `uv run` itself.
+
+use std::io::Read as _;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use sha2::{Digest as _, Sha256};
+
+/// A different runtime archive to install (a URL or a local file): for a
+/// mirror, a pre-release, and the tests.
+pub const RUNTIME_ENV: &str = "TRAINNR_RUNTIME_URL";
+/// The uv the engine runs (`trainnr/paths.py::UV_ENV`), handed to every
+/// process the Studio starts so the jobs run the same one.
+pub const UV_ENV: &str = "TRAINNR_UV";
+/// Under the user's trainnr home (`model::user_home`).
+const ENGINE_DIR: &str = "engine";
+/// Written last, once the core is synced: an engine without it is
+/// unfinished and is set up again.
+const READY_FILE: &str = ".ready";
+/// The release's runtime archive, by version (`tools/runtime-archive.py`).
+const RUNTIME_URL: &str =
+    "https://github.com/Trainnr-AI/trainnr/releases/download/v{version}/trainnr-runtime-v{version}.tar.gz";
+/// The runtime's folder inside the archive.
+const RUNTIME_NAME: &str = "trainnr-runtime-v{version}";
+/// The core the first action needs: the tools and the MCP server.
+pub const CORE_EXTRAS: &[&str] = &["sim", "mcp"];
+/// No download the engine makes is larger than this.
+const MAX_DOWNLOAD: u64 = 300_000_000;
+const TIMEOUT: Duration = Duration::from_secs(600);
+
+/// uv as the engine downloads it when none is on PATH: the version, and
+/// each platform's archive with the SHA-256 astral publishes beside it
+/// (read 2026-10-11 from github.com/astral-sh/uv/releases/tag/0.13.0).
+const UV_VERSION: &str = "0.13.0";
+struct UvPin {
+    archive: &'static str,
+    sha256: &'static str,
+}
+const UV_PINS: &[(&str, UvPin)] = &[
+    (
+        "x86_64-linux",
+        UvPin {
+            archive: "uv-x86_64-unknown-linux-gnu.tar.gz",
+            sha256: "1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154",
+        },
+    ),
+    (
+        "aarch64-linux",
+        UvPin {
+            archive: "uv-aarch64-unknown-linux-gnu.tar.gz",
+            sha256: "3ccfb6af6e242433eb552f7d9676abd5412c6595c497e990d9c8cb7b5bd4d2c3",
+        },
+    ),
+    (
+        "aarch64-macos",
+        UvPin {
+            archive: "uv-aarch64-apple-darwin.tar.gz",
+            sha256: "a9c1b29002cf3c83f07fa9cd8a887a3be0107d90e23189721221e7257db8e3d6",
+        },
+    ),
+    (
+        "x86_64-macos",
+        UvPin {
+            archive: "uv-x86_64-apple-darwin.tar.gz",
+            sha256: "5f44dcbde809b632f47c36fadb241cb4d6f9af71d0c8f172b5d2026d3dde742c",
+        },
+    ),
+    (
+        "x86_64-windows",
+        UvPin {
+            archive: "uv-x86_64-pc-windows-msvc.zip",
+            sha256: "088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c",
+        },
+    ),
+];
+
+fn this_platform() -> String {
+    format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS)
+}
+
+fn exe(name: &str) -> String {
+    format!("{name}{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// `<trainnr home>/engine`, when there is a home.
+pub fn engine_home() -> Option<PathBuf> {
+    crate::model::user_home().map(|home| home.join(ENGINE_DIR))
+}
+
+/// The runtime this Studio's version runs, where it unpacks.
+fn runtime_dir(home: &Path) -> PathBuf {
+    home.join(RUNTIME_NAME.replace("{version}", env!("CARGO_PKG_VERSION")))
+}
+
+/// The engine's runtime, once it is set up and synced.
+pub fn installed_runtime() -> Option<PathBuf> {
+    let dir = runtime_dir(&engine_home()?);
+    dir.join(READY_FILE).is_file().then_some(dir)
+}
+
+/// The uv to run: `$TRAINNR_UV`, else one on PATH, else the engine's own
+/// (downloaded), else the bare name for the OS to find.
+pub fn uv_program() -> PathBuf {
+    if let Some(named) = std::env::var_os(UV_ENV).filter(|v| !v.is_empty()) {
+        return PathBuf::from(named);
+    }
+    if let Some(found) = on_path("uv") {
+        return found;
+    }
+    let own = engine_home().map(|h| h.join("bin").join(exe("uv")));
+    own.filter(|p| p.is_file())
+        .unwrap_or_else(|| PathBuf::from("uv"))
+}
+
+fn on_path(name: &str) -> Option<PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths)
+        .map(|dir| dir.join(exe(name)))
+        .find(|p| p.is_file())
+}
+
+/// Where the engine's setup stands, as the buttons show it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum Setup {
+    #[default]
+    Idle,
+    /// What it is doing now, in a few words.
+    Working(String),
+    Ready,
+    Failed(String),
+}
+
+/// The engine's setup, on its own thread; `state` is what it is doing.
+#[derive(Default)]
+pub struct Installer {
+    state: Arc<Mutex<Setup>>,
+}
+
+impl Installer {
+    /// What the setup is doing now.
+    pub fn state(&self) -> Setup {
+        self.state.lock().map(|s| s.clone()).unwrap_or_default()
+    }
+
+    /// Start setting the engine up, unless it is under way or done.
+    pub fn start(&self) {
+        {
+            let Ok(mut state) = self.state.lock() else {
+                return;
+            };
+            if matches!(*state, Setup::Working(_) | Setup::Ready) {
+                return;
+            }
+            *state = Setup::Working("Setting up the engine…".to_owned());
+        }
+        let state = Arc::clone(&self.state);
+        std::thread::Builder::new()
+            .name("trainnr-engine-setup".to_owned())
+            .spawn(move || {
+                let say = |words: &str| {
+                    if let Ok(mut s) = state.lock() {
+                        *s = Setup::Working(words.to_owned());
+                    }
+                };
+                let outcome = match engine_home() {
+                    Some(home) => install(&home, &say),
+                    None => Err("no home folder to set the engine up in".to_owned()),
+                };
+                if let Ok(mut s) = state.lock() {
+                    *s = match outcome {
+                        Ok(_) => Setup::Ready,
+                        Err(why) => Setup::Failed(why),
+                    };
+                }
+            })
+            .ok();
+    }
+}
+
+/// Set the engine up in `home`: uv, the runtime, the core. Returns the
+/// runtime's folder. `say` names each step for the window.
+pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
+    let uv = match on_path("uv").or_else(|| std::env::var_os(UV_ENV).map(PathBuf::from)) {
+        Some(uv) => uv,
+        None => {
+            say(&format!("Downloading uv {UV_VERSION} (about 16 MB)…"));
+            install_uv(home)?
+        }
+    };
+    let runtime = runtime_dir(home);
+    if !runtime.join(crate::spawn::REPO_MARKER).is_file() {
+        say("Downloading the runtime (about 9 MB)…");
+        install_runtime(home)?;
+    }
+    say("Installing Python and the core tools (about 750 MB on disk, once)…");
+    let mut sync = std::process::Command::new(&uv);
+    sync.arg("sync")
+        .arg("--project")
+        .arg(runtime.join(crate::spawn::PIPELINE_DIR));
+    for extra in CORE_EXTRAS {
+        sync.args(["--extra", extra]);
+    }
+    let done = sync
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("uv did not start: {e}"))?;
+    if !done.status.success() {
+        let said = String::from_utf8_lossy(&done.stderr);
+        let last = said
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("");
+        return Err(format!("uv sync failed: {last}"));
+    }
+    std::fs::write(runtime.join(READY_FILE), UV_VERSION).map_err(|e| e.to_string())?;
+    Ok(runtime)
+}
+
+/// The pinned uv for this platform, downloaded, checked and unpacked into
+/// `<home>/bin`.
+fn install_uv(home: &Path) -> Result<PathBuf, String> {
+    let platform = this_platform();
+    let pin = UV_PINS
+        .iter()
+        .find(|(p, _)| *p == platform)
+        .map(|(_, pin)| pin)
+        .ok_or_else(|| format!("no uv build is pinned for {platform}; install uv and retry"))?;
+    let url = format!(
+        "https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/{}",
+        pin.archive
+    );
+    let bytes = download(&url)?;
+    check_sha256(&bytes, pin.sha256, &url)?;
+    let bin = home.join("bin");
+    std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
+    let target = bin.join(exe("uv"));
+    if pin.archive.ends_with(".zip") {
+        // Windows: the archive is a zip; Windows' own tar (bsdtar, in every
+        // Windows 10 and 11) reads it, and the bytes are already checked.
+        let staged = home.join(pin.archive);
+        std::fs::write(&staged, &bytes).map_err(|e| e.to_string())?;
+        let status = std::process::Command::new("tar")
+            .arg("-xf")
+            .arg(&staged)
+            .arg("-C")
+            .arg(&bin)
+            .status()
+            .map_err(|e| format!("tar did not start: {e}"))?;
+        let _ = std::fs::remove_file(&staged);
+        if !status.success() {
+            return Err(format!("could not unpack {}", pin.archive));
+        }
+    } else {
+        // The unix archives hold `uv-<target>/uv` and `uvx`: uv alone is kept.
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(&bytes[..]));
+        for entry in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path().map_err(|e| e.to_string())?.into_owned();
+            if path.file_name().is_some_and(|n| n == "uv") && entry.header().entry_type().is_file()
+            {
+                let mut body = Vec::new();
+                entry.read_to_end(&mut body).map_err(|e| e.to_string())?;
+                std::fs::write(&target, body).map_err(|e| e.to_string())?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt as _;
+                    std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755))
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+    target
+        .is_file()
+        .then(|| target.clone())
+        .ok_or_else(|| format!("{} held no uv", pin.archive))
+}
+
+/// The runtime archive: from `$TRAINNR_RUNTIME_URL` (a URL or a file), else
+/// the release's, checked against the `.sha256` beside it, unpacked into
+/// `home`.
+fn install_runtime(home: &Path) -> Result<(), String> {
+    let version = env!("CARGO_PKG_VERSION");
+    let source = std::env::var(RUNTIME_ENV)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| RUNTIME_URL.replace("{version}", version));
+    let (bytes, listed) = if source.starts_with("https://") {
+        let bytes = download(&source)?;
+        let listed = String::from_utf8(download(&format!("{source}.sha256"))?)
+            .map_err(|_| "the checksum file is not text".to_owned())?;
+        (bytes, listed)
+    } else {
+        let bytes = std::fs::read(&source).map_err(|e| format!("{source}: {e}"))?;
+        let listed = std::fs::read_to_string(format!("{source}.sha256"))
+            .map_err(|e| format!("{source}.sha256: {e}"))?;
+        (bytes, listed)
+    };
+    let expected = listed.split_whitespace().next().unwrap_or_default();
+    check_sha256(&bytes, expected, &source)?;
+    let staging = home.join(format!(".unpacking-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&staging);
+    unpack_tar_gz(&bytes, &staging)?;
+    let name = RUNTIME_NAME.replace("{version}", version);
+    let unpacked = staging.join(&name);
+    if !unpacked.join(crate::spawn::REPO_MARKER).is_file() {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(format!(
+            "{source}: no {name}/{} inside",
+            crate::spawn::REPO_MARKER
+        ));
+    }
+    let target = runtime_dir(home);
+    let _ = std::fs::remove_dir_all(&target);
+    std::fs::rename(&unpacked, &target).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_dir_all(&staging);
+    Ok(())
+}
+
+/// A download over HTTPS only (a redirect away from it is refused), at
+/// most `MAX_DOWNLOAD` bytes.
+pub fn download(url: &str) -> Result<Vec<u8>, String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .https_only(true)
+        .timeout_global(Some(TIMEOUT))
+        .build()
+        .into();
+    let mut reply = agent.get(url).call().map_err(|e| format!("{url}: {e}"))?;
+    reply
+        .body_mut()
+        .with_config()
+        .limit(MAX_DOWNLOAD)
+        .read_to_vec()
+        .map_err(|e| format!("{url}: {e}"))
+}
+
+/// `bytes` must hash to `expected` (hex SHA-256), or nothing is unpacked.
+pub fn check_sha256(bytes: &[u8], expected: &str, what: &str) -> Result<(), String> {
+    let digest = Sha256::digest(bytes);
+    let got: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    if got.eq_ignore_ascii_case(expected.trim()) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{what}: SHA-256 {} is not the listed {}",
+            &got[..12],
+            expected.get(..12).unwrap_or(expected)
+        ))
+    }
+}
+
+/// Unpack a tar.gz into `dir`: plain files and folders only, every one
+/// inside `dir`; a link, a device or a path that leaves is refused and
+/// nothing is kept.
+pub fn unpack_tar_gz(bytes: &[u8], dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(bytes));
+    archive.set_preserve_permissions(true);
+    let result = (|| {
+        for entry in archive.entries().map_err(|e| e.to_string())? {
+            let mut entry = entry.map_err(|e| e.to_string())?;
+            let kind = entry.header().entry_type();
+            let path = entry.path().map_err(|e| e.to_string())?.into_owned();
+            if !(kind.is_file() || kind.is_dir()) {
+                return Err(format!("{}: not a file or a folder", path.display()));
+            }
+            let plain = path
+                .components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)));
+            if !plain {
+                return Err(format!("{}: leaves the folder", path.display()));
+            }
+            if !entry.unpack_in(dir).map_err(|e| e.to_string())? {
+                return Err(format!("{}: leaves the folder", path.display()));
+            }
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tar_gz(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut builder = tar::Builder::new(Vec::new());
+        for (name, body) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(body.len() as u64);
+            header.set_mode(0o644);
+            header.set_entry_type(tar::EntryType::Regular);
+            // The name written as raw bytes: the crate refuses to write a
+            // `..`, and a hostile archive is exactly one that has it.
+            let raw = &mut header.as_gnu_mut().expect("gnu").name;
+            raw[..name.len()].copy_from_slice(name.as_bytes());
+            header.set_cksum();
+            builder.append(&header, *body).expect("append");
+        }
+        let raw = builder.into_inner().expect("tar");
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        std::io::Write::write_all(&mut gz, &raw).expect("gz");
+        gz.finish().expect("gz")
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("studio-engine-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn a_digest_that_is_not_the_listed_one_is_refused() {
+        let bytes = b"runtime";
+        let good: String = Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        assert!(check_sha256(bytes, &good, "x").is_ok());
+        assert!(check_sha256(bytes, &good.to_uppercase(), "x").is_ok());
+        assert!(check_sha256(b"tampered", &good, "x").is_err());
+    }
+
+    #[test]
+    fn an_archive_unpacks_and_one_that_leaves_is_refused_whole() {
+        let dir = scratch("unpack");
+        let good = tar_gz(&[
+            ("rt/trainnr/pyproject.toml", b"[project]"),
+            ("rt/tools/a.py", b"x"),
+        ]);
+        unpack_tar_gz(&good, &dir).expect("unpacks");
+        assert!(dir.join("rt/trainnr/pyproject.toml").is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+        let bad = tar_gz(&[("rt/ok.txt", b"x"), ("../escaped.txt", b"x")]);
+        assert!(unpack_tar_gz(&bad, &dir).is_err());
+        assert!(!dir.exists(), "nothing is kept of a refused archive");
+        assert!(!std::env::temp_dir().join("escaped.txt").exists());
+    }
+
+    #[test]
+    fn the_runtime_installs_from_a_local_archive_checked_by_its_digest() {
+        let home = scratch("runtime");
+        std::fs::create_dir_all(&home).unwrap();
+        let name = RUNTIME_NAME.replace("{version}", env!("CARGO_PKG_VERSION"));
+        let marker = format!("{name}/{}", crate::spawn::REPO_MARKER);
+        let bytes = tar_gz(&[(&marker, b"[project]")]);
+        let archive = home.join("rt.tar.gz");
+        std::fs::write(&archive, &bytes).unwrap();
+        let digest: String = Sha256::digest(&bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        std::fs::write(
+            home.join("rt.tar.gz.sha256"),
+            format!("{digest}  rt.tar.gz\n"),
+        )
+        .unwrap();
+        std::env::set_var(RUNTIME_ENV, &archive);
+        let installed = install_runtime(&home);
+        std::fs::write(home.join("rt.tar.gz.sha256"), "0000  rt.tar.gz\n").unwrap();
+        let tampered = install_runtime(&home);
+        std::env::remove_var(RUNTIME_ENV);
+        installed.expect("installs");
+        assert!(runtime_dir(&home).join(crate::spawn::REPO_MARKER).is_file());
+        assert!(
+            tampered.is_err(),
+            "a digest that does not match unpacks nothing"
+        );
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// The whole setup on this machine, from nothing: uv downloaded when
+    /// none is on PATH, the runtime unpacked, the core synced. Network and
+    /// minutes, so it runs on request:
+    /// `TRAINNR_TEST_ENGINE_HOME=<empty dir> TRAINNR_RUNTIME_URL=<archive>
+    /// cargo test --release -- --ignored a_fresh_engine --nocapture`.
+    #[test]
+    #[ignore = "downloads uv and Python packages; run by hand"]
+    fn a_fresh_engine_sets_up_from_nothing() {
+        let home = PathBuf::from(std::env::var("TRAINNR_TEST_ENGINE_HOME").expect("a home"));
+        let started = std::time::Instant::now();
+        let say = |step: &str| eprintln!("{:>6.1}s  {step}", started.elapsed().as_secs_f32());
+        let runtime = install(&home, &say).expect("sets up");
+        say("ready");
+        assert!(runtime.join(READY_FILE).is_file());
+        assert!(runtime.join(crate::spawn::REPO_MARKER).is_file());
+    }
+
+    #[test]
+    fn every_platform_the_release_builds_has_a_pinned_uv() {
+        for platform in ["x86_64-linux", "aarch64-macos", "x86_64-windows"] {
+            let pin = UV_PINS.iter().find(|(p, _)| *p == platform);
+            let (_, pin) = pin.unwrap_or_else(|| panic!("no uv pinned for {platform}"));
+            assert_eq!(pin.sha256.len(), 64, "{platform}");
+        }
+    }
+}

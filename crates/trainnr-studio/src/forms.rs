@@ -140,15 +140,22 @@ impl Catalog {
         };
     }
 
+    /// The forms to show: the loaded ones, else the ones built in, so a
+    /// page has its buttons before the engine is set up (a click sets it
+    /// up) and when `trainnr forms` could not run.
+    fn forms(&self) -> &[Form] {
+        match self {
+            Self::Ready(forms) => forms,
+            _ => built_in(),
+        }
+    }
+
     /// This page's forms, in the registry's order.
     pub fn for_page(&self, section: Section) -> Vec<&Form> {
-        match self {
-            Self::Ready(forms) => forms
-                .iter()
-                .filter(|f| Section::parse(&f.page) == Some(section))
-                .collect(),
-            _ => Vec::new(),
-        }
+        self.forms()
+            .iter()
+            .filter(|f| Section::parse(&f.page) == Some(section))
+            .collect()
     }
 
     /// Why there are no forms, when loading them failed.
@@ -161,10 +168,7 @@ impl Catalog {
 
     /// The form that runs `tool`.
     pub fn form(&self, tool: &str) -> Option<&Form> {
-        match self {
-            Self::Ready(forms) => forms.iter().find(|f| f.tool == tool),
-            _ => None,
-        }
+        self.forms().iter().find(|f| f.tool == tool)
     }
 }
 
@@ -181,6 +185,14 @@ pub fn output_files(
     crate::control::refuse_links(log)?;
     let create = |p: &std::path::Path| std::fs::File::create(p).map_err(|e| e.to_string());
     Ok((create(out)?, create(log)?))
+}
+
+/// The forms this build was made with (`forms.json`, written by
+/// `trainnr forms` and pinned to it by `tests/test_studio_mirrors.py`):
+/// the built-in tools' forms, without a plugin's.
+pub fn built_in() -> &'static [Form] {
+    static BUILT_IN: std::sync::OnceLock<Vec<Form>> = std::sync::OnceLock::new();
+    BUILT_IN.get_or_init(|| parse(include_str!("forms.json")).unwrap_or_default())
 }
 
 /// A file's last line that says something, or a word that it said nothing.
@@ -570,6 +582,7 @@ mod tests {
         assert_eq!(catalog.for_page(Section::Robots).len(), 1);
         assert!(catalog.for_page(Section::Recordings).is_empty());
         assert!(catalog.form("identify_system").is_some());
-        assert!(Catalog::Unloaded.for_page(Section::Robots).is_empty());
+        let built_in = Catalog::Unloaded.for_page(Section::Robots);
+        assert!(!built_in.is_empty(), "the built-in forms stand in");
     }
 }

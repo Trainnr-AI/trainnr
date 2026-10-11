@@ -82,16 +82,20 @@ start, for adoption.* The app is the only thing a person downloads. The
 Python environment that does the work (the "engine") is fetched in
 pieces, each the first time something needs it, with its size shown on
 the button that triggers it and a progress line while it lands. Sizes
-measured on 2026-10-11 (installed on disk, Linux x86-64; the downloads are compressed and smaller, not yet measured):
+measured on 2026-10-11 (installed on disk, Linux x86-64; the downloads are compressed and smaller):
 
 | Piece | Fetched when | What it holds | Size |
 |---|---|---|---|
 | The app | the download | the Studio, the Rerun viewer, the Welcome page, browsing any project | 63 to 71 MB archive |
-| Core | the first action (New project, Add robot, Identify) | `uv`, Python, `trainnr`, the MCP server, MuJoCo, numpy, scipy | about 380 MB: packages 254, Python 85, `uv` 39 |
-| Viewer stream | the first Show or simulator scene | `rerun-sdk` (it carries its own viewer binary) | 253 MB |
-| Deploy | the first export or gate | `onnx`, `onnxruntime` | 89 MB |
+| Core | the first action that runs a tool (New project, Add robot, Identify) | `uv`, Python, the runtime (`tools/runtime-archive.py`: the packages' sources, the job scripts, the robot library, 9 MB as an archive), the tools, the MCP server, MuJoCo with its identification module, numpy, scipy, ONNX | about 765 MB on disk, measured from nothing on 2026-10-11: packages and runtime 620, Python 107, `uv` 38; 25 s on this connection |
+| Viewer stream | the first project opened on the engine (the presenter starts with it: it draws the cards and shows recordings) or the first simulator scene | `rerun-sdk` (it carries its own viewer binary), with `uv run` adding the extra in the background | 253 MB |
 | Local training | the first training run on this machine | the trainer: mjlab, PyTorch, Warp (CUDA on Linux and Windows) | 1.8 GB on a Mac, 6.5 GB on Linux with CUDA |
 | Imitation, USD, scenes | the first use of each | LeRobot; Newton's USD reader; Open3D and CoACD | per extra |
+
+The core is larger than it has to be: MuJoCo's identification module
+pulls a plotting stack (plotly, matplotlib, a bundled ffmpeg: about
+165 MB), and ONNX (89 MB) is only for exports and gates. Both are the
+next pieces to move out of it.
 
 A user who trains on a rented GPU (`tools/cloud-gpu.py`) never fetches
 the local trainer. The Python side owns the map from a tool to the
@@ -140,15 +144,23 @@ Each phase ends with a check on a fresh machine, not with code merged.
    stages. Train, evaluate, export and the gates wait on a full training
    run, which is the user's to start.
 
-2. **The engine, on demand and without a checkout.** The scripts jobs
-   run move into the package (`python -m trainnr.…`); `trainnr-mjlab`
-   comes from PyPI; `onnx` and `onnxruntime` leave the base dependencies
-   for the deploy piece; the tool-to-piece map lands in the package; the
-   app fetches each piece the first time it is needed, and the sample
-   opens with none. *Check:* on a fresh Mac and a fresh Windows machine,
-   the release's Studio alone opens the sample with no engine, then
-   creates a project, then trains a smoke run, fetching only what each
-   step needs, each size shown before it downloads.
+2. **The engine, on demand and without a checkout.** Done on this branch:
+   the release carries the runtime (`tools/runtime-archive.py`: 9 MB,
+   the same bytes from the same commit); the Studio sets the engine up
+   the first time an action runs a tool (`engine.rs`: uv from PATH, else
+   downloaded at a pinned version and SHA-256; the runtime checked
+   against the SHA-256 beside it; `uv sync` of the core), shows each step
+   on the button, then runs the action; jobs run the engine's uv
+   (`TRAINNR_UV`); the presenter and the simulator wait for it. The
+   sample carries its index and the Studio opens it itself, with no
+   engine (`sample.rs`). *Checked, 2026-10-11, on this Linux machine:* the
+   engine set up from nothing (no uv on PATH, an empty package cache, a
+   managed Python only) in 25 s, 765 MB on disk; a copy of the release
+   Studio outside any checkout, with no uv on PATH, found the engine,
+   loaded its forms through it and opened the sample; the sample opened
+   with no engine in 5.4 s; New project on a machine with nothing set
+   the engine up, then made the project. Left: the same on a fresh Mac
+   and a fresh Windows machine (Prakhar's), and the core's trims above.
 3. **Connect your agent.** A panel with one click for Claude Code (the
    plugin), and the entry to copy for Cursor, Codex and others; the
    connection status (PR #32 once fixed). It asks before writing another

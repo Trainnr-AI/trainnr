@@ -52,6 +52,13 @@ egui_extras = "0.36.1"
 # Native file dialogs for the forms' file fields; the same version and
 # backend re_viewer already builds (xdg-portal), so no new crate.
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+# The engine's downloads (engine.rs): uv and the runtime over HTTPS, each
+# checked by its SHA-256 and unpacked from a tar.gz. ureq, sha2 and flate2
+# are the versions Rerun already builds; tar is the one new crate.
+ureq = "3.4"
+sha2 = "0.10.9"
+flate2 = "1"
+tar = "0.4"
 # PNG encoding for the agent's screenshots (control.rs); already in the
 # tree through egui_extras, pinned to the same major.
 image = { version = "0.25", default-features = false, features = ["png"] }

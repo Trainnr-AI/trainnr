@@ -51,25 +51,52 @@ pub const PROJECT_ENV: &str = "TRAINNR_PROJECT";
 pub const PROJECTS_ENV: &str = "TRAINNR_PROJECTS";
 const HOME_ENV: &str = "TRAINNR_HOME";
 const HOME_DIR: &str = "trainnr";
-const CURRENT_FILE: &str = ".current";
+pub const CURRENT_FILE: &str = ".current";
 
-/// Where projects are created: `$TRAINNR_PROJECTS`, else
-/// `$TRAINNR_HOME/projects`, else `~/trainnr/projects`.
-pub fn user_projects_home() -> Option<PathBuf> {
-    let named = |var: &str| {
-        std::env::var_os(var)
+/// The operating system's home folder, as Python's `Path.home()` finds
+/// it: `USERPROFILE` first on Windows, `HOME` first elsewhere.
+fn os_home() -> Option<PathBuf> {
+    let var = |name: &str| {
+        std::env::var_os(name)
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    if let Some(home) = named(PROJECTS_ENV) {
-        return Some(home);
+    if cfg!(windows) {
+        var("USERPROFILE").or_else(|| var("HOME"))
+    } else {
+        var("HOME").or_else(|| var("USERPROFILE"))
     }
-    if let Some(root) = named(HOME_ENV) {
-        return Some(root.join(PROJECTS_HOME));
+}
+
+/// A path an environment variable names, read as Python reads it
+/// (`trainnr/paths.py`): trimmed, `~` expanded, made absolute. The two
+/// sides must land on the same folder, or each looks where the other
+/// never writes.
+fn env_path(name: &str) -> Option<PathBuf> {
+    let raw = std::env::var(name).ok()?;
+    let text = raw.trim();
+    if text.is_empty() {
+        return None;
     }
-    named("HOME")
-        .or_else(|| named("USERPROFILE"))
-        .map(|home| home.join(HOME_DIR).join(PROJECTS_HOME))
+    let path = match text.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => {
+            os_home()?.join(rest.trim_start_matches(['/', '\\']))
+        }
+        _ => PathBuf::from(text),
+    };
+    Some(std::path::absolute(&path).unwrap_or(path))
+}
+
+/// Where the user's own data lives: `$TRAINNR_HOME`, else `~/trainnr`
+/// (`trainnr/paths.py::user_home`): the projects, the caches, the engine.
+pub fn user_home() -> Option<PathBuf> {
+    env_path(HOME_ENV).or_else(|| os_home().map(|home| home.join(HOME_DIR)))
+}
+
+/// Where projects are created: `$TRAINNR_PROJECTS`, else
+/// `<user home>/projects` (`trainnr/project/locate.py::projects_home`).
+pub fn user_projects_home() -> Option<PathBuf> {
+    env_path(PROJECTS_ENV).or_else(|| user_home().map(|home| home.join(PROJECTS_HOME)))
 }
 
 /// The project last created or chosen through the tools, when it is one.
@@ -1006,6 +1033,28 @@ mod tests {
             .as_deref()
             .is_some_and(|p| p.contains("somebody-else/1") && p.contains(INDEX_SCHEMA)));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// A home named in the environment reads as Python reads it: trimmed,
+    /// `~` expanded, absolute (the review of PR #32, 2026-10-11).
+    #[test]
+    fn a_named_home_is_read_as_python_reads_it() {
+        const VAR: &str = "TRAINNR_TEST_ENV_PATH";
+        let home = os_home().expect("a home");
+        std::env::set_var(VAR, "  ~/th  ");
+        assert_eq!(env_path(VAR), Some(home.join("th")));
+        std::env::set_var(VAR, "~");
+        assert_eq!(env_path(VAR), Some(home.clone()));
+        std::env::set_var(VAR, " /data/th ");
+        assert_eq!(env_path(VAR), Some(PathBuf::from("/data/th")));
+        std::env::set_var(VAR, "~other/x");
+        assert!(
+            env_path(VAR).is_some_and(|p| p.ends_with("~other/x")),
+            "another user's ~ is left as written, never guessed"
+        );
+        std::env::set_var(VAR, "   ");
+        assert_eq!(env_path(VAR), None);
+        std::env::remove_var(VAR);
     }
 
     #[test]
