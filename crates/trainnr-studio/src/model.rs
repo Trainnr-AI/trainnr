@@ -55,7 +55,7 @@ pub const CURRENT_FILE: &str = ".current";
 
 /// The operating system's home folder, as Python's `Path.home()` finds
 /// it: `USERPROFILE` first on Windows, `HOME` first elsewhere.
-fn os_home() -> Option<PathBuf> {
+pub fn os_home() -> Option<PathBuf> {
     let var = |name: &str| {
         std::env::var_os(name)
             .filter(|v| !v.is_empty())

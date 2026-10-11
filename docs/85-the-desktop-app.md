@@ -161,11 +161,23 @@ Each phase ends with a check on a fresh machine, not with code merged.
    with no engine in 5.4 s; New project on a machine with nothing set
    the engine up, then made the project. Left: the same on a fresh Mac
    and a fresh Windows machine (Prakhar's), and the core's trims above.
-3. **Connect your agent.** A panel with one click for Claude Code (the
-   plugin), and the entry to copy for Cursor, Codex and others; the
-   connection status (PR #32 once fixed). It asks before writing another
-   app's configuration. *Check:* a fresh machine connects Claude Code in
-   one click and the agent's first call shows in the window.
+3. **Connect your agent.** Done on this branch (`connect.rs`): a panel
+   from the Welcome page and the status bar lists Claude Code, Codex and
+   Cursor with whether each is on this machine and already has trainnr
+   (its MCP entry, or the Claude Code plugin), an Add button for each
+   that is the asking (Claude Code and Codex through their own `mcp add`;
+   Cursor by adding one entry to `~/.cursor/mcp.json`, every other entry
+   kept, a file that is not JSON refused), and the line to copy for any
+   other client. The entry runs a launcher at a fixed path,
+   `<trainnr home>/engine/bin/trainnr`, rewritten when the engine
+   changes, so an update never breaks it (Windows names the engine's
+   Python, since a `.cmd` launcher does not start from every client).
+   Before the engine exists the panel sets it up first. *Checked,
+   2026-10-11:* in a throwaway home, the panel's add put trainnr into
+   Claude Code and `claude mcp get trainnr` answered "Connected", Claude
+   Code having started the server through the launcher on the fresh
+   engine. Left: the connection status in the window (PR #32, once its
+   review is answered).
 4. **Distribution.** Installers built by `release.yml`: a signed and
    notarised macOS DMG, a signed Windows installer, a Linux AppImage; an
    update check; a download page on trainnr.ai. *Check:* download, install
@@ -180,8 +192,9 @@ Each phase ends with a check on a fresh machine, not with code merged.
 - **Metered MCP calls.** Paper's free plan allows 100 tool calls a week.
   trainnr's tools run on the user's machine and are not counted.
 - **Writing other apps' configuration unasked.** Spline writes its MCP
-  entry into every client it finds at launch. trainnr will ask first,
-  per client: phase 3, not built yet, so not a claim until it ships.
+  entry into every client it finds at launch. trainnr writes nothing at
+  launch: each client is added by its own button (phase 3, built on this
+  branch, 2026-10-11).
 
 ## 7. Open questions for Prakhar
 

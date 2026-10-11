@@ -23,6 +23,7 @@
 //! replaced it with the wheel.
 
 mod chrome;
+mod connect;
 mod control;
 mod detail;
 mod engine;

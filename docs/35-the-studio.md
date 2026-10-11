@@ -262,6 +262,21 @@ runs from the checkout, so the tests that play a fresh machine hide it
 to write a `..` path, so the test of a hostile archive writes the name's
 bytes into the header itself.
 
+### 5.7 Connect your agent (2026-10-11)
+
+The Welcome page's "Connect your coding agent" and the status bar's
+"connect agent" open one panel (`connect.rs`): Claude Code, Codex and
+Cursor, each with whether it is on this machine, whether it already has
+trainnr, and an Add button; then the command line for any other client,
+to copy. The agent's entry runs `<trainnr home>/engine/bin/trainnr mcp`,
+a launcher the Studio rewrites to point at the current engine (or the
+checkout's environment), with the engine's uv named; Windows names the
+environment's Python instead. Each client is looked up when the panel
+opens and after an add, never per frame: a PATH search crosses the
+Windows folders under WSL, and the panel's test took 19 s a run until
+the lookups moved out of the frame. Before the engine exists the panel
+offers to set it up.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

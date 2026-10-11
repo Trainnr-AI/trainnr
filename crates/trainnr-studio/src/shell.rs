@@ -112,6 +112,11 @@ pub struct Shell {
     /// The engine's setup finished in this session: the project's presenter
     /// and forms have been started once for it.
     engine_settled: bool,
+    /// The Connect your agent panel, while it is open, and the command
+    /// agents run, made once the engine is there (`connect.rs`).
+    connect_open: bool,
+    connect: crate::connect::Panel,
+    connect_command: Option<crate::connect::ServerCommand>,
     /// A sample being opened by the Studio itself: its name, and where the
     /// answer arrives.
     sample_wait: Option<(
@@ -173,6 +178,9 @@ impl Shell {
             pending: None,
             engine_settled: false,
             sample_wait: None,
+            connect_open: false,
+            connect: crate::connect::Panel::default(),
+            connect_command: None,
         }
     }
 
@@ -610,6 +618,17 @@ impl Shell {
                             .on_hover_text("One frame, drawn to shown, on this machine");
                             ui.add_space(6.0);
                         }
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new("connect agent").small())
+                                    .frame_when_inactive(false),
+                            )
+                            .on_hover_text("Connect Claude Code, Codex, Cursor or another agent")
+                            .clicked()
+                        {
+                            self.open_connect();
+                        }
+                        ui.add_space(6.0);
                         // Dark, light or the system's: egui's own switch,
                         // so the embedded viewer and this chrome change
                         // together.
@@ -875,6 +894,10 @@ impl Shell {
     /// the Simulator included, not only where a page is drawn.
     pub fn tick(&mut self, ctx: &egui::Context) {
         self.reap_action();
+        if self.connect_open {
+            self.connect
+                .poll(&crate::model::os_home().unwrap_or_default());
+        }
         self.follow_sample();
         self.follow_engine();
         self.forms.poll();
@@ -895,6 +918,42 @@ impl Shell {
         ctx.request_repaint_after(crate::model::RELOAD_EVERY);
     }
 
+    /// The Connect your agent panel, this frame: the command agents run is
+    /// made once the engine is there; a button adds it to one client.
+    fn connect_panel(&mut self, ctx: &egui::Context) {
+        if self.connect_command.is_none() && crate::spawn::engine_ready() {
+            let made = crate::engine::engine_home()
+                .ok_or_else(|| "no home".to_owned())
+                .and_then(|engine| {
+                    crate::connect::server_command(
+                        &crate::spawn::repo_root(),
+                        &engine,
+                        &crate::engine::uv_program(),
+                    )
+                });
+            self.connect_command = made.ok();
+        }
+        let home = crate::model::os_home().unwrap_or_default();
+        let engine = self.engine.state();
+        match crate::connect::panel(ctx, &self.connect, self.connect_command.as_ref(), &engine) {
+            crate::connect::Ask::Open => {}
+            crate::connect::Ask::Close => self.connect_open = false,
+            crate::connect::Ask::SetUpEngine => self.engine.start(),
+            crate::connect::Ask::Add(client) => {
+                if let Some(command) = self.connect_command.clone() {
+                    self.connect.start(client, home, command);
+                }
+            }
+        }
+    }
+
+    /// Open the Connect your agent panel (the status bar's button).
+    pub fn open_connect(&mut self) {
+        self.connect
+            .refresh(&crate::model::os_home().unwrap_or_default());
+        self.connect_open = true;
+    }
+
     /// A click on the Welcome or Projects page: a project to switch to,
     /// or a sample to open.
     fn pick(&mut self, picked: Option<Pick>) {
@@ -902,6 +961,7 @@ impl Shell {
             Some(Pick::Project(root)) => self.switch_to = Some(root),
             Some(Pick::Sample(name)) => self.open_sample(name),
             Some(Pick::NewProject) => self.new_project_name = Some(String::new()),
+            Some(Pick::ConnectAgent) => self.open_connect(),
             None => {}
         }
     }
@@ -921,6 +981,10 @@ impl Shell {
                 }
             }
             // The dialog has the keys: no palette, no page moves under it.
+            return;
+        }
+        if self.connect_open {
+            self.connect_panel(ctx);
             return;
         }
         if let Some(open) = self.open_form.as_mut() {

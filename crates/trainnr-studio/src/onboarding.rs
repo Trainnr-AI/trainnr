@@ -172,19 +172,39 @@ pub fn ask_your_agent(ui: &mut egui::Ui, prompts: &[&str]) {
 /// column centres it; a click anywhere on it copies it, and it says
 /// "copied" for a moment.
 pub fn prompt_chip(ui: &mut egui::Ui, prompt: &str) {
+    chip(
+        ui,
+        &format!("\u{201c}{prompt}\u{201d}"),
+        prompt,
+        "Copy, then paste it to your agent",
+    );
+}
+
+/// A command, shown as it is typed rather than quoted as speech, and
+/// copied as it is.
+pub fn command_chip(ui: &mut egui::Ui, command: &str) {
+    chip(
+        ui,
+        command,
+        command,
+        "Copy, then use it in your agent's MCP settings",
+    );
+}
+
+/// The chip both of those wear: `shown` on its face, `copy` to the
+/// clipboard, `hover` as its tooltip.
+fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
     let palette = crate::theme::palette(ui);
-    let id = egui::Id::new(("prompt-chip", prompt));
+    let id = egui::Id::new(("prompt-chip", copy));
     let now = ui.input(|i| i.time);
     let copied = ui
         .ctx()
         .data(|d| d.get_temp::<f64>(id))
         .is_some_and(|t| now - t < COPIED_FOR.as_secs_f64());
     let font = DesignTokens::welcome_screen_body().resolve(ui.style());
-    let words = ui.painter().layout_no_wrap(
-        format!("\u{201c}{prompt}\u{201d}"),
-        font.clone(),
-        palette.text,
-    );
+    let words = ui
+        .painter()
+        .layout_no_wrap(shown.to_owned(), font.clone(), palette.text);
     let mark = ui
         .painter()
         .layout_no_wrap("copied".to_owned(), font, palette.link);
@@ -233,9 +253,9 @@ pub fn prompt_chip(ui: &mut egui::Ui, prompt: &str) {
     }
     let response = response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text("Copy, then paste it to your agent");
+        .on_hover_text(hover);
     if response.clicked() {
-        ui.ctx().copy_text(prompt.to_owned());
+        ui.ctx().copy_text(copy.to_owned());
         ui.ctx().data_mut(|d| d.insert_temp(id, now));
     }
     if copied {
@@ -406,6 +426,8 @@ pub enum Pick {
     Sample(&'static str),
     /// The New project dialog, to name it.
     NewProject,
+    /// The Connect your agent panel.
+    ConnectAgent,
 }
 
 /// What the New project dialog answered this frame.
@@ -576,7 +598,14 @@ pub fn welcome(
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
-        ui.add_space(28.0);
+        ui.add_space(12.0);
+        if secondary_button(ui, "Connect your coding agent", true)
+            .on_hover_text("Claude Code, Codex, Cursor or any MCP client")
+            .clicked()
+        {
+            picked = Some(Pick::ConnectAgent);
+        }
+        ui.add_space(22.0);
         let mut create = false;
         let mut open = false;
         let mut start = |ui: &mut egui::Ui| create = start_your_own(ui, samples, home);
