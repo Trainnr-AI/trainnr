@@ -312,12 +312,14 @@ Fixed here:
 - **Faint text.** `theme::align_visuals` stopped when the page was
   already white, and Rerun's light page is white, so the light theme's
   muted grey and link blue were never applied; it now checks those
-  colours. Dark muted text takes Rerun's own `Gray.500` (`DARK_MUTED`),
+  colours. Dark muted text takes Rerun's own subdued text, `Gray.550`
+  (`DARK_MUTED`; `Gray.500`, the first pick, read 4.4:1 on a card),
   dark tags Rerun's `text_default`, and the highlight token (a
   background) is no longer used as text: `Palette::accent_text` is the
   link blue in light and Rerun's `info_text_color` in dark. The light
   link blue went one notch darker (0, 96, 196) to clear 4.5:1 on every
-  surface. Measured after: secondary text 4.9:1 (dark) and 6.1 to
+  surface. Measured after: secondary text 6.1:1 on the page and 5.7:1
+  on a card (dark) and 6.1 to
   6.4:1 (light), "Next" 9.8 and 5.5, rail labels 6.1 and 17.9, step
   numbers 5.1 and 16.0. A test holds the light palette to 4.5:1 on its
   surfaces.
@@ -339,6 +341,51 @@ Fixed here:
   under its label ("smoke (minutes, saves nothing) or full").
 - The project switcher shows a dropdown arrow, not a download one;
   Findings an outlined icon.
+
+The second round, the same day:
+- **The Overview** of a project with results leads with the best policy
+  per condition; the four count tiles repeated the rail's counts.
+- **Forms** show a problem under its own field, in the warning colour
+  (`Palette::warn`: Rerun's orange in dark, a deeper one in light, where
+  Rerun's measured 2.6:1), a bad number as it is typed and an empty
+  required field only after Run. A click outside no longer discards a
+  half-filled form or the New project dialog (`widgets::escape_closes`:
+  Escape or Cancel only). The buttons sit on the right, Cancel then the
+  main action, as egui's own dialogs lay them out; the footer says "Your
+  agent can run this too", the tool name on hover.
+- **Downloads** show a bar, the megabytes and a Cancel: the sample, uv,
+  the runtime (`engine::Transfer`, counted as `download_with` reads), and
+  the `uv sync` step, which has no size, a spinner and the same Cancel,
+  which stops uv (`output_unless_cancelled`). A cancelled setup goes back
+  to not started and its waiting button comes back.
+- **Screen readers** reach the painted widgets: a prompt or command chip
+  is a "Copy …" button, a step number says "Step n", a simulator world
+  dot is a radio button (`Response::widget_info`).
+- **The palette has a door**: Search on the title bar, with the key as
+  the platform writes it (⌘K on a Mac, Ctrl+K elsewhere, egui's
+  `format_shortcut`).
+- **Copy.** Sentence case on every button and state ("Stop", "Dismiss",
+  "Idle", "Connect agent", "Checking…"); "Previews stopped" in place of
+  "presenter stopped"; "1 deployment", "2 policies" (`count_word` knows
+  the "-ies" plural); a task's detail says where it is defined, not
+  "declared as: declared"; no emoji or em dash in on-screen strings (an
+  in-progress line is a spinner); the Compute card's cloud line names no
+  script. Recent activity leaves out the person's own page opens,
+  selections and time scrubs, and folds a run of page opens into one.
+- **Layout.** The pipeline's "›" goes before a chip on the same row,
+  never dangling where the row breaks; the Welcome page's numbered
+  stages sit on one line (each a block of fixed height); the status
+  bar's buttons are 24 points tall; the simulator's selects are framed
+  with a visible arrow in light.
+- **Pictures.** A still's pure-black rows are trimmed before it fills a
+  card (`previews._trim_black_bands`): a deployment's card had a black
+  band across its top. The sample's packed pictures keep theirs until
+  the sample archive is made again.
+- **Doors where a page had none.** The Simulator of a project with a
+  deployment leads with Play buttons for it; a drifted drift record's
+  drawer has Re-identify dynamics, which opens that form; long detail
+  values (a drift record's rule, its joint lists) wrap at body size, not
+  small monospace.
 
 ## 6. Performance lessons, all measured
 

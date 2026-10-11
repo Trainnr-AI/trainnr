@@ -960,8 +960,24 @@ def _copy_scaled(frame: Path, out: Path) -> bool:
     from PIL import ImageOps  # noqa: PLC0415
 
     with Image.open(frame) as opened:
-        image = opened.convert("RGB")
+        image = _trim_black_bands(opened.convert("RGB"))
     # Cover the card, cropped at the edges, never letterboxed: a 4:3 still
     # sat in the 337:250 card with a black band above it (2026-09-28).
     image = ImageOps.fit(image, PREVIEW_SIZE, method=Image.Resampling.LANCZOS)
     return _save_pil(image, out)
+
+
+# A row this dark everywhere is a render's empty sky, not the scene.
+_BAND_LEVEL = 4
+
+
+def _trim_black_bands(image: PilImage) -> PilImage:
+    """The still without the pure-black rows above and below the scene:
+    MuJoCo's offscreen render of a deployment's fall left a black band
+    across the top of its card (design review, 2026-10-12). A still that
+    is black throughout is kept as it is."""
+    pixels = np.asarray(image)
+    lit = np.flatnonzero(pixels.max(axis=(1, 2)) >= _BAND_LEVEL)
+    if lit.size == 0:
+        return image
+    return image.crop((0, int(lit[0]), image.width, int(lit[-1]) + 1))

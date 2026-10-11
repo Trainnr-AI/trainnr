@@ -7,6 +7,10 @@ use re_ui::{DesignTokens, UiExt as _};
 use crate::model::{ago_iso, split_stamp, Index};
 use crate::pages::Section;
 
+/// The palette's key: ⌘K on a Mac, Ctrl+K elsewhere. The top bar shows
+/// it through egui's `format_shortcut`, so each platform reads its own.
+pub const SHORTCUT: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::K);
 /// How many hits the palette lists.
 pub const MAX_HITS: usize = 12;
 const PALETTE_WIDTH: f32 = 560.0;

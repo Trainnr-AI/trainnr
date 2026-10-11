@@ -10,6 +10,9 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
+use std::sync::Arc;
+
+use crate::engine::Transfer;
 
 use crate::onboarding::SampleCard;
 
@@ -21,12 +24,13 @@ const INDEX_FILE: &str = ".index/project.json";
 pub fn open_in_background(
     sample: &'static SampleCard,
     home: PathBuf,
+    transfer: Arc<Transfer>,
 ) -> Receiver<Result<PathBuf, String>> {
     let (send, receive) = channel();
     std::thread::Builder::new()
         .name("trainnr-sample".to_owned())
         .spawn(move || {
-            let _ = send.send(open(sample, &home));
+            let _ = send.send(open(sample, &home, &transfer));
         })
         .ok();
     receive
@@ -35,7 +39,7 @@ pub fn open_in_background(
 /// The sample in `home`: downloaded, checked and unpacked the first time,
 /// the folder that is there after that; made the current project, so an
 /// agent session opens it too.
-pub fn open(sample: &SampleCard, home: &Path) -> Result<PathBuf, String> {
+pub fn open(sample: &SampleCard, home: &Path, transfer: &Transfer) -> Result<PathBuf, String> {
     let target = home.join(sample.project);
     if !target.join(crate::model::MANIFEST_FILE).is_file() {
         if target.exists() {
@@ -44,7 +48,7 @@ pub fn open(sample: &SampleCard, home: &Path) -> Result<PathBuf, String> {
                 target.display()
             ));
         }
-        let bytes = crate::engine::download(sample.url)?;
+        let bytes = crate::engine::download_with(sample.url, transfer)?;
         unpack(sample, &bytes, home)?;
     }
     remember(home, &target)?;

@@ -625,7 +625,7 @@ pub fn summary(ui: &mut egui::Ui, job: &Job, now: f64) {
         } else if job.exit == Some(0) {
             ui.visuals().weak_text_color()
         } else {
-            ui.visuals().warn_fg_color
+            crate::theme::palette(ui).warn
         };
         ui.label(egui::RichText::new(job.state_word()).small().color(color));
     });
@@ -649,7 +649,7 @@ pub fn summary(ui: &mut egui::Ui, job: &Job, now: f64) {
     let line = if status.stage.is_empty() {
         facts.join(" · ")
     } else {
-        format!("{} — {}", status.stage, facts.join(" · "))
+        format!("{} · {}", status.stage, facts.join(" · "))
     };
     ui.label(
         egui::RichText::new(line)
@@ -673,7 +673,7 @@ fn chip_color(ui: &egui::Ui, state: ChipState) -> egui::Color32 {
     match state {
         ChipState::Running => crate::theme::palette(ui).accent_text,
         ChipState::Done => ui.visuals().weak_text_color(),
-        ChipState::Failed | ChipState::Died => ui.visuals().warn_fg_color,
+        ChipState::Failed | ChipState::Died => crate::theme::palette(ui).warn,
     }
 }
 
@@ -876,17 +876,19 @@ pub fn row(
         }
         if job.running() {
             if armed {
-                let warn = ui.visuals().warn_fg_color;
+                let warn = crate::theme::palette(ui).warn;
                 if ui
-                    .small_button(egui::RichText::new(format!("stop pid {}?", job.pid)).color(warn))
+                    .small_button(
+                        egui::RichText::new(format!("Stop process {}?", job.pid)).color(warn),
+                    )
                     .clicked()
                 {
                     action = Some(RowAction::Stop);
                 }
-                if ui.small_button("keep running").clicked() {
+                if ui.small_button("Keep running").clicked() {
                     action = Some(RowAction::Disarm);
                 }
-            } else if ui.small_button("stop").clicked() {
+            } else if ui.small_button("Stop").clicked() {
                 action = Some(RowAction::ArmStop);
             }
         }

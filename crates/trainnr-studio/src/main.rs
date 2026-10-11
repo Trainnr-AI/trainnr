@@ -474,9 +474,16 @@ impl eframe::App for StudioShell {
                         );
                         ui.add_space(12.0);
                         let deployments = self.shell.model.deploy_scenes();
+                        // A project with a deployment leads with it: the
+                        // finished sample showed a picker and nothing of
+                        // its own (design review, 2026-10-12).
+                        let mut chosen = simulator::play_deployments(ui, &deployments);
                         if let Some(simulator::Action::Spawn(task)) =
                             simulator::transport(ui, &mut self.viewport, &deployments)
                         {
+                            chosen = Some(task);
+                        }
+                        if let Some(task) = chosen {
                             self.viewport = ViewportFeed::spawn(
                                 ui.ctx(),
                                 &task,

@@ -382,9 +382,9 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
     let mut clicked = None;
     ui.label(
         egui::RichText::new(format!(
-            "{} policies × {} conditions · a cell is the newest evaluation of that policy under that condition; the fill is its success rate",
-            policies.len(),
-            conditions.len()
+            "{} × {} · a cell is the newest evaluation of that policy under that condition; the fill is its success rate",
+            crate::widgets::count_word(policies.len(), "policy"),
+            crate::widgets::count_word(conditions.len(), "condition")
         ))
         .color(ui.visuals().weak_text_color()),
     );

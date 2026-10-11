@@ -13,8 +13,9 @@
 //! core (the viewer stream, the trainer) arrives the first time it is
 //! used, by `uv run` itself.
 
-use std::io::Read as _;
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -153,6 +154,8 @@ pub enum Setup {
 #[derive(Default)]
 pub struct Installer {
     state: Arc<Mutex<Setup>>,
+    /// The running setup's downloads and its cancel.
+    transfer: Arc<Transfer>,
 }
 
 impl Installer {
@@ -161,8 +164,13 @@ impl Installer {
         self.state.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
+    /// The running setup's progress, for the window to draw.
+    pub fn transfer(&self) -> Arc<Transfer> {
+        Arc::clone(&self.transfer)
+    }
+
     /// Start setting the engine up, unless it is under way or done.
-    pub fn start(&self) {
+    pub fn start(&mut self) {
         {
             let Ok(mut state) = self.state.lock() else {
                 return;
@@ -172,6 +180,8 @@ impl Installer {
             }
             *state = Setup::Working("Setting up the engine…".to_owned());
         }
+        self.transfer = Arc::new(Transfer::default());
+        let transfer = Arc::clone(&self.transfer);
         let state = Arc::clone(&self.state);
         std::thread::Builder::new()
             .name("trainnr-engine-setup".to_owned())
@@ -182,12 +192,15 @@ impl Installer {
                     }
                 };
                 let outcome = match engine_home() {
-                    Some(home) => install(&home, &say),
+                    Some(home) => install(&home, &say, &transfer),
                     None => Err("no home folder to set the engine up in".to_owned()),
                 };
                 if let Ok(mut s) = state.lock() {
                     *s = match outcome {
                         Ok(_) => Setup::Ready,
+                        // Cancelled by the person: back to not started,
+                        // with nothing to apologise for.
+                        Err(_) if transfer.is_cancelled() => Setup::Idle,
                         Err(why) => Setup::Failed(why),
                     };
                 }
@@ -198,21 +211,22 @@ impl Installer {
 
 /// Set the engine up in `home`: uv, the runtime, the core. Returns the
 /// runtime's folder. `say` names each step for the window.
-pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
+pub fn install(home: &Path, say: &dyn Fn(&str), transfer: &Transfer) -> Result<PathBuf, String> {
     std::fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
     let uv = match existing_uv(Some(home)) {
         Some(uv) => uv,
         None => {
             say(&format!("Downloading uv {UV_VERSION} (about 16 MB)…"));
-            install_uv(home)?
+            install_uv(home, transfer)?
         }
     };
     let runtime = runtime_dir(home);
     if !runtime.join(crate::spawn::REPO_MARKER).is_file() {
         say("Downloading the runtime (about 9 MB)…");
-        install_runtime(home)?;
+        install_runtime(home, transfer)?;
     }
     say("Installing Python and the core tools (about 750 MB on disk, once)…");
+    transfer.begin(0); // uv reports no size: the bar runs without one
     let mut sync = std::process::Command::new(&uv);
     // `--locked`: the lock file's versions and hashes, or an error; never
     // a new resolution from PyPI on the day (review, 2026-10-11).
@@ -223,10 +237,7 @@ pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
     for extra in CORE_EXTRAS {
         sync.args(["--extra", extra]);
     }
-    let done = sync
-        .stdin(std::process::Stdio::null())
-        .output()
-        .map_err(|e| format!("uv did not start: {e}"))?;
+    let done = output_unless_cancelled(&mut sync, transfer)?;
     if !done.status.success() {
         let said = String::from_utf8_lossy(&done.stderr);
         let last = said
@@ -240,6 +251,63 @@ pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
     remove_older_runtimes(home, &runtime);
     Ok(runtime)
 }
+
+/// Run `command` to its end like `Command::output`, but stop it when
+/// `transfer` is cancelled: `uv sync` takes minutes, and Cancel must not
+/// wait for it. What uv installed so far stays, and the next sync goes on
+/// from there.
+fn output_unless_cancelled(
+    command: &mut std::process::Command,
+    transfer: &Transfer,
+) -> Result<std::process::Output, String> {
+    let mut child = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("uv did not start: {e}"))?;
+    // Drain both pipes on their own threads so a full pipe never stalls uv.
+    let drain = |pipe: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut out = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut out);
+            }
+            out
+        })
+    };
+    let stdout = drain(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let stderr = drain(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let status = loop {
+        if transfer.is_cancelled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(CANCELLED.to_owned());
+        }
+        match child.try_wait().map_err(|e| e.to_string())? {
+            Some(status) => break status,
+            None => std::thread::sleep(CANCEL_POLL),
+        }
+    };
+    Ok(std::process::Output {
+        status,
+        stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    })
+}
+
+/// How often a long step looks at its cancel flag.
+const CANCEL_POLL: Duration = Duration::from_millis(200);
 
 /// Every other runtime under `home`: an earlier version's, left by an
 /// update, about 600 MB each. Agents' entries go through the launcher,
@@ -260,7 +328,7 @@ fn remove_older_runtimes(home: &Path, current: &Path) {
 
 /// The pinned uv for this platform, downloaded, checked and unpacked into
 /// `<home>/bin`.
-fn install_uv(home: &Path) -> Result<PathBuf, String> {
+fn install_uv(home: &Path, transfer: &Transfer) -> Result<PathBuf, String> {
     let platform = this_platform();
     let pin = UV_PINS
         .iter()
@@ -271,7 +339,7 @@ fn install_uv(home: &Path) -> Result<PathBuf, String> {
         "https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/{}",
         pin.archive
     );
-    let bytes = download(&url)?;
+    let bytes = download_with(&url, transfer)?;
     check_sha256(&bytes, pin.sha256, &url)?;
     let bin = home.join("bin");
     std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
@@ -321,14 +389,14 @@ fn install_uv(home: &Path) -> Result<PathBuf, String> {
 /// The runtime archive: from `$TRAINNR_RUNTIME_URL` (a URL or a file), else
 /// the release's, checked against the `.sha256` beside it, unpacked into
 /// `home`.
-fn install_runtime(home: &Path) -> Result<(), String> {
+fn install_runtime(home: &Path, transfer: &Transfer) -> Result<(), String> {
     let version = env!("CARGO_PKG_VERSION");
     let source = std::env::var(RUNTIME_ENV)
         .ok()
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| RUNTIME_URL.replace("{version}", version));
     let (bytes, listed) = if source.starts_with("https://") {
-        let bytes = download(&source)?;
+        let bytes = download_with(&source, transfer)?;
         let listed = String::from_utf8(download(&format!("{source}.sha256"))?)
             .map_err(|_| "the checksum file is not text".to_owned())?;
         (bytes, listed)
@@ -362,18 +430,89 @@ fn install_runtime(home: &Path) -> Result<(), String> {
 /// A download over HTTPS only (a redirect away from it is refused), at
 /// most `MAX_DOWNLOAD` bytes.
 pub fn download(url: &str) -> Result<Vec<u8>, String> {
+    download_with(url, &Transfer::default())
+}
+
+/// [`download`], counting into `transfer` as the bytes arrive and
+/// stopping with [`CANCELLED`] when it is cancelled.
+pub fn download_with(url: &str, transfer: &Transfer) -> Result<Vec<u8>, String> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .https_only(true)
         .timeout_global(Some(TIMEOUT))
         .build()
         .into();
     let mut reply = agent.get(url).call().map_err(|e| format!("{url}: {e}"))?;
-    reply
-        .body_mut()
-        .with_config()
-        .limit(MAX_DOWNLOAD)
-        .read_to_vec()
-        .map_err(|e| format!("{url}: {e}"))
+    transfer.begin(reply.body().content_length().unwrap_or(0));
+    let mut reader = reply.body_mut().with_config().limit(MAX_DOWNLOAD).reader();
+    let mut bytes = Vec::new();
+    let mut chunk = vec![0_u8; DOWNLOAD_CHUNK];
+    loop {
+        if transfer.is_cancelled() {
+            return Err(CANCELLED.to_owned());
+        }
+        let n = reader.read(&mut chunk).map_err(|e| format!("{url}: {e}"))?;
+        if n == 0 {
+            return Ok(bytes);
+        }
+        bytes.extend_from_slice(&chunk[..n]);
+        transfer.add(n as u64);
+    }
+}
+
+/// What a cancelled download or setup answers with.
+pub const CANCELLED: &str = "Cancelled";
+/// How much a download reads between looks at its cancel flag.
+const DOWNLOAD_CHUNK: usize = 64 * 1024;
+
+/// A long fetch's progress and its cancel, shared by the thread doing
+/// the work and the window drawing it. The sample and the engine had a
+/// spinner and no way out until the 2026-10-12 design review.
+#[derive(Default, Debug)]
+pub struct Transfer {
+    received: AtomicU64,
+    /// The size, when the server said it; 0 when unknown (and while a
+    /// step that is not a download runs).
+    total: AtomicU64,
+    cancelled: AtomicBool,
+}
+
+impl Transfer {
+    /// A new download (or a step with no size, at 0) starts.
+    pub fn begin(&self, total: u64) {
+        self.received.store(0, Ordering::Relaxed);
+        self.total.store(total, Ordering::Relaxed);
+    }
+
+    fn add(&self, n: u64) {
+        self.received.fetch_add(n, Ordering::Relaxed);
+    }
+
+    /// Ask the work to stop at its next look.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+
+    /// The share done, when the size is known.
+    pub fn fraction(&self) -> Option<f32> {
+        let total = self.total.load(Ordering::Relaxed);
+        (total > 0).then(|| (self.received.load(Ordering::Relaxed) as f64 / total as f64) as f32)
+    }
+
+    /// "12 of 48 MB", "12 MB" with no size, nothing before a byte.
+    pub fn amount(&self) -> Option<String> {
+        let mb = |b: u64| b as f64 / 1e6;
+        let received = self.received.load(Ordering::Relaxed);
+        let total = self.total.load(Ordering::Relaxed);
+        match (received, total) {
+            (0, 0) => None,
+            (r, 0) => Some(format!("{:.0} MB", mb(r))),
+            (r, t) => Some(format!("{:.0} of {:.0} MB", mb(r), mb(t))),
+        }
+    }
 }
 
 /// `bytes` must hash to `expected` (hex SHA-256), or nothing is unpacked.
@@ -501,9 +640,9 @@ mod tests {
         )
         .unwrap();
         std::env::set_var(RUNTIME_ENV, &archive);
-        let installed = install_runtime(&home);
+        let installed = install_runtime(&home, &Transfer::default());
         std::fs::write(home.join("rt.tar.gz.sha256"), "0000  rt.tar.gz\n").unwrap();
-        let tampered = install_runtime(&home);
+        let tampered = install_runtime(&home, &Transfer::default());
         std::env::remove_var(RUNTIME_ENV);
         installed.expect("installs");
         assert!(runtime_dir(&home).join(crate::spawn::REPO_MARKER).is_file());
@@ -525,7 +664,7 @@ mod tests {
         let home = PathBuf::from(std::env::var("TRAINNR_TEST_ENGINE_HOME").expect("a home"));
         let started = std::time::Instant::now();
         let say = |step: &str| eprintln!("{:>6.1}s  {step}", started.elapsed().as_secs_f32());
-        let runtime = install(&home, &say).expect("sets up");
+        let runtime = install(&home, &say, &Transfer::default()).expect("sets up");
         say("ready");
         assert!(runtime.join(READY_FILE).is_file());
         assert!(runtime.join(crate::spawn::REPO_MARKER).is_file());
@@ -538,5 +677,39 @@ mod tests {
             let (_, pin) = pin.unwrap_or_else(|| panic!("no uv pinned for {platform}"));
             assert_eq!(pin.sha256.len(), 64, "{platform}");
         }
+    }
+
+    #[test]
+    fn a_transfer_reports_its_share_and_its_amount() {
+        let t = Transfer::default();
+        assert_eq!((t.fraction(), t.amount()), (None, None), "nothing yet");
+        t.begin(48_000_000);
+        t.add(12_000_000);
+        assert_eq!(t.fraction(), Some(0.25));
+        assert_eq!(t.amount().as_deref(), Some("12 of 48 MB"));
+        t.begin(0);
+        t.add(3_000_000);
+        assert_eq!(t.fraction(), None, "no size: no share");
+        assert_eq!(t.amount().as_deref(), Some("3 MB"));
+        assert!(!t.is_cancelled());
+        t.cancel();
+        assert!(t.is_cancelled());
+    }
+
+    /// Cancel stops a long step at once, rather than at its end.
+    #[cfg(unix)]
+    #[test]
+    fn a_cancelled_step_stops_its_process() {
+        let t = Transfer::default();
+        t.cancel();
+        let started = std::time::Instant::now();
+        let mut sleep = std::process::Command::new("sleep");
+        sleep.arg("30");
+        let outcome = output_unless_cancelled(&mut sleep, &t);
+        assert_eq!(outcome.err().as_deref(), Some(CANCELLED));
+        assert!(started.elapsed() < Duration::from_secs(5));
+        let mut quick = std::process::Command::new("true");
+        let done = output_unless_cancelled(&mut quick, &Transfer::default()).expect("runs");
+        assert!(done.status.success());
     }
 }

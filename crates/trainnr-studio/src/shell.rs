@@ -18,6 +18,10 @@ use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
 const RAIL_WIDTH: f32 = 196.0;
+/// The title bar's Search button: wide enough to read as a search box.
+const SEARCH_BUTTON_WIDTH: f32 = 200.0;
+/// The status bar's smallest hit target, in points.
+const STATUS_TARGET: f32 = 24.0;
 /// The files a button's `trainnr` command writes, in the projects home's
 /// `.index`: its errors, and what it prints. A file, never a pipe: a
 /// pipe read only after the exit fills at about 64 KB and the command
@@ -240,10 +244,22 @@ impl Shell {
     fn follow_engine(&mut self) {
         use crate::engine::Setup;
         match self.engine.state() {
-            Setup::Idle => {}
-            Setup::Working(step) => self.actions.progress = Some(step),
+            // Idle with a command waiting: the setup was cancelled, so the
+            // command is dropped and its button comes back.
+            Setup::Idle => {
+                if self.pending.take().is_some() {
+                    self.actions.running = None;
+                    self.actions.progress = None;
+                    self.actions.transfer = None;
+                }
+            }
+            Setup::Working(step) => {
+                self.actions.progress = Some(step);
+                self.actions.transfer = Some(self.engine.transfer());
+            }
             Setup::Ready => {
                 self.actions.progress = None;
+                self.actions.transfer = None;
                 if let Some((key, args, after)) = self.pending.take() {
                     self.actions.running = None;
                     let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -257,6 +273,7 @@ impl Shell {
             }
             Setup::Failed(why) => {
                 self.actions.progress = None;
+                self.actions.transfer = None;
                 if let Some((key, _, _)) = self.pending.take() {
                     self.actions.running = None;
                     self.actions.failed = Some((key, format!("the engine did not set up: {why}")));
@@ -281,9 +298,11 @@ impl Shell {
         self.actions.failed = None;
         self.actions.done = None;
         self.actions.running = Some(name.to_owned());
+        let transfer = std::sync::Arc::new(crate::engine::Transfer::default());
+        self.actions.transfer = Some(std::sync::Arc::clone(&transfer));
         self.sample_wait = Some((
             name.to_owned(),
-            crate::sample::open_in_background(sample, home),
+            crate::sample::open_in_background(sample, home, transfer),
         ));
     }
 
@@ -298,8 +317,14 @@ impl Shell {
         let key = key.clone();
         self.sample_wait = None;
         self.actions.running = None;
+        let cancelled = self
+            .actions
+            .transfer
+            .take()
+            .is_some_and(|t| t.is_cancelled());
         match outcome {
             Ok(root) => self.switch_to = Some(root),
+            Err(_) if cancelled => {}
             Err(why) => self.actions.failed = Some((key, why)),
         }
     }
@@ -539,6 +564,12 @@ impl Shell {
                             // re_ui's caption buttons: close, maximize,
                             // minimize, in the platform's own order.
                             ui.native_window_buttons_ui();
+                            ui.add_space(12.0);
+                        }
+                        // The palette, visible: only the key opened it
+                        // until the 2026-10-12 design review.
+                        if !self.model.welcome && self.search_button(ui).clicked() {
+                            self.palette = Some(crate::palette::Palette::open(None));
                         }
                     });
                 });
@@ -551,6 +582,25 @@ impl Shell {
             rect.bottom() - 0.5,
             egui::Stroke::new(1.0, palette.edge),
         );
+    }
+
+    /// The search box's stand-in on the title bar: an icon, "Search" and
+    /// the palette's key, which open the palette.
+    fn search_button(&self, ui: &mut egui::Ui) -> egui::Response {
+        let palette = crate::theme::palette(ui);
+        let key = ui.ctx().format_shortcut(&crate::palette::SHORTCUT);
+        ui.add(
+            egui::Button::image_and_text(
+                icons::SEARCH.as_image().tint(palette.muted),
+                egui::RichText::new("Search").color(palette.muted),
+            )
+            .right_text(egui::RichText::new(key).small().color(palette.muted))
+            .fill(palette.surface)
+            .stroke(egui::Stroke::new(1.0, palette.hairline))
+            .corner_radius(6.0)
+            .min_size(egui::vec2(SEARCH_BUTTON_WIDTH, 0.0)),
+        )
+        .on_hover_text("Go to a page or an artifact")
     }
 
     /// The status bar along the bottom, after Zed's: on the left what
@@ -576,6 +626,9 @@ impl Shell {
             .inner_margin(egui::Margin::symmetric(10, 4))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
+                // 24-point targets for the bar's small buttons (WCAG 2.2's
+                // minimum; they were 18, design review 2026-10-12).
+                ui.spacing_mut().interact_size.y = STATUS_TARGET;
                 ui.horizontal(|ui| {
                     // What runs, whoever started it: a click opens the
                     // Running now panel (2026-09-25). The line rotates
@@ -587,7 +640,7 @@ impl Shell {
                             ui.ctx().request_repaint_after(crate::running::ROTATE_EVERY);
                             (line, crate::theme::palette(ui).accent_text)
                         }
-                        None => ("idle".to_owned(), ui.visuals().weak_text_color()),
+                        None => ("Idle".to_owned(), ui.visuals().weak_text_color()),
                     };
                     if self.model.running_jobs() > 0 {
                         ui.small_icon(&icons::PLAY, Some(tokens.highlight_color));
@@ -611,9 +664,9 @@ impl Shell {
                     if let Some(why) = self.forms.problem() {
                         ui.add_space(8.0);
                         ui.label(
-                            egui::RichText::new("buttons unavailable")
+                            egui::RichText::new("Buttons unavailable")
                                 .small()
-                                .color(ui.visuals().warn_fg_color),
+                                .color(crate::theme::palette(ui).warn),
                         )
                         .on_hover_text(format!(
                             "The pages' buttons could not load (trainnr forms): {why}. \
@@ -624,11 +677,11 @@ impl Shell {
                     if !self.model.welcome && !presenting {
                         ui.add_space(8.0);
                         ui.label(
-                            egui::RichText::new("presenter stopped")
+                            egui::RichText::new("Previews stopped")
                                 .small()
-                                .color(ui.visuals().warn_fg_color),
+                                .color(crate::theme::palette(ui).warn),
                         )
-                        .on_hover_text("The process that draws the cards and shows recordings is not running; launch_studio restarts it");
+                        .on_hover_text("The process that draws the cards and plays recordings is not running. Ask your agent to relaunch the Studio.");
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if let Some(ms) = frame_ms {
@@ -650,7 +703,7 @@ impl Shell {
                                 ui.visuals().weak_text_color(),
                             ),
                             State::Looking => (
-                                "checking…".to_owned(),
+                                "Checking…".to_owned(),
                                 "Asking GitHub for the latest release".to_owned(),
                                 ui.visuals().weak_text_color(),
                             ),
@@ -667,7 +720,7 @@ impl Shell {
                             State::Failed(why) => (
                                 format!("v{THIS_VERSION} · could not check"),
                                 format!("{why}; click to try again"),
-                                ui.visuals().warn_fg_color,
+                                crate::theme::palette(ui).warn,
                             ),
                         };
                         if ui
@@ -692,7 +745,7 @@ impl Shell {
                         ui.add_space(6.0);
                         if ui
                             .add(
-                                egui::Button::new(egui::RichText::new("connect agent").small())
+                                egui::Button::new(egui::RichText::new("Connect agent").small())
                                     .frame_when_inactive(false),
                             )
                             .on_hover_text("Connect Claude Code, Codex, Cursor or another agent")
@@ -1013,8 +1066,12 @@ impl Shell {
             self.connect.refresh(&home, program.as_deref());
         }
         let home = crate::model::os_home().unwrap_or_default();
-        let engine = self.engine.state();
-        match crate::connect::panel(ctx, &self.connect, self.connect_command.as_ref(), &engine) {
+        match crate::connect::panel(
+            ctx,
+            &self.connect,
+            self.connect_command.as_ref(),
+            &self.engine,
+        ) {
             crate::connect::Ask::Open => {}
             crate::connect::Ask::Close => self.connect_open = false,
             crate::connect::Ask::SetUpEngine => self.engine.start(),
@@ -1149,7 +1206,7 @@ impl Shell {
                 i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft);
                 i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight);
             }
-            i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)
+            i.consume_shortcut(&crate::palette::SHORTCUT)
         });
         if palette_key {
             self.palette = Some(crate::palette::Palette::open(None));
@@ -1202,18 +1259,18 @@ impl Shell {
                 ui.painter().rect_filled(
                     ui.max_rect().expand(8.0),
                     0.0,
-                    ui.visuals().warn_fg_color.linear_multiply(0.12),
+                    crate::theme::palette(ui).warn.linear_multiply(0.12),
                 );
                 ui.horizontal_wrapped(|ui| {
-                    ui.small_icon(&icons::WARNING, Some(ui.visuals().warn_fg_color));
+                    ui.small_icon(&icons::WARNING, Some(crate::theme::palette(ui).warn));
                     ui.label(
                         egui::RichText::new(format!(
                             "The viewer could not show {}: {error}",
                             crate::model::split_stamp(&stamp).0
                         ))
-                        .color(ui.visuals().warn_fg_color),
+                        .color(crate::theme::palette(ui).warn),
                     );
-                    if ui.small_button("dismiss").clicked() {
+                    if ui.small_button("Dismiss").clicked() {
                         self.dismissed_failure = Some((stamp.clone(), error.clone()));
                     }
                 });
@@ -1264,7 +1321,7 @@ impl Shell {
                     ui.label(
                         egui::RichText::new(note)
                             .small()
-                            .color(ui.visuals().warn_fg_color),
+                            .color(crate::theme::palette(ui).warn),
                     );
                 }
                 if rows.is_empty() {

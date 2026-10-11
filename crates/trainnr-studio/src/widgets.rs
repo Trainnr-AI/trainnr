@@ -13,12 +13,23 @@ pub const CARD_INNER_MARGIN: i8 = 14;
 /// Rerun's example-card thumbnail aspect (337 × 250).
 pub const THUMBNAIL_ASPECT: f32 = 337.0 / 250.0;
 
-/// "1 row", "13 rows": a count with its noun, never "1 rows".
+/// "1 row", "13 rows", "2 policies": a count with its noun, never
+/// "1 rows" (the drawer's "Used by" said "1 deployments" until the
+/// 2026-10-12 design review).
 pub fn count_word(n: usize, noun: &str) -> String {
     if n == 1 {
         format!("1 {noun}")
     } else {
-        format!("{n} {noun}s")
+        format!("{n} {}", plural(noun))
+    }
+}
+
+/// The plural of the app's nouns: a consonant before a final "y" turns
+/// it to "ies" (policy, policies); every other noun takes an "s".
+fn plural(noun: &str) -> String {
+    match noun.strip_suffix('y') {
+        Some(stem) if !stem.ends_with(['a', 'e', 'i', 'o', 'u']) => format!("{stem}ies"),
+        _ => format!("{noun}s"),
     }
 }
 const THUMBNAIL_RADIUS: u8 = 8;
@@ -45,6 +56,20 @@ pub fn card(ui: &egui::Ui, accent: Option<egui::Color32>) -> egui::Frame {
         .stroke(stroke)
         .corner_radius(CARD_RADIUS)
         .inner_margin(egui::Margin::same(CARD_INNER_MARGIN))
+}
+
+/// Whether a dialog that holds typed input closes this frame: on Escape
+/// only, when it is the topmost dialog and no menu is open. egui's own
+/// `should_close` also closes on a click outside, which discarded a
+/// half-filled form (design review, 2026-10-12); Cancel stays explicit.
+pub fn escape_closes<T>(modal: &egui::ModalResponse<T>) -> bool {
+    modal.response.should_close()
+        || modal.is_top_modal
+            && !modal.any_popup_open
+            && modal
+                .response
+                .ctx
+                .input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
 }
 
 /// A small pill in the welcome screen's tag style.
@@ -247,7 +272,7 @@ pub fn home_relative(path: &str) -> String {
 
 #[cfg(test)]
 mod home_relative_tests {
-    use super::home_relative;
+    use super::{count_word, home_relative};
 
     #[test]
     fn the_home_directory_reads_as_a_tilde() {
@@ -257,5 +282,19 @@ mod home_relative_tests {
         }
         assert_eq!(home_relative(&format!("{home}/projects/x")), "~/projects/x");
         assert_eq!(home_relative("/srv/projects/x"), "/srv/projects/x");
+    }
+
+    #[test]
+    fn counts_take_the_right_plural() {
+        assert_eq!(count_word(1, "deployment"), "1 deployment");
+        assert_eq!(count_word(2, "deployment"), "2 deployments");
+        assert_eq!(count_word(1, "policy"), "1 policy");
+        assert_eq!(count_word(3, "policy"), "3 policies");
+        assert_eq!(count_word(0, "drift record"), "0 drift records");
+        assert_eq!(
+            count_word(2, "key"),
+            "2 keys",
+            "a vowel before the y keeps it"
+        );
     }
 }

@@ -483,7 +483,7 @@ pub fn panel(
     ctx: &egui::Context,
     state: &Panel,
     command: Option<&ServerCommand>,
-    engine: &crate::engine::Setup,
+    engine: &crate::engine::Installer,
 ) -> Ask {
     if state.receive.is_some() {
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
@@ -509,17 +509,14 @@ pub fn panel(
         );
         ui.add_space(14.0);
         let Some(command) = command else {
-            match engine {
+            match engine.state() {
                 crate::engine::Setup::Working(step) => {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(egui::RichText::new(step).color(palette.text));
-                    });
+                    crate::onboarding::transfer_row(ui, &step, &engine.transfer());
                 }
                 crate::engine::Setup::Failed(why) => {
                     ui.label(
                         egui::RichText::new(format!("The engine did not set up: {why}"))
-                            .color(ui.visuals().warn_fg_color),
+                            .color(crate::theme::palette(ui).warn),
                     );
                     if crate::onboarding::primary_button(ui, "Try again", true).clicked() {
                         ask = Ask::SetUpEngine;
@@ -540,7 +537,7 @@ pub fn panel(
                 }
             }
             ui.add_space(12.0);
-            if ui.button("Close").clicked() {
+            if crate::onboarding::secondary_button(ui, "Close", true).clicked() {
                 ask = Ask::Close;
             }
             return;
@@ -588,7 +585,7 @@ pub fn panel(
                     ui.label(
                         egui::RichText::new(why)
                             .small()
-                            .color(ui.visuals().warn_fg_color),
+                            .color(crate::theme::palette(ui).warn),
                     );
                 }
                 _ => {}
@@ -600,7 +597,7 @@ pub fn panel(
         ui.add_space(4.0);
         crate::onboarding::command_chip(ui, &command.line());
         ui.add_space(12.0);
-        if ui.button("Close").clicked() {
+        if crate::onboarding::secondary_button(ui, "Close", true).clicked() {
             ask = Ask::Close;
         }
     });
@@ -674,7 +671,7 @@ mod tests {
         let state = Panel::default();
         let frame = |input: egui::RawInput, command: Option<&ServerCommand>| {
             let mut ask = Ask::Open;
-            let engine = crate::engine::Setup::Idle;
+            let engine = crate::engine::Installer::default();
             let mut output =
                 ctx.run_ui(input, |ui| ask = panel(ui.ctx(), &state, command, &engine));
             output.textures_delta.clear(); // no renderer here to apply them

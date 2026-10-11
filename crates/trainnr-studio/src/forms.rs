@@ -238,6 +238,9 @@ pub struct Open {
     /// A file dialog open for a field: its answer arrives on the channel
     /// (the dialog runs on its own thread, so the window keeps drawing).
     picking: Option<(String, Receiver<Option<PathBuf>>)>,
+    /// Run was pressed: a required field left empty says so from now
+    /// on, not before (design review, 2026-10-12).
+    tried: bool,
 }
 
 impl Open {
@@ -268,6 +271,7 @@ impl Open {
             values,
             flags,
             picking: None,
+            tried: false,
         }
     }
 
@@ -288,27 +292,51 @@ impl Open {
                 out.insert(field.name.clone(), flag.into());
                 continue;
             }
-            let text = self.values.get(&field.name).map_or("", |v| v.trim());
-            if text.is_empty() {
-                if field.required {
-                    return Err(format!("{} is needed", field.label));
-                }
-                continue;
+            if let Some(value) = self.value_of(field)? {
+                out.insert(field.name.clone(), value);
             }
-            let value = match field.kind_of_value.as_str() {
-                "integer" => text
-                    .parse::<i64>()
-                    .map(serde_json::Value::from)
-                    .map_err(|_| format!("{} is a whole number", field.label))?,
-                "number" => text
-                    .parse::<f64>()
-                    .map(serde_json::Value::from)
-                    .map_err(|_| format!("{} is a number", field.label))?,
-                _ => serde_json::Value::from(text),
-            };
-            out.insert(field.name.clone(), value);
         }
         Ok(serde_json::Value::Object(out))
+    }
+
+    /// One text field's value, typed by the schema: `None` when it is
+    /// empty and optional (the tool's default applies), an error naming
+    /// the field when it is required and empty or not a number.
+    fn value_of(&self, field: &Field) -> Result<Option<serde_json::Value>, String> {
+        let text = self.text_of(field);
+        if text.is_empty() {
+            return if field.required {
+                Err(format!("{} is needed", field.label))
+            } else {
+                Ok(None)
+            };
+        }
+        let value = match field.kind_of_value.as_str() {
+            "integer" => text
+                .parse::<i64>()
+                .map(serde_json::Value::from)
+                .map_err(|_| format!("{} is a whole number", field.label))?,
+            "number" => text
+                .parse::<f64>()
+                .map(serde_json::Value::from)
+                .map_err(|_| format!("{} is a number", field.label))?,
+            _ => serde_json::Value::from(text),
+        };
+        Ok(Some(value))
+    }
+
+    fn text_of(&self, field: &Field) -> &str {
+        self.values.get(&field.name).map_or("", |v| v.trim())
+    }
+
+    /// The problem to show under a field: what was typed and does not
+    /// read at once, a required field left empty only after Run.
+    fn problem_shown(&self, field: &Field) -> Option<String> {
+        if field.kind_of_value == "boolean" {
+            return None;
+        }
+        let why = self.value_of(field).err()?;
+        (self.tried || !self.text_of(field).is_empty()).then_some(why)
     }
 
     /// Start a file (or folder) dialog for a field on its own thread.
@@ -364,7 +392,6 @@ pub fn dialog(
         ctx.request_repaint_after(std::time::Duration::from_millis(200));
     }
     let mut answer = Answer::Open;
-    let mut problem: Option<String> = None;
     let modal = egui::Modal::new(egui::Id::new(("form", &open.form.tool))).show(ctx, |ui| {
         let palette = crate::theme::palette(ui);
         ui.set_width(DIALOG_WIDTH);
@@ -380,38 +407,49 @@ pub fn dialog(
         let fields = open.form.fields.clone();
         for field in &fields {
             field_row(ui, open, field, artifacts);
+            // The problem sits under its own field, in the warning
+            // colour; it sat beside the buttons, muted, until 2026-10-12.
+            if let Some(why) = open.problem_shown(field) {
+                ui.label(egui::RichText::new(why).color(palette.warn));
+            }
             ui.add_space(10.0);
         }
-        let ready = open.arguments();
-        if let Err(why) = &ready {
-            problem = Some(why.clone());
-        }
         ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            let run = crate::onboarding::primary_button(ui, &open.form.label, ready.is_ok());
-            if run.clicked() {
-                if let Ok(arguments) = ready {
-                    answer = Answer::Submit(arguments);
-                }
-            }
-            if ui.button("Cancel").clicked() {
-                answer = Answer::Cancel;
-            }
-            if let Some(why) = &problem {
-                ui.label(egui::RichText::new(why).color(palette.muted));
-            }
-        });
-        ui.add_space(6.0);
-        ui.label(
-            egui::RichText::new(format!(
-                "Runs the {} tool, as your agent would.",
-                open.form.tool
-            ))
-            .small()
-            .color(palette.muted),
-        );
+        ui.separator();
+        ui.add_space(4.0);
+        let tool = open.form.tool.clone();
+        // egui's own dialog layout: the note on the left, the buttons on
+        // the right with the main one rightmost (2026-10-12).
+        egui::Sides::new()
+            .height(crate::onboarding::BUTTON_HEIGHT)
+            .show(
+                ui,
+                |ui| {
+                    ui.label(
+                        egui::RichText::new("Your agent can run this too.")
+                            .small()
+                            .color(palette.muted),
+                    )
+                    .on_hover_text(format!("The {tool} tool"));
+                },
+                |ui| {
+                    let run = crate::onboarding::primary_button(ui, &open.form.label, true);
+                    if run.clicked() {
+                        match open.arguments() {
+                            Ok(arguments) => answer = Answer::Submit(arguments),
+                            Err(_) => open.tried = true,
+                        }
+                    }
+                    if crate::onboarding::secondary_button(ui, "Cancel", true).clicked() {
+                        answer = Answer::Cancel;
+                    }
+                },
+            );
     });
-    if modal.should_close() && matches!(answer, Answer::Open) && open.picking.is_none() {
+    if crate::widgets::escape_closes(&modal)
+        && matches!(answer, Answer::Open)
+        && open.picking.is_none()
+    {
         answer = Answer::Cancel;
     }
     answer
@@ -554,6 +592,27 @@ mod tests {
             open.arguments(),
             Ok(serde_json::json!({"robot": "go2@0e7e123a7de7", "full": false})),
             "an empty optional field takes the tool's default"
+        );
+    }
+
+    /// A problem shows under its field: a bad number as soon as it is
+    /// typed, an empty required field only after Run was pressed.
+    #[test]
+    fn problems_show_under_their_field_and_not_before_run() {
+        let form = parse(LISTED).expect("reads").remove(0);
+        let robot = form.fields[0].clone();
+        let trials = form.fields[1].clone();
+        let mut open = Open::new(form);
+        assert_eq!(open.problem_shown(&robot), None, "nothing before Run");
+        open.set("trials", "many");
+        assert_eq!(
+            open.problem_shown(&trials).as_deref(),
+            Some("Trials is a whole number")
+        );
+        open.tried = true;
+        assert_eq!(
+            open.problem_shown(&robot).as_deref(),
+            Some("Robot is needed")
         );
     }
 

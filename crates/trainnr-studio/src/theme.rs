@@ -31,6 +31,10 @@ pub struct Palette {
     /// highlight colour is a background token and measured 1.4:1 to
     /// 1.7:1 as text (design review, 2026-10-12).
     pub accent_text: egui::Color32,
+    /// What needs fixing before something can run: a form field's
+    /// problem. Rerun's warning orange in dark; it measured 2.6:1 on the
+    /// light page, so light has its own deeper orange.
+    pub warn: egui::Color32,
     /// The soft tint behind the selected item (the rail, a chosen row).
     pub accent_soft: egui::Color32,
     /// A line that must be seen: the title bar's edge, a divider.
@@ -54,6 +58,7 @@ pub const LIGHT: Palette = Palette {
     // on the selection tint (design review, 2026-10-12).
     link: egui::Color32::from_rgb(0, 96, 196),
     accent_text: egui::Color32::from_rgb(0, 96, 196),
+    warn: egui::Color32::from_rgb(170, 64, 0),
     accent_soft: egui::Color32::from_rgb(198, 229, 250),
     edge: egui::Color32::from_rgb(214, 211, 203),
 };
@@ -74,6 +79,7 @@ pub fn palette(ui: &egui::Ui) -> Palette {
             muted: visuals.weak_text_color(),
             link: visuals.hyperlink_color,
             accent_text: tokens.info_text_color,
+            warn: tokens.warn_fg_color,
             accent_soft: tokens.selection_bg_fill,
             edge: tokens.native_frame_stroke.color,
         }
@@ -82,12 +88,13 @@ pub fn palette(ui: &egui::Ui) -> Palette {
     }
 }
 
-/// Rerun's own grey one step below its subdued text (`Gray.500` in
-/// re_ui's colour table, #827f7f): the dark theme's muted text. egui
-/// otherwise fades the body text to 60 %, which measured 2.9:1 on the
-/// dark page; this measures 4.9:1 on the page and the bars, 4.4:1 on a
-/// card (design review, 2026-10-12). Dark keeps to Rerun's colours.
-pub const DARK_MUTED: egui::Color32 = egui::Color32::from_rgb(0x82, 0x7f, 0x7f);
+/// Rerun's own subdued text (`text_subdued`, `Gray.550` in re_ui's colour
+/// table, #939090): the dark theme's muted text. egui otherwise fades the
+/// body text to 60 %, which measured 2.9:1 on the dark page; Gray.500,
+/// the first choice, measured 4.4:1 on a card. This one is 5.6:1 on the
+/// page and 5.2:1 on a card (design review, 2026-10-12). Dark keeps to
+/// Rerun's colours.
+pub const DARK_MUTED: egui::Color32 = egui::Color32::from_rgb(0x93, 0x90, 0x90);
 
 /// egui's visuals in both themes, aligned with the palette so what the
 /// pages do not paint themselves (weak text, links, default labels)
@@ -158,6 +165,7 @@ mod tests {
                 ("muted", LIGHT.muted),
                 ("link", LIGHT.link),
                 ("accent text", LIGHT.accent_text),
+                ("warn", LIGHT.warn),
             ] {
                 let ratio = contrast(ink, surface);
                 assert!(ratio >= 4.5, "{role} on {surface:?}: {ratio:.2}");
@@ -171,6 +179,9 @@ mod tests {
     fn dark_muted_text_reads_on_the_page() {
         let page = egui::Color32::from_rgb(13, 13, 13);
         assert!(contrast(DARK_MUTED, page) >= 4.5);
+        // A card: Rerun's #FFFFFF0A over the page, measured #161616.
+        let card = egui::Color32::from_rgb(22, 22, 22);
+        assert!(contrast(DARK_MUTED, card) >= 4.5);
     }
 
     /// The alignment applies in both themes and holds once applied.

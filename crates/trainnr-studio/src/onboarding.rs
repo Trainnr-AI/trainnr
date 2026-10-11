@@ -210,7 +210,7 @@ fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
         .layout_no_wrap("copied".to_owned(), font, palette.link);
     let trailing = if copied { mark.size().x } else { CHIP_ICON };
     let size = egui::vec2(
-        CHIP_PAD.x * 2.0 + words.size().x + CHIP_GAP + trailing,
+        CHIP_PAD.x * 2.0 + words.size().x + COPY_ICON_GAP + trailing,
         CHIP_PAD.y * 2.0 + words.size().y.max(CHIP_ICON),
     );
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
@@ -251,6 +251,11 @@ fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
                 .paint_at(ui, icon);
         }
     }
+    // Painted, so it names itself to a screen reader: a copy button with
+    // its words (it was unlabelled until the 2026-10-12 design review).
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Copy {shown}"))
+    });
     let response = response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(hover);
@@ -265,9 +270,10 @@ fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
     }
 }
 
-/// A chip's inner margin, the gap before its icon, and the icon's size.
+/// A copy chip's inner margin, the gap before its icon, and the icon's
+/// size (named apart from `running::CHIP_GAP`, the gap between run chips).
 const CHIP_PAD: egui::Vec2 = egui::vec2(12.0, 8.0);
-const CHIP_GAP: f32 = 10.0;
+const COPY_ICON_GAP: f32 = 10.0;
 const CHIP_ICON: f32 = 14.0;
 
 /// A first step of a project: what it is, the buttons that do it (the
@@ -401,11 +407,18 @@ pub fn start_here(
     asked
 }
 
+/// A step number's disc, across, and the gap before its words.
+const STEP_DISC: f32 = 24.0;
+const STEP_TEXT_GAP: f32 = 6.0;
+
 /// A step's number in a soft disc.
 fn step_number(ui: &mut egui::Ui, n: usize) {
     let palette = crate::theme::palette(ui);
-    let size = egui::vec2(24.0, 24.0);
-    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let size = egui::vec2(STEP_DISC, STEP_DISC);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Step {n}"))
+    });
     ui.painter()
         .circle_filled(rect.center(), size.x / 2.0, palette.accent_soft);
     ui.painter().text(
@@ -458,6 +471,26 @@ pub struct ActionState {
     /// What the engine's setup is doing while the running command waits
     /// on it (`engine.rs`): shown in place of the button's own word.
     pub progress: Option<String>,
+    /// The running download's progress and its cancel: the sample's, or
+    /// the engine's while a command waits on its setup.
+    pub transfer: Option<std::sync::Arc<crate::engine::Transfer>>,
+}
+
+/// What a running button shows in its place: the download's bar and
+/// Cancel while one runs, else a spinner and its word.
+pub fn busy_line(ui: &mut egui::Ui, actions: &ActionState, own: &str) {
+    match &actions.transfer {
+        Some(transfer) => transfer_row(ui, actions.busy_word(own), transfer),
+        None => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    egui::RichText::new(actions.busy_word(own))
+                        .color(crate::theme::palette(ui).text),
+                );
+            });
+        }
+    }
 }
 
 impl ActionState {
@@ -530,21 +563,62 @@ pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
         let in_field = field.has_focus() || field.lost_focus();
         let entered = in_field && ui.input(|i| i.key_pressed(egui::Key::Enter));
         ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            let ready = !name.trim().is_empty();
-            if primary_button(ui, "Create", ready).clicked() || (entered && ready) {
-                answer = Dialog::Create(name.trim().to_owned());
-            }
-            if ui.button("Cancel").clicked() {
-                answer = Dialog::Cancel;
-            }
-        });
+        egui::Sides::new().height(BUTTON_HEIGHT).show(
+            ui,
+            |_ui| {},
+            |ui| {
+                let ready = !name.trim().is_empty();
+                if primary_button(ui, "Create", ready).clicked() || (entered && ready) {
+                    answer = Dialog::Create(name.trim().to_owned());
+                }
+                if secondary_button(ui, "Cancel", true).clicked() {
+                    answer = Dialog::Cancel;
+                }
+            },
+        );
     });
-    if modal.should_close() && matches!(answer, Dialog::Open) {
+    if crate::widgets::escape_closes(&modal) && matches!(answer, Dialog::Open) {
         answer = Dialog::Cancel;
     }
     answer
 }
+
+/// A download under way: its step in words, a bar when its size is known
+/// (a spinner when it is not), the megabytes so far, and Cancel. The work
+/// stops at its next look at the flag; until then Cancel says so.
+pub fn transfer_row(ui: &mut egui::Ui, step: &str, transfer: &crate::engine::Transfer) {
+    let palette = crate::theme::palette(ui);
+    ui.label(egui::RichText::new(step).color(palette.text));
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        match transfer.fraction() {
+            Some(done) => {
+                ui.add(
+                    egui::ProgressBar::new(done.min(1.0))
+                        .desired_width(TRANSFER_BAR_WIDTH)
+                        .fill(palette.link),
+                );
+            }
+            None => {
+                ui.spinner();
+            }
+        }
+        if let Some(amount) = transfer.amount() {
+            ui.label(egui::RichText::new(amount).color(palette.muted));
+        }
+        let stopping = transfer.is_cancelled();
+        let label = if stopping { "Cancelling…" } else { "Cancel" };
+        if secondary_button(ui, label, !stopping).clicked() {
+            transfer.cancel();
+        }
+    });
+    ui.ctx().request_repaint_after(TRANSFER_REDRAW);
+}
+
+/// A download bar's width: room for the words beside it on a card.
+const TRANSFER_BAR_WIDTH: f32 = 220.0;
+/// How often a download's bar is redrawn.
+const TRANSFER_REDRAW: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// The filled button a page's one main action wears.
 pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
@@ -559,7 +633,7 @@ pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Re
     .fill(palette.accent_soft)
     .stroke(egui::Stroke::new(1.0, palette.link))
     .corner_radius(8.0)
-    .min_size(egui::vec2(0.0, 36.0));
+    .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
     ui.add_enabled(enabled, button)
 }
 
@@ -575,7 +649,7 @@ pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::
     .fill(palette.surface)
     .stroke(egui::Stroke::new(1.0, palette.edge))
     .corner_radius(8.0)
-    .min_size(egui::vec2(0.0, 36.0));
+    .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
     ui.add_enabled(enabled, button)
 }
 
@@ -595,7 +669,7 @@ pub fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &st
         if failed == key {
             ui.add_space(8.0);
             ui.label(
-                egui::RichText::new(format!("{what}: {why}")).color(ui.visuals().warn_fg_color),
+                egui::RichText::new(format!("{what}: {why}")).color(crate::theme::palette(ui).warn),
             );
         }
     }
@@ -604,6 +678,9 @@ pub fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &st
 /// The Welcome page's widest pair of cards side by side; narrower, one
 /// above the other.
 const WELCOME_TWO_UP: f32 = 760.0;
+/// The height of a primary or secondary button, and of the row of them
+/// a dialog ends with.
+pub const BUTTON_HEIGHT: f32 = 36.0;
 /// Room around an Open button's words.
 const BUTTON_PADDING: egui::Vec2 = egui::vec2(16.0, 8.0);
 /// The two cards' height, so they read as a pair.
@@ -714,18 +791,41 @@ fn the_loop(ui: &mut egui::Ui) {
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(6.0, 10.0);
+            // One row height, the disc's, so every item centres on the same
+            // line: the nested rows grew it step by step and the row sloped
+            // (design review, 2026-10-12).
+            ui.set_row_height(STEP_DISC);
             for (number, (state, section)) in LOOP_STATES.iter().enumerate() {
                 if number > 0 {
-                    ui.label(egui::RichText::new("›").color(palette.muted));
-                }
-                ui.horizontal(|ui| {
-                    step_number(ui, number + 1);
                     ui.label(
-                        egui::RichText::new(crate::pages::stage_label(state))
+                        egui::RichText::new("›")
                             .text_style(DesignTokens::welcome_screen_body())
-                            .color(palette.text),
+                            .color(palette.muted),
                     );
-                })
+                }
+                // A block of the disc's height, its width measured: a nested
+                // row grew the wrapped row a little each time.
+                let words = crate::pages::stage_label(state);
+                let font = DesignTokens::welcome_screen_body().resolve(ui.style());
+                let text_w = ui
+                    .painter()
+                    .layout_no_wrap(words.to_owned(), font, palette.text)
+                    .size()
+                    .x;
+                let size = egui::vec2(STEP_DISC + STEP_TEXT_GAP + text_w, STEP_DISC);
+                ui.allocate_ui_with_layout(
+                    size,
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.x = STEP_TEXT_GAP;
+                        step_number(ui, number + 1);
+                        ui.label(
+                            egui::RichText::new(words)
+                                .text_style(DesignTokens::welcome_screen_body())
+                                .color(palette.text),
+                        );
+                    },
+                )
                 .response
                 .on_hover_text(section.guide().body);
             }
@@ -749,10 +849,7 @@ fn start_your_own(ui: &mut egui::Ui, actions: &ActionState, home: Option<&Path>)
         );
         ui.add_space(16.0);
         if actions.is_running(NEW_PROJECT) {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(egui::RichText::new(actions.busy_word("Creating…")).color(palette.text));
-            });
+            busy_line(ui, actions, "Creating…");
         } else {
             clicked = primary_button(ui, "New project", actions.running.is_none()).clicked();
         }
@@ -870,17 +967,12 @@ fn sample_body(
     ui.add_space(16.0);
     let mut clicked = false;
     if samples.is_running(sample.name) {
-        ui.horizontal(|ui| {
-            ui.spinner();
-            ui.label(
-                egui::RichText::new(samples.busy_word(if here {
-                    "Opening…"
-                } else {
-                    "Downloading and checking…"
-                }))
-                .color(palette.text),
-            );
-        });
+        let own = if here {
+            "Opening…"
+        } else {
+            "Downloading and checking…"
+        };
+        busy_line(ui, samples, own);
     } else {
         let label = if here {
             format!("Open the {}", sample.title)
