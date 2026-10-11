@@ -193,8 +193,13 @@ Each phase ends with a check on a fresh machine, not with code merged.
    Developer ID and notarisation; a Windows certificate), until which
    macOS asks to open the app from System Settings the first time; and a
    download page on trainnr.ai (the README links the release page).
-5. **Messaging.** The README, the site and the plugin descriptions lead
-   with the app.
+5. **Messaging.** Done on this branch: the README opens with the app
+   ("a desktop app to work in, that your coding agent can drive"), its
+   Quickstart starts with the app (download, the sample, New project,
+   Connect your coding agent) and keeps the agent's path second, and the
+   Welcome page says the same. The site waits for trainnr.ai. Before the
+   release that ships the installers: the fresh-machine check on a Mac
+   and on Windows, which this Linux box cannot stand in for.
 
 ## 6. What we do not copy
 

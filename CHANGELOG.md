@@ -9,6 +9,7 @@ All notable changes to trainnr. The format follows
 ### Added
 
 - `trainnr call <tool> --args '<json>'` runs one tool by name, as an agent would: the same registry, argument checks, refusals and plugin tools. It prints the result as JSON and exits 3 on a refusal. The Studio's buttons run it.
+- The README opens with the app: download it, open the sample, make a project, connect your coding agent; the plugin's path follows.
 - The release carries the app to double-click: a macOS disk image (drag trainnr onto Applications) and a Linux AppImage (`tools/package-studio.py`), unsigned for now. The Studio says in its status bar when a newer release is out, looking at most once a day (`TRAINNR_NO_UPDATE_CHECK=1` turns it off).
 - Connect your agent: a panel from the Welcome page and the status bar adds trainnr to Claude Code, Codex or Cursor with one button each (nothing is written at launch), shows which already have it, and gives the line for any other client. The entry runs a launcher at a fixed path (`<trainnr home>/engine/bin/trainnr`), so an update does not break it.
 - The Studio runs without a checkout: the first action that runs a tool sets up its engine (uv when none is on PATH, at a pinned version and SHA-256; the release's runtime archive, `trainnr-runtime-v*.tar.gz`, 9 MB; the core packages), showing each step on the button. The sample opens with no engine at all: the Studio downloads, checks and unpacks it itself. The release builds the runtime archive (`tools/runtime-archive.py`); jobs run the engine's uv (`TRAINNR_UV`).
