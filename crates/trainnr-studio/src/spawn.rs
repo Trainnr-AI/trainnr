@@ -172,6 +172,10 @@ fn python_with(extras: &[&str]) -> Command {
     let uv = crate::engine::uv_program();
     let mut command = Command::new(&uv);
     command.arg("run");
+    if checkout_root().as_os_str().is_empty() || checkout_hidden() {
+        // The engine's runtime runs what its lock file pins, no other.
+        command.arg("--locked");
+    }
     for extra in extras {
         command.args(["--extra", extra]);
     }
@@ -180,6 +184,7 @@ fn python_with(extras: &[&str]) -> Command {
         .current_dir(root.join(PIPELINE_DIR))
         .env(crate::engine::UV_ENV, &uv)
         .env(REPO_ENV, &root);
+    absolute_homes(&mut command);
     own_process_group(&mut command);
     mujoco_environment(&mut command);
     command
@@ -196,9 +201,21 @@ pub fn walk_command(module: &str) -> Command {
         .current_dir(root.join(WALK_PACKAGE_DIR))
         .env(crate::engine::UV_ENV, &uv)
         .env(REPO_ENV, &root);
+    absolute_homes(&mut command);
     own_process_group(&mut command);
     mujoco_environment(&mut command);
     command
+}
+
+/// The homes a child must find, made absolute as this window read them:
+/// a relative `TRAINNR_HOME` or `TRAINNR_PROJECTS` would otherwise mean
+/// another folder from the child's working directory (review, 2026-10-11).
+fn absolute_homes(command: &mut Command) {
+    for name in [crate::model::HOME_ENV, crate::model::PROJECTS_ENV] {
+        if let Some(path) = crate::model::env_path(name) {
+            command.env(name, path);
+        }
+    }
 }
 
 /// Its own process group, so the whole tree can be reaped: killing only

@@ -22,8 +22,9 @@ const RAIL_WIDTH: f32 = 196.0;
 /// `.index`: its errors, and what it prints. A file, never a pipe: a
 /// pipe read only after the exit fills at about 64 KB and the command
 /// then waits forever on its write (review, 2026-10-11).
-const ACTION_LOG: &str = "studio-action.log";
-const ACTION_OUT: &str = "studio-action.out";
+/// Each window's own, by its process id, removed once read: two windows
+/// on one projects home never truncate each other's (review, 2026-10-11).
+const ACTION_FILE: &str = "studio-action";
 /// `trainnr call`'s exit code for a tool that ran and refused
 /// (`trainnr/cli.py::REFUSED_EXIT`).
 const REFUSED_EXIT: i32 = 3;
@@ -95,7 +96,7 @@ pub struct Shell {
     /// A button's `trainnr` command while it runs (a sample opening, a
     /// new project): its key, the process, and the log its errors go to.
     action_job: Option<ActionJob>,
-    /// What the running command prints (`ACTION_OUT`), read when it ends.
+    /// What the running command prints (`ACTION_FILE`), read when it ends.
     action_out: std::path::PathBuf,
     /// What the buttons show: the command running, the last failure.
     pub actions: ActionState,
@@ -112,12 +113,14 @@ pub struct Shell {
     /// The engine's setup finished in this session: the project's presenter
     /// and forms have been started once for it.
     engine_settled: bool,
+    /// The agents' launcher was checked against this engine this session.
+    launcher_checked: bool,
     /// The Connect your agent panel, while it is open, and the command
     /// agents run, made once the engine is there (`connect.rs`).
     connect_open: bool,
     connect: crate::connect::Panel,
     connect_command: Option<crate::connect::ServerCommand>,
-    /// Whether a newer trainnr is out (`update.rs`).
+    /// Whether a newer trainnr is out, once the person asks (`update.rs`).
     update: crate::update::Check,
     /// A sample being opened by the Studio itself: its name, and where the
     /// answer arrives.
@@ -179,11 +182,12 @@ impl Shell {
             engine: crate::engine::Installer::default(),
             pending: None,
             engine_settled: false,
+            launcher_checked: false,
             sample_wait: None,
             connect_open: false,
             connect: crate::connect::Panel::default(),
             connect_command: None,
-            update: crate::update::Check::start(),
+            update: crate::update::Check::default(),
         }
     }
 
@@ -198,6 +202,10 @@ impl Shell {
             self.ensure_presenter();
             self.load_forms();
         }
+        if !self.launcher_checked && crate::spawn::engine_ready() {
+            self.launcher_checked = true;
+            self.refresh_launcher();
+        }
     }
 
     /// The forms over this build's tools, once the engine can list them;
@@ -205,6 +213,14 @@ impl Shell {
     fn load_forms(&mut self) {
         if let Some(home) = crate::model::user_projects_home() {
             self.forms.load(&home.join(crate::model::INDEX_DIR));
+        }
+    }
+
+    /// Why the engine's setup failed, when it did.
+    pub fn engine_failure(&self) -> Option<String> {
+        match self.engine.state() {
+            crate::engine::Setup::Failed(why) => Some(why),
+            _ => None,
         }
     }
 
@@ -236,6 +252,7 @@ impl Shell {
                 if !self.engine_settled {
                     self.engine_settled = true;
                     self.open_project();
+                    self.refresh_launcher();
                 }
             }
             Setup::Failed(why) => {
@@ -328,8 +345,8 @@ impl Shell {
         let dir = crate::model::user_projects_home()
             .unwrap_or_else(std::env::temp_dir)
             .join(crate::model::INDEX_DIR);
-        let log = dir.join(ACTION_LOG);
-        let out = dir.join(ACTION_OUT);
+        let log = dir.join(format!("{ACTION_FILE}-{}.log", std::process::id()));
+        let out = dir.join(format!("{ACTION_FILE}-{}.out", std::process::id()));
         let (printed, errors) = match crate::forms::output_files(&dir, &out, &log) {
             Ok(files) => files,
             Err(why) => {
@@ -415,6 +432,8 @@ impl Shell {
             let why = why.unwrap_or_else(|| crate::forms::last_line(&job.log));
             self.actions.failed = Some((job.key, why));
         }
+        let _ = std::fs::remove_file(&self.action_out);
+        let _ = std::fs::remove_file(&job.log);
     }
 
     pub fn show(&mut self, stamp: &str) {
@@ -621,25 +640,56 @@ impl Shell {
                             .on_hover_text("One frame, drawn to shown, on this machine");
                             ui.add_space(6.0);
                         }
-                        if let Some(newer) = self.update.newer() {
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(format!("trainnr {newer} is out"))
-                                            .small()
-                                            .color(tokens.highlight_color),
-                                    )
+                        // The version: a click looks for a newer release (only
+                        // then: no network call runs unasked).
+                        use crate::update::{State, THIS_VERSION};
+                        let (word, hover, colour) = match self.update.state() {
+                            State::Idle => (
+                                format!("v{THIS_VERSION}"),
+                                "Check for a newer release".to_owned(),
+                                ui.visuals().weak_text_color(),
+                            ),
+                            State::Looking => (
+                                "checking…".to_owned(),
+                                "Asking GitHub for the latest release".to_owned(),
+                                ui.visuals().weak_text_color(),
+                            ),
+                            State::UpToDate => (
+                                format!("v{THIS_VERSION} · up to date"),
+                                "This is the latest release; click to look again".to_owned(),
+                                ui.visuals().weak_text_color(),
+                            ),
+                            State::Newer(v) => (
+                                format!("trainnr {v} is out"),
+                                "Open the release page to download it".to_owned(),
+                                tokens.highlight_color,
+                            ),
+                            State::Failed(why) => (
+                                format!("v{THIS_VERSION} · could not check"),
+                                format!("{why}; click to try again"),
+                                ui.visuals().warn_fg_color,
+                            ),
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new(word).small().color(colour))
                                     .frame_when_inactive(false),
-                                )
-                                .on_hover_text("Open the release page to download it")
-                                .clicked()
-                            {
+                            )
+                            .on_hover_text(hover)
+                            .clicked()
+                        {
+                            if let State::Newer(_) = self.update.state() {
                                 ui.ctx().open_url(egui::OpenUrl::new_tab(
                                     crate::update::RELEASES_PAGE,
                                 ));
+                            } else {
+                                self.update.look();
                             }
-                            ui.add_space(6.0);
                         }
+                        if self.update.state() == State::Looking {
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+                        }
+                        ui.add_space(6.0);
                         if ui
                             .add(
                                 egui::Button::new(egui::RichText::new("connect agent").small())
@@ -944,16 +994,10 @@ impl Shell {
     /// made once the engine is there; a button adds it to one client.
     fn connect_panel(&mut self, ctx: &egui::Context) {
         if self.connect_command.is_none() && crate::spawn::engine_ready() {
-            let made = crate::engine::engine_home()
-                .ok_or_else(|| "no home".to_owned())
-                .and_then(|engine| {
-                    crate::connect::server_command(
-                        &crate::spawn::repo_root(),
-                        &engine,
-                        &crate::engine::uv_program(),
-                    )
-                });
-            self.connect_command = made.ok();
+            self.connect_command = agent_command().ok();
+            let home = crate::model::os_home().unwrap_or_default();
+            let program = self.connect_command.as_ref().map(|c| c.program.clone());
+            self.connect.refresh(&home, program.as_deref());
         }
         let home = crate::model::os_home().unwrap_or_default();
         let engine = self.engine.state();
@@ -963,7 +1007,12 @@ impl Shell {
             crate::connect::Ask::SetUpEngine => self.engine.start(),
             crate::connect::Ask::Add(client) => {
                 if let Some(command) = self.connect_command.clone() {
-                    self.connect.start(client, home, command);
+                    self.connect.start(client, home, command, false);
+                }
+            }
+            crate::connect::Ask::Update(client) => {
+                if let Some(command) = self.connect_command.clone() {
+                    self.connect.start(client, home, command, true);
                 }
             }
         }
@@ -971,9 +1020,26 @@ impl Shell {
 
     /// Open the Connect your agent panel (the status bar's button).
     pub fn open_connect(&mut self) {
-        self.connect
-            .refresh(&crate::model::os_home().unwrap_or_default());
+        if crate::spawn::engine_ready() {
+            self.connect_command = agent_command().ok();
+        }
+        let program = self.connect_command.as_ref().map(|c| c.program.clone());
+        self.connect.refresh(
+            &crate::model::os_home().unwrap_or_default(),
+            program.as_deref(),
+        );
         self.connect_open = true;
+    }
+
+    /// An agent's launcher left by an earlier Connect points at the engine
+    /// this Studio runs: rewritten once the engine is ready, so an update
+    /// never leaves an agent on the old runtime (review, 2026-10-11).
+    fn refresh_launcher(&mut self) {
+        let written = crate::engine::engine_home()
+            .is_some_and(|e| e.join("bin").join(crate::connect::SERVER_NAME).is_file());
+        if written && !cfg!(windows) {
+            self.connect_command = agent_command().ok();
+        }
     }
 
     /// A click on the Welcome or Projects page: a project to switch to,
@@ -1376,6 +1442,17 @@ fn action_outcome(code: Option<i32>, printed: &str) -> Result<std::path::PathBuf
     };
     root.filter(|r| r.join(crate::model::MANIFEST_FILE).is_file())
         .ok_or_else(|| Some("it finished without naming a project".to_owned()))
+}
+
+/// The command agents run (`connect::server_command`): the launcher on
+/// macOS and Linux, rewritten here to point at the engine in use.
+fn agent_command() -> Result<crate::connect::ServerCommand, String> {
+    let engine = crate::engine::engine_home().ok_or_else(|| "no home folder".to_owned())?;
+    crate::connect::server_command(
+        &crate::spawn::repo_root(),
+        &engine,
+        &crate::engine::uv_program(),
+    )
 }
 
 /// What a form's `trainnr call` came to: the job it started (its

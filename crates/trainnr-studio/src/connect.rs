@@ -157,12 +157,49 @@ impl Client {
         }
     }
 
-    /// Whether this machine has the client (its command, or its folder).
-    pub fn present(self, home: &Path) -> bool {
+    /// The client's own command, for Claude Code and Codex.
+    fn cli(self) -> Option<&'static str> {
         match self {
-            Self::ClaudeCode => on_path("claude") || home.join(".claude").is_dir(),
-            Self::Codex => on_path("codex") || codex_home(home).is_dir(),
-            Self::Cursor => home.join(".cursor").is_dir(),
+            Self::ClaudeCode => Some("claude"),
+            Self::Codex => Some("codex"),
+            Self::Cursor => None,
+        }
+    }
+
+    /// Whether the client can be added here: its command found (Claude
+    /// Code, Codex), or its folder (Cursor).
+    pub fn present(self, home: &Path) -> bool {
+        match self.cli() {
+            Some(cli) => find_cli(cli, home).is_some(),
+            None => home.join(".cursor").is_dir(),
+        }
+    }
+
+    /// The program the client's trainnr entry runs, when it has one (the
+    /// Claude Code plugin has none of its own to compare).
+    pub fn entry_program(self, home: &Path) -> Option<String> {
+        let json = |path: PathBuf| -> Option<serde_json::Value> {
+            serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+        };
+        let from_json = |config: serde_json::Value| {
+            config["mcpServers"][SERVER_NAME]["command"]
+                .as_str()
+                .map(str::to_owned)
+        };
+        match self {
+            Self::ClaudeCode => json(home.join(".claude.json")).and_then(from_json),
+            Self::Cursor => json(home.join(".cursor").join("mcp.json")).and_then(from_json),
+            Self::Codex => {
+                let text = std::fs::read_to_string(codex_home(home).join("config.toml")).ok()?;
+                let section = text.split(&format!("[mcp_servers.{SERVER_NAME}]")).nth(1)?;
+                // `command = "..."` before the next table (its `.env` comes after).
+                let line = section
+                    .lines()
+                    .take_while(|l| !l.trim_start().starts_with('['))
+                    .find(|l| l.trim_start().starts_with("command"))?;
+                let value = line.split_once('=')?.1.trim();
+                Some(value.trim_matches('"').replace("\\\\", "\\"))
+            }
         }
     }
 
@@ -200,11 +237,48 @@ impl Client {
     pub fn add(self, home: &Path, command: &ServerCommand) -> Result<String, String> {
         match self {
             Self::ClaudeCode => {
-                run_add("claude", &["mcp", "add", "--scope", "user"], "-e", command)
+                let claude = self.found(home, command)?;
+                run_add(&claude, &["mcp", "add", "--scope", "user"], "-e", command)
             }
-            Self::Codex => run_add("codex", &["mcp", "add"], "--env", command),
+            Self::Codex => {
+                let codex = self.found(home, command)?;
+                run_add(&codex, &["mcp", "add"], "--env", command)
+            }
             Self::Cursor => add_to_json(&home.join(".cursor").join("mcp.json"), command),
         }
+    }
+
+    /// Point the client's entry at `command` again (the engine moved, the
+    /// Windows entry names a versioned Python): the old entry removed by
+    /// the client's own command, then added.
+    pub fn update(self, home: &Path, command: &ServerCommand) -> Result<String, String> {
+        let remove: &[&str] = match self {
+            Self::ClaudeCode => &["mcp", "remove", "--scope", "user", SERVER_NAME],
+            Self::Codex => &["mcp", "remove", SERVER_NAME],
+            Self::Cursor => return self.add(home, command), // the entry is replaced
+        };
+        let cli = self.found(home, command)?;
+        let done = std::process::Command::new(&cli)
+            .args(remove)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|e| format!("{} did not start: {e}", cli.display()))?;
+        if !done.status.success() {
+            return Err(String::from_utf8_lossy(&done.stderr).trim().to_owned());
+        }
+        self.add(home, command)
+    }
+
+    /// The client's command, or why it cannot be run from here, with the
+    /// line to run by hand.
+    fn found(self, home: &Path, command: &ServerCommand) -> Result<PathBuf, String> {
+        let cli = self.cli().unwrap_or_default();
+        find_cli(cli, home).ok_or_else(|| {
+            format!(
+                "{cli} was not found from this app; in a terminal, run: {cli} mcp add {SERVER_NAME} -- {}",
+                command.line()
+            )
+        })
     }
 }
 
@@ -214,20 +288,39 @@ fn codex_home(home: &Path) -> PathBuf {
         .map_or_else(|| home.join(".codex"), PathBuf::from)
 }
 
-fn on_path(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|dir| {
-            dir.join(name).is_file()
-                || dir.join(format!("{name}.exe")).is_file()
-                || dir.join(format!("{name}.cmd")).is_file()
-        })
-    })
+/// A client's command: on PATH, else where its installers put it. An app
+/// opened from Finder or the Dock gets a PATH with neither ~/.local/bin
+/// nor Homebrew, where `claude` and `codex` live (review, 2026-10-11).
+/// On Windows an npm install leaves a `.cmd`, which is run by its path.
+fn find_cli(name: &str, home: &Path) -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    dirs.extend([
+        home.join(".local").join("bin"),
+        home.join(".claude").join("local"),
+        home.join(".npm-global").join("bin"),
+        home.join(".bun").join("bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+    ]);
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        dirs.push(PathBuf::from(appdata).join("npm"));
+    }
+    let names: Vec<String> = if cfg!(windows) {
+        vec![format!("{name}.exe"), format!("{name}.cmd")]
+    } else {
+        vec![name.to_owned()]
+    };
+    dirs.iter()
+        .flat_map(|dir| names.iter().map(move |n| dir.join(n)))
+        .find(|candidate| candidate.is_file())
 }
 
 /// `<cli> <add…> trainnr <env flag> K=V … -- <program> <args…>`: the
 /// client's own command writes its own configuration.
 fn run_add(
-    cli: &str,
+    cli: &Path,
     add: &[&str],
     env_flag: &str,
     command: &ServerCommand,
@@ -241,7 +334,7 @@ fn run_add(
     let done = run
         .stdin(std::process::Stdio::null())
         .output()
-        .map_err(|e| format!("{cli} did not start: {e}"))?;
+        .map_err(|e| format!("{} did not start: {e}", cli.display()))?;
     let said = |bytes: &[u8]| {
         String::from_utf8_lossy(bytes)
             .lines()
@@ -299,6 +392,7 @@ pub enum Ask {
     Open,
     Close,
     Add(Client),
+    Update(Client),
     SetUpEngine,
 }
 
@@ -309,40 +403,54 @@ pub struct Panel {
     pub adding: Option<Client>,
     pub answers: Vec<(Client, Result<String, String>)>,
     receive: Option<std::sync::mpsc::Receiver<(Client, Result<String, String>)>>,
+    /// The program the entries should run, as of the last look.
+    program: Option<PathBuf>,
     /// Each client: on this machine, already has trainnr. Looked up when
     /// the panel opens and after an add, never per frame: a PATH search
     /// crosses the Windows folders under WSL, seconds a frame (measured
     /// 2026-10-11).
-    facts: Vec<(Client, bool, bool)>,
+    facts: Vec<(Client, bool, bool, bool)>,
 }
 
 impl Panel {
     /// Add trainnr to `client` on its own thread (a client's own command
     /// takes a second or two).
-    pub fn start(&mut self, client: Client, home: PathBuf, command: ServerCommand) {
+    pub fn start(&mut self, client: Client, home: PathBuf, command: ServerCommand, update: bool) {
         let (send, receive) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = send.send((client, client.add(&home, &command)));
+            let answer = if update {
+                client.update(&home, &command)
+            } else {
+                client.add(&home, &command)
+            };
+            let _ = send.send((client, answer));
         });
         self.adding = Some(client);
         self.receive = Some(receive);
     }
 
-    /// Look each client up again (the panel opening, an add done).
-    pub fn refresh(&mut self, home: &Path) {
+    /// Look each client up again (the panel opening, an add done): on
+    /// this machine, has trainnr, and whether its entry runs `program`
+    /// (an entry left from an older engine does not).
+    pub fn refresh(&mut self, home: &Path, program: Option<&Path>) {
+        self.program = program.map(Path::to_path_buf);
         self.facts = CLIENTS
             .iter()
-            .map(|&c| (c, c.present(home), c.configured(home)))
+            .map(|&c| {
+                let current = match (c.entry_program(home), program) {
+                    (Some(entry), Some(program)) => Path::new(&entry) == program,
+                    _ => true, // the plugin, or nothing to compare yet
+                };
+                (c, c.present(home), c.configured(home), current)
+            })
             .collect();
     }
 
-    fn fact(&self, client: Client) -> (bool, bool) {
-        self.facts
-            .iter()
-            .find(|(c, _, _)| *c == client)
-            .map_or((false, false), |&(_, present, configured)| {
-                (present, configured)
-            })
+    fn fact(&self, client: Client) -> (bool, bool, bool) {
+        self.facts.iter().find(|(c, _, _, _)| *c == client).map_or(
+            (false, false, true),
+            |&(_, present, configured, current)| (present, configured, current),
+        )
     }
 
     /// The answer, when it has come; `home` is looked up again with it.
@@ -355,7 +463,8 @@ impl Panel {
             self.answers.push((client, answer));
             self.adding = None;
             self.receive = None;
-            self.refresh(home);
+            let program = self.program.clone();
+            self.refresh(home, program.as_deref());
         }
     }
 
@@ -437,7 +546,7 @@ pub fn panel(
             return;
         };
         for client in CLIENTS {
-            let (present, configured) = state.fact(client);
+            let (present, configured, current) = state.fact(client);
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(client.label())
@@ -447,6 +556,14 @@ pub fn panel(
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if state.adding == Some(client) {
                         ui.spinner();
+                    } else if configured && !current {
+                        let free = state.adding.is_none();
+                        if crate::onboarding::secondary_button(ui, "Update", free)
+                            .on_hover_text("Its entry runs an older engine: point it at this one")
+                            .clicked()
+                        {
+                            ask = Ask::Update(client);
+                        }
                     } else if configured {
                         ui.label(egui::RichText::new("added").color(palette.text));
                     } else if present {
@@ -577,6 +694,36 @@ mod tests {
             ..Default::default()
         };
         assert!(matches!(frame(escape, Some(&made)), Ask::Close));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn an_entry_left_from_an_older_engine_is_told_apart() {
+        let home = scratch("stale");
+        std::fs::write(
+            home.join(".claude.json"),
+            r#"{"mcpServers": {"trainnr": {"command": "/old/python"}}}"#,
+        )
+        .unwrap();
+        let codex = home.join(".codex");
+        std::fs::create_dir_all(&codex).unwrap();
+        std::fs::write(
+            codex.join("config.toml"),
+            "[mcp_servers.trainnr]\ncommand = \"/e/bin/trainnr\"\nargs = [\"mcp\"]\n\n[mcp_servers.trainnr.env]\nTRAINNR_UV = \"/e/bin/uv\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            Client::ClaudeCode.entry_program(&home).as_deref(),
+            Some("/old/python")
+        );
+        assert_eq!(
+            Client::Codex.entry_program(&home).as_deref(),
+            Some("/e/bin/trainnr")
+        );
+        let mut panel = Panel::default();
+        panel.refresh(&home, Some(Path::new("/e/bin/trainnr")));
+        assert!(!panel.fact(Client::ClaudeCode).2, "stale: Update");
+        assert!(panel.fact(Client::Codex).2, "current");
         let _ = std::fs::remove_dir_all(&home);
     }
 

@@ -105,8 +105,9 @@ impl Catalog {
         if !matches!(self, Self::Unloaded) {
             return;
         }
-        let out = dir.join("studio-forms.json");
-        let log = dir.join("studio-forms.log");
+        // This window's own, by its process id, removed once read.
+        let out = dir.join(format!("studio-forms-{}.json", std::process::id()));
+        let log = dir.join(format!("studio-forms-{}.log", std::process::id()));
         let started = output_files(dir, &out, &log).and_then(|(printed, errors)| {
             crate::spawn::trainnr_command()
                 .arg("forms")
@@ -133,11 +134,14 @@ impl Catalog {
             Err(_) => false,
         };
         let text = std::fs::read_to_string(&*out).unwrap_or_default();
-        *self = match (ended, parse(&text)) {
+        let next = match (ended, parse(&text)) {
             (true, Ok(forms)) => Self::Ready(forms),
             (true, Err(why)) => Self::Failed(why),
             (false, _) => Self::Failed(last_line(log)),
         };
+        let _ = std::fs::remove_file(&*out);
+        let _ = std::fs::remove_file(&*log);
+        *self = next;
     }
 
     /// The forms to show: the loaded ones, else the ones built in, so a

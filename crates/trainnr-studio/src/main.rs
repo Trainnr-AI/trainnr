@@ -257,9 +257,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 struct StudioShell {
-    /// A scene asked for before the engine was set up: it starts the
-    /// moment the engine is ready (`engine.rs`).
-    pending_scene: Option<String>,
+    /// A scene asked for before the engine was set up, and the project it
+    /// was asked on: it starts the moment the engine is ready
+    /// (`engine.rs`), unless Stop or another project came first.
+    pending_scene: Option<(String, std::path::PathBuf)>,
     /// The theme preference as of this frame (system, dark or light),
     /// persisted by `save`.
     theme_preference: egui::ThemePreference,
@@ -319,10 +320,17 @@ impl eframe::App for StudioShell {
         self.fullscreen_keys(ui.ctx());
         self.leave_fullscreen_before_close(ui.ctx());
         self.shell.tick(ui.ctx());
-        if self.pending_scene.is_some() && spawn::engine_ready() {
-            if let Some(task) = self.pending_scene.take() {
-                self.viewport =
-                    ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+        if let Some((task, root)) = self.pending_scene.clone() {
+            if root != self.shell.model.project_root {
+                self.pending_scene = None; // the scene was for the last project
+            } else if let Some(why) = self.shell.engine_failure() {
+                self.pending_scene = None;
+                self.viewport = ViewportFeed::errored(format!(
+                    "The {task} scene did not start: the engine did not set up ({why})."
+                ));
+            } else if spawn::engine_ready() {
+                self.pending_scene = None;
+                self.viewport = ViewportFeed::spawn(ui.ctx(), &task, &root);
             }
         }
         self.answer_screenshot(ui);
@@ -599,7 +607,7 @@ impl StudioShell {
                         "Setting up the engine for the {task} scene (once); it starts \
                          when the engine is ready."
                     ));
-                    self.pending_scene = Some(task);
+                    self.pending_scene = Some((task, self.shell.model.project_root.clone()));
                 }
             }
             Some(simulator::Action::Stop) => self.stop_scene(),
@@ -643,6 +651,7 @@ impl StudioShell {
     }
 
     fn stop_scene(&mut self) {
+        self.pending_scene = None; // a scene still waiting on the engine stops too
         self.viewport = ViewportFeed::idle();
         self.viewport_full = false;
     }

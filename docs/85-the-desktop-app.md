@@ -183,10 +183,10 @@ Each phase ends with a check on a fresh machine, not with code merged.
    a disk image with an Applications link to drag onto (`iconutil`,
    `hdiutil` on the macOS runner) and a Linux AppImage (`appimagetool`
    1.9.1, its SHA-256 pinned); Windows keeps its zip, whose `.exe` runs
-   where it is unpacked. The Studio looks for a newer release at most
-   once a day (`update.rs`; `TRAINNR_NO_UPDATE_CHECK=1` turns it off) and
-   says so in the status bar, linking the release page; it downloads
-   nothing itself. *Checked, 2026-10-11:* the AppImage built here (74 MB)
+   where it is unpacked. The Studio's version in the status bar looks for a newer release
+   when clicked, never on its own (`update.rs`: the repository allows no
+   network call the user did not ask for), and links the release page;
+   it downloads nothing itself. *Checked, 2026-10-11:* the AppImage built here (74 MB)
    and ran under WSLg, answered the control channel and quit cleanly;
    the macOS steps run only on the release's macOS runner, so the next
    release candidate is their first check. Left: signing (an Apple

@@ -115,15 +115,20 @@ pub fn installed_runtime() -> Option<PathBuf> {
 /// The uv to run: `$TRAINNR_UV`, else one on PATH, else the engine's own
 /// (downloaded), else the bare name for the OS to find.
 pub fn uv_program() -> PathBuf {
+    existing_uv(engine_home().as_deref()).unwrap_or_else(|| PathBuf::from("uv"))
+}
+
+/// A uv already here, in the one order the setup and every run share:
+/// `$TRAINNR_UV`, else PATH, else the engine's own from an earlier setup
+/// (so a retry after a failed sync never downloads it again).
+fn existing_uv(home: Option<&Path>) -> Option<PathBuf> {
     if let Some(named) = std::env::var_os(UV_ENV).filter(|v| !v.is_empty()) {
-        return PathBuf::from(named);
+        return Some(PathBuf::from(named));
     }
-    if let Some(found) = on_path("uv") {
-        return found;
-    }
-    let own = engine_home().map(|h| h.join("bin").join(exe("uv")));
-    own.filter(|p| p.is_file())
-        .unwrap_or_else(|| PathBuf::from("uv"))
+    on_path("uv").or_else(|| {
+        home.map(|h| h.join("bin").join(exe("uv")))
+            .filter(|p| p.is_file())
+    })
 }
 
 fn on_path(name: &str) -> Option<PathBuf> {
@@ -195,7 +200,7 @@ impl Installer {
 /// runtime's folder. `say` names each step for the window.
 pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
     std::fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
-    let uv = match on_path("uv").or_else(|| std::env::var_os(UV_ENV).map(PathBuf::from)) {
+    let uv = match existing_uv(Some(home)) {
         Some(uv) => uv,
         None => {
             say(&format!("Downloading uv {UV_VERSION} (about 16 MB)…"));
@@ -209,7 +214,10 @@ pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
     }
     say("Installing Python and the core tools (about 750 MB on disk, once)…");
     let mut sync = std::process::Command::new(&uv);
+    // `--locked`: the lock file's versions and hashes, or an error; never
+    // a new resolution from PyPI on the day (review, 2026-10-11).
     sync.arg("sync")
+        .arg("--locked")
         .arg("--project")
         .arg(runtime.join(crate::spawn::PIPELINE_DIR));
     for extra in CORE_EXTRAS {
@@ -229,7 +237,25 @@ pub fn install(home: &Path, say: &dyn Fn(&str)) -> Result<PathBuf, String> {
         return Err(format!("uv sync failed: {last}"));
     }
     std::fs::write(runtime.join(READY_FILE), UV_VERSION).map_err(|e| e.to_string())?;
+    remove_older_runtimes(home, &runtime);
     Ok(runtime)
+}
+
+/// Every other runtime under `home`: an earlier version's, left by an
+/// update, about 600 MB each. Agents' entries go through the launcher,
+/// which the Studio points at the new one (`connect.rs`).
+fn remove_older_runtimes(home: &Path, current: &Path) {
+    let prefix = RUNTIME_NAME.replace("{version}", "");
+    let Ok(entries) = std::fs::read_dir(home) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let named = entry.file_name().to_string_lossy().starts_with(&prefix);
+        if named && path != current && path.is_dir() && !path.is_symlink() {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+    }
 }
 
 /// The pinned uv for this platform, downloaded, checked and unpacked into

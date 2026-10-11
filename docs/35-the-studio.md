@@ -277,6 +277,32 @@ Windows folders under WSL, and the panel's test took 19 s a run until
 the lookups moved out of the frame. Before the engine exists the panel
 offers to set it up.
 
+### 5.8 The review of the desktop app (2026-10-11)
+
+A review of the whole branch found, and this branch fixed:
+- an app opened from Finder or the Dock has a PATH with neither
+  ~/.local/bin nor Homebrew, so Connect looked for `claude` and `codex`
+  only there and failed for most Macs: `connect::find_cli` also looks
+  where their installers put them, and on Windows runs an npm `.cmd` by
+  its path;
+- an agent's entry from an older engine kept running it: the launcher is
+  rewritten whenever the engine is ready, older runtimes are removed, and
+  an entry that runs another program (Windows names the versioned
+  Python) shows Update, which removes and adds it;
+- a scene asked for before the engine started anyway after Stop or on
+  another project: it now waits on its own project, and a failed setup
+  says why;
+- `uv sync` re-resolved from PyPI when a lock was stale: the engine syncs
+  and runs `--locked` (checked: uv 0.13.0 honours the lock 0.5.24 wrote);
+- the setup and the runs could pick different uvs, and a retry
+  downloaded uv again: one order for both;
+- a relative `TRAINNR_HOME` meant another folder in the children: they
+  get the absolute one;
+- two windows truncated each other's command output: each window's files
+  carry its process id and are removed once read;
+- the update check looked once a day on its own, against the rule that
+  no network call runs unasked: it is now a click on the version.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

@@ -298,7 +298,6 @@ it at your binary with `TRAINNR_STUDIO`.
 | `TRAINNR_UNITREE_REFERENCE` | The `unitree_rl_mjlab` checkout the DDS gate runs Unitree's simulator from, instead of `~/.cache/trainnr/unitree_rl_mjlab` |
 | `TRAINNR_X11` | WSL only: `1` makes the Studio use X11 instead of Wayland |
 | `TRAINNR_VSYNC` | WSL only: `1` turns the Studio's vsync back on |
-| `TRAINNR_NO_UPDATE_CHECK` | `1`: the Studio never looks for a newer release (it looks at most once a day) |
 | `TRAINNR_RUNTIME_URL` | The engine's runtime archive to set up from (a URL or a file), instead of the release's |
 | `TRAINNR_UV` | The uv the jobs run; the Studio names its engine's own |
 

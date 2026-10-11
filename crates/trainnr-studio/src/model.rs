@@ -49,7 +49,7 @@ pub const PROJECT_ENV: &str = "TRAINNR_PROJECT";
 /// projects home (`PROJECTS_ENV`, else `<HOME_ENV or ~/trainnr>/projects`)
 /// and the file in it naming the current project (`CURRENT_FILE`).
 pub const PROJECTS_ENV: &str = "TRAINNR_PROJECTS";
-const HOME_ENV: &str = "TRAINNR_HOME";
+pub const HOME_ENV: &str = "TRAINNR_HOME";
 const HOME_DIR: &str = "trainnr";
 pub const CURRENT_FILE: &str = ".current";
 
@@ -72,7 +72,7 @@ pub fn os_home() -> Option<PathBuf> {
 /// (`trainnr/paths.py`): trimmed, `~` expanded, made absolute. The two
 /// sides must land on the same folder, or each looks where the other
 /// never writes.
-fn env_path(name: &str) -> Option<PathBuf> {
+pub fn env_path(name: &str) -> Option<PathBuf> {
     let raw = std::env::var(name).ok()?;
     let text = raw.trim();
     if text.is_empty() {
