@@ -194,6 +194,21 @@ The Projects page lists the samples under its projects, the open one
 marked as open. The Studio's copies of the sample list and the loop's
 stages are pinned to the Python originals by `tests/test_studio_mirrors.py`.
 
+### 5.4 Buttons that run the agent's tools (2026-10-11)
+
+The app is becoming one people use on their own (docs/85). Its buttons
+run the same tools the agent calls, through `trainnr call <tool> --args
+'<json>'` (`spawn::trainnr_command`): one runner in the shell
+(`run_action`), one button at a time, its errors in the projects home's
+`.index/studio-action.log`. A finished command names the project to open:
+`sample open` prints its folder, `call` prints the tool's JSON, whose
+`root` names it; a refusal (exit 3) shows its reason under the button.
+**New project** is the first: a dialog asks for the name, and
+`create_project` checks it and refuses by name. Gotcha: a dialog that
+asks for focus every frame takes it back the frame Enter releases it, so
+Enter never submitted; it now takes focus once and reads Enter itself
+(a headless test draws it).
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

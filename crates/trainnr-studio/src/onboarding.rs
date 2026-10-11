@@ -364,18 +364,109 @@ pub const SAMPLES: &[SampleCard] = &[SampleCard {
     bytes: 11_973_917,
 }];
 
-/// Where opening a sample stands: the one being opened, or the last
-/// failure (the sample's name and why).
+/// Where a button's `trainnr` command stands (a sample opening, a new
+/// project): the one running, or the last failure (its key and why). One
+/// at a time: the buttons are disabled while one runs.
 #[derive(Default)]
-pub struct SampleState {
-    pub opening: Option<&'static str>,
+pub struct ActionState {
+    pub running: Option<&'static str>,
     pub failed: Option<(&'static str, String)>,
 }
+
+/// The key a new project's `trainnr call create_project` runs under.
+pub const NEW_PROJECT: &str = "new-project";
 
 /// What a click on the Welcome or Projects page asks for.
 pub enum Pick {
     Project(PathBuf),
     Sample(&'static str),
+    /// The New project dialog, to name it.
+    NewProject,
+}
+
+/// What the New project dialog answered this frame.
+pub enum Dialog {
+    Open,
+    Create(String),
+    Cancel,
+}
+
+/// The New project dialog: a name, Create and Cancel; Enter creates and
+/// Escape cancels. The name is checked by `create_project` itself, which
+/// refuses by name, so the rule lives in one place.
+pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
+    let mut answer = Dialog::Open;
+    let modal = egui::Modal::new(egui::Id::new("new-project")).show(ctx, |ui| {
+        let palette = crate::theme::palette(ui);
+        ui.set_width(NEW_PROJECT_DIALOG_WIDTH);
+        ui.label(
+            egui::RichText::new("New project")
+                .text_style(DesignTokens::welcome_screen_h2())
+                .strong()
+                .color(ui.visuals().strong_text_color()),
+        );
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new("One project per robot effort. Name it for the robot or the task.")
+                .color(palette.text),
+        );
+        ui.add_space(12.0);
+        let field = ui.add(
+            egui::TextEdit::singleline(name)
+                .hint_text("my-robot")
+                .desired_width(f32::INFINITY),
+        );
+        // Focus once, when the dialog opens: asking every frame took the
+        // focus back the frame Enter released it, and Enter never created.
+        if ui.memory(|m| m.focused().is_none()) {
+            field.request_focus();
+        }
+        // Enter anywhere in the dialog: it has one field.
+        let entered = ui.input(|i| i.key_pressed(egui::Key::Enter));
+        ui.add_space(14.0);
+        ui.horizontal(|ui| {
+            let ready = !name.trim().is_empty();
+            if primary_button(ui, "Create", ready).clicked() || (entered && ready) {
+                answer = Dialog::Create(name.trim().to_owned());
+            }
+            if ui.button("Cancel").clicked() {
+                answer = Dialog::Cancel;
+            }
+        });
+    });
+    if modal.should_close() && matches!(answer, Dialog::Open) {
+        answer = Dialog::Cancel;
+    }
+    answer
+}
+
+/// The filled button a page's one main action wears.
+pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
+    let palette = crate::theme::palette(ui);
+    ui.spacing_mut().button_padding = BUTTON_PADDING;
+    let button = egui::Button::new(
+        egui::RichText::new(label)
+            .text_style(DesignTokens::welcome_screen_body())
+            .strong()
+            .color(ui.visuals().strong_text_color()),
+    )
+    .fill(palette.accent_soft)
+    .stroke(egui::Stroke::new(1.0, palette.link))
+    .corner_radius(8.0)
+    .min_size(egui::vec2(0.0, 36.0));
+    ui.add_enabled(enabled, button)
+}
+
+/// A failure line under a button, when the last run under `key` failed.
+fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &str) {
+    if let Some((failed, why)) = &state.failed {
+        if *failed == key {
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(format!("{what}: {why}")).color(ui.visuals().warn_fg_color),
+            );
+        }
+    }
 }
 
 /// The Welcome page's widest pair of cards side by side; narrower, one
@@ -401,13 +492,15 @@ pub const LOOP_STATES: [(&str, Section); 9] = [
 ];
 /// What a user says to start their own project.
 const START_PROMPT: &str = "Create a project called my-robot";
+/// The New project dialog's width.
+const NEW_PROJECT_DIALOG_WIDTH: f32 = 380.0;
 
 /// The window before any project exists: what trainnr is, start your own
 /// project, or explore a sample; then the projects already there.
 pub fn welcome(
     ui: &mut egui::Ui,
     projects: &[ProjectSummary],
-    samples: &SampleState,
+    samples: &ActionState,
     home: Option<&Path>,
 ) -> Option<Pick> {
     let palette = crate::theme::palette(ui);
@@ -423,19 +516,17 @@ pub fn welcome(
         ui.add_space(6.0);
         ui.label(
             egui::RichText::new(
-                "The end-to-end robotics platform, run from your coding agent: \
-                 real-to-sim, train, sim-to-real, and back.",
+                "The robotics platform on your desktop: real-to-sim, train, \
+                 sim-to-real, and back. Work here, or let your coding agent drive it.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
         ui.add_space(28.0);
-        let start = |ui: &mut egui::Ui| start_your_own(ui, home);
-        let mut explore = |ui: &mut egui::Ui| {
-            if explore_a_sample(ui, samples, projects) {
-                picked = Some(Pick::Sample(SAMPLES[0].name));
-            }
-        };
+        let mut create = false;
+        let mut open = false;
+        let mut start = |ui: &mut egui::Ui| create = start_your_own(ui, samples, home);
+        let mut explore = |ui: &mut egui::Ui| open = explore_a_sample(ui, samples, projects);
         if ui.available_width() >= WELCOME_TWO_UP {
             ui.columns(2, |cols| {
                 start(&mut cols[0]);
@@ -445,6 +536,11 @@ pub fn welcome(
             start(ui);
             ui.add_space(16.0);
             explore(ui);
+        }
+        if create {
+            picked = Some(Pick::NewProject);
+        } else if open {
+            picked = Some(Pick::Sample(SAMPLES[0].name));
         }
         ui.add_space(16.0);
         the_loop(ui);
@@ -498,19 +594,30 @@ fn the_loop(ui: &mut egui::Ui) {
     });
 }
 
-/// The left card: a project of one's own, through the agent.
-fn start_your_own(ui: &mut egui::Ui, home: Option<&Path>) {
+/// The left card: a project of one's own, made here or by the agent.
+/// Whether New project was clicked.
+fn start_your_own(ui: &mut egui::Ui, actions: &ActionState, home: Option<&Path>) -> bool {
     let palette = crate::theme::palette(ui);
+    let mut clicked = false;
     welcome_card(ui, Section::Robots.icon(), "Start your own", |ui| {
         ui.label(
             egui::RichText::new(
                 "A project holds one robot effort: its model, its data, and \
-                 everything trained from them. Your agent makes it, and this \
-                 window opens it the moment it exists.",
+                 everything trained from them.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
+        ui.add_space(16.0);
+        if actions.running == Some(NEW_PROJECT) {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(egui::RichText::new("Creating…").color(palette.text));
+            });
+        } else {
+            clicked = primary_button(ui, "New project", actions.running.is_none()).clicked();
+        }
+        failure_line(ui, actions, NEW_PROJECT, "It was not created");
         ui.add_space(16.0);
         ask_your_agent(ui, &[START_PROMPT]);
         if let Some(home) = home {
@@ -524,10 +631,11 @@ fn start_your_own(ui: &mut egui::Ui, home: Option<&Path>) {
             );
         }
     });
+    clicked
 }
 
 /// The right card: the first sample, with its Open button.
-fn explore_a_sample(ui: &mut egui::Ui, samples: &SampleState, projects: &[ProjectSummary]) -> bool {
+fn explore_a_sample(ui: &mut egui::Ui, samples: &ActionState, projects: &[ProjectSummary]) -> bool {
     let mut clicked = false;
     welcome_card(ui, &icons::PLAY, "Explore a sample", |ui| {
         clicked = sample_body(ui, &SAMPLES[0], samples, projects);
@@ -567,7 +675,7 @@ fn welcome_card(ui: &mut egui::Ui, icon: &Icon, title: &str, add: impl FnOnce(&m
 pub fn sample_card(
     ui: &mut egui::Ui,
     sample: &SampleCard,
-    samples: &SampleState,
+    samples: &ActionState,
     projects: &[ProjectSummary],
     open: &Path,
 ) -> bool {
@@ -612,7 +720,7 @@ fn sample_text(ui: &mut egui::Ui, sample: &SampleCard) {
 fn sample_body(
     ui: &mut egui::Ui,
     sample: &SampleCard,
-    samples: &SampleState,
+    samples: &ActionState,
     projects: &[ProjectSummary],
 ) -> bool {
     let palette = crate::theme::palette(ui);
@@ -622,7 +730,7 @@ fn sample_body(
     sample_text(ui, sample);
     ui.add_space(16.0);
     let mut clicked = false;
-    if samples.opening == Some(sample.name) {
+    if samples.running == Some(sample.name) {
         ui.horizontal(|ui| {
             ui.spinner();
             ui.label(
@@ -644,19 +752,7 @@ fn sample_body(
                 sample.bytes as f64 / 1e6
             )
         };
-        ui.spacing_mut().button_padding = BUTTON_PADDING;
-        let button = egui::Button::new(
-            egui::RichText::new(label)
-                .text_style(DesignTokens::welcome_screen_body())
-                .strong()
-                .color(ui.visuals().strong_text_color()),
-        )
-        .fill(palette.accent_soft)
-        .stroke(egui::Stroke::new(1.0, palette.link))
-        .corner_radius(8.0)
-        .min_size(egui::vec2(0.0, 36.0));
-        clicked = ui
-            .add_enabled(samples.opening.is_none(), button)
+        clicked = primary_button(ui, &label, samples.running.is_none())
             .on_hover_text(if here {
                 "Open it: it is in your projects"
             } else {
@@ -664,15 +760,7 @@ fn sample_body(
             })
             .clicked();
     }
-    if let Some((name, why)) = &samples.failed {
-        if *name == sample.name {
-            ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(format!("It did not open: {why}"))
-                    .color(ui.visuals().warn_fg_color),
-            );
-        }
-    }
+    failure_line(ui, samples, sample.name, "It did not open");
     ui.add_space(8.0);
     ui.label(
         egui::RichText::new(
@@ -687,6 +775,58 @@ fn sample_body(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The New project dialog stays open while typed into, creates the
+    /// trimmed name on Enter, and cancels on Escape; drawn headless.
+    #[test]
+    fn the_new_project_dialog_creates_on_enter_and_cancels_on_escape() {
+        let press = |key| egui::RawInput {
+            events: vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        let frame = |ctx: &egui::Context, input, name: &mut String| {
+            let mut answer = Dialog::Open;
+            let mut output = ctx.run_ui(input, |ui| answer = new_project_dialog(ui.ctx(), name));
+            output.textures_delta.clear(); // no renderer here to apply them
+            answer
+        };
+        let ctx = egui::Context::default();
+        re_ui::apply_style_and_install_loaders(&ctx);
+        let mut name = "  lab-arm ".to_owned();
+        assert!(matches!(
+            frame(&ctx, Default::default(), &mut name),
+            Dialog::Open
+        ));
+        assert!(matches!(
+            frame(&ctx, Default::default(), &mut name),
+            Dialog::Open
+        ));
+        match frame(&ctx, press(egui::Key::Enter), &mut name) {
+            Dialog::Create(made) => assert_eq!(made, "lab-arm"),
+            _ => panic!("Enter did not create"),
+        }
+        let ctx = egui::Context::default();
+        re_ui::apply_style_and_install_loaders(&ctx);
+        let mut empty = String::new();
+        let _ = frame(&ctx, Default::default(), &mut empty);
+        assert!(
+            matches!(
+                frame(&ctx, press(egui::Key::Enter), &mut empty),
+                Dialog::Open
+            ),
+            "an empty name creates nothing"
+        );
+        assert!(matches!(
+            frame(&ctx, press(egui::Key::Escape), &mut empty),
+            Dialog::Cancel
+        ));
+    }
 
     /// Every page that can be empty says what it is for, and a prompt is
     /// words to paste, never a tool call.

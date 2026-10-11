@@ -537,7 +537,7 @@ pub fn problem_page(ui: &mut egui::Ui, problem: &str) {
 pub fn projects(
     ui: &mut egui::Ui,
     model: &mut Model,
-    samples: &crate::onboarding::SampleState,
+    samples: &crate::onboarding::ActionState,
 ) -> Option<crate::onboarding::Pick> {
     // The page is visited, not polled: a walk when it opens (throttled
     // inside), then the cached list.
@@ -549,11 +549,17 @@ pub fn projects(
             heading(ui, "Projects");
             ui.add_space(8.0);
             tag(ui, &list.len().to_string());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let busy = samples.running.is_some();
+                if crate::onboarding::primary_button(ui, "New project", !busy).clicked() {
+                    picked = Some(crate::onboarding::Pick::NewProject);
+                }
+            });
         });
         ui.add_space(4.0);
         weak_body(
             ui,
-            "One project per robot effort. Ask your agent to create one, or open one below.",
+            "One project per robot effort. Make one here or ask your agent to, or open one below.",
         );
         ui.add_space(20.0);
         if list.is_empty() {

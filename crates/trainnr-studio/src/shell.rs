@@ -11,15 +11,19 @@
 use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::model::Model;
-use crate::onboarding::{Pick, SampleState};
+use crate::onboarding::{ActionState, Pick};
 use crate::pages::{self, Section, RAIL_ICON};
 use crate::spawn::{end_tree, pipeline_command, trainnr_command, PRESENTER_SCRIPT};
 use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
 const RAIL_WIDTH: f32 = 196.0;
-/// The log a sample's opening writes, in the projects home's `.index`.
-const SAMPLE_LOG: &str = "sample-open.log";
+/// The log a button's `trainnr` command writes its errors to, in the
+/// projects home's `.index`.
+const ACTION_LOG: &str = "studio-action.log";
+/// `trainnr call`'s exit code for a tool that ran and refused
+/// (`trainnr/cli.py::REFUSED_EXIT`).
+const REFUSED_EXIT: i32 = 3;
 /// Width of the macOS traffic-light cluster the top bar must clear.
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHTS_INSET: f32 = 72.0;
@@ -85,11 +89,13 @@ pub struct Shell {
     /// A run's viewer file to load into the viewer, taken by the frame
     /// loop that owns the viewer.
     pub viewer_request: Option<std::path::PathBuf>,
-    /// A sample being opened (`trainnr sample open`): its name, the
-    /// process, and the log its errors go to.
-    sample_job: Option<(&'static str, std::process::Child, std::path::PathBuf)>,
-    /// What the sample cards show: the one opening, the last failure.
-    pub samples: SampleState,
+    /// A button's `trainnr` command while it runs (a sample opening, a
+    /// new project): its key, the process, and the log its errors go to.
+    action_job: Option<(&'static str, std::process::Child, std::path::PathBuf)>,
+    /// What the buttons show: the command running, the last failure.
+    pub actions: ActionState,
+    /// The New project dialog's name, while the dialog is open.
+    new_project_name: Option<String>,
 }
 
 impl Shell {
@@ -119,8 +125,9 @@ impl Shell {
             runs_listed: false,
             stop_note: None,
             viewer_request: None,
-            sample_job: None,
-            samples: SampleState::default(),
+            action_job: None,
+            actions: ActionState::default(),
+            new_project_name: None,
         }
     }
 
@@ -138,39 +145,57 @@ impl Shell {
 
     /// Open a sample: `trainnr sample open <name>` downloads, checks,
     /// unpacks and indexes it and makes it current; `tick` switches to
-    /// the folder it prints. Not killed with the window: a download cut
-    /// short leaves its temporary folder in the projects home.
+    /// the folder it prints.
     pub fn open_sample(&mut self, name: &'static str) {
-        if self.sample_job.is_some() {
+        self.run_action(name, &["sample", "open", name]);
+    }
+
+    /// Make a project without an agent: the same `create_project` tool an
+    /// agent calls (`trainnr call`), which checks the name and refuses by
+    /// name; `tick` switches to the project it made.
+    pub fn create_project(&mut self, name: &str) {
+        let arguments = serde_json::json!({ "path": name, "name": name }).to_string();
+        self.run_action(
+            crate::onboarding::NEW_PROJECT,
+            &["call", "create_project", "--args", &arguments],
+        );
+    }
+
+    /// Run `trainnr <args>` for a button, one at a time. Not killed with
+    /// the window: a sample's download cut short leaves its temporary
+    /// folder in the projects home.
+    fn run_action(&mut self, key: &'static str, args: &[&str]) {
+        if self.action_job.is_some() {
             return;
         }
         let dir = crate::model::user_projects_home()
             .unwrap_or_else(std::env::temp_dir)
             .join(crate::model::INDEX_DIR);
-        let log = dir.join(SAMPLE_LOG);
+        let log = dir.join(ACTION_LOG);
         let sink = std::fs::create_dir_all(&dir).and_then(|()| std::fs::File::create(&log));
         let mut command = trainnr_command();
         command
-            .args(["sample", "open", name])
+            .args(args)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped());
         if let Ok(sink) = sink {
             command.stderr(sink);
         }
-        self.samples.failed = None;
+        self.actions.failed = None;
         match command.spawn() {
             Ok(child) => {
-                self.samples.opening = Some(name);
-                self.sample_job = Some((name, child, log));
+                self.actions.running = Some(key);
+                self.action_job = Some((key, child, log));
             }
-            Err(why) => self.samples.failed = Some((name, format!("uv did not start: {why}"))),
+            Err(why) => self.actions.failed = Some((key, format!("uv did not start: {why}"))),
         }
     }
 
-    /// The sample's opening, when it ended: switch to its folder, or say
-    /// why it did not open (the log's last line).
-    fn reap_sample(&mut self) {
-        let Some((name, child, log)) = self.sample_job.as_mut() else {
+    /// A button's command, when it ended: switch to the project it made
+    /// or opened, or say why not (a refusal's reason, else the log's last
+    /// line).
+    fn reap_action(&mut self) {
+        let Some((key, child, log)) = self.action_job.as_mut() else {
             return;
         };
         let status = match child.try_wait() {
@@ -183,24 +208,26 @@ impl Shell {
             use std::io::Read as _;
             let _ = out.read_to_string(&mut printed);
         }
-        let name = *name;
-        let root = std::path::PathBuf::from(printed.trim());
-        if status.is_some_and(|s| s.success()) && root.join(crate::model::MANIFEST_FILE).is_file() {
-            self.switch_to = Some(root);
-        } else {
-            let why = std::fs::read_to_string(&*log)
-                .ok()
-                .and_then(|text| {
-                    text.lines()
-                        .rev()
-                        .find(|l| !l.trim().is_empty())
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| "it exited without saying why".to_owned());
-            self.samples.failed = Some((name, why));
+        let key = *key;
+        let outcome = action_outcome(status.and_then(|s| s.code()), &printed);
+        match outcome {
+            Ok(root) => self.switch_to = Some(root),
+            Err(None) => {
+                let why = std::fs::read_to_string(&*log)
+                    .ok()
+                    .and_then(|text| {
+                        text.lines()
+                            .rev()
+                            .find(|l| !l.trim().is_empty())
+                            .map(str::to_owned)
+                    })
+                    .unwrap_or_else(|| "it exited without saying why".to_owned());
+                self.actions.failed = Some((key, why));
+            }
+            Err(Some(reason)) => self.actions.failed = Some((key, reason)),
         }
-        self.samples.opening = None;
-        self.sample_job = None;
+        self.actions.running = None;
+        self.action_job = None;
     }
 
     pub fn show(&mut self, stamp: &str) {
@@ -556,7 +583,7 @@ impl Shell {
             let picked = crate::onboarding::welcome(
                 ui,
                 self.model.projects(),
-                &self.samples,
+                &self.actions,
                 home.as_deref(),
             );
             self.pick(picked);
@@ -570,7 +597,7 @@ impl Shell {
         }
         match self.section {
             Section::Projects => {
-                let picked = pages::projects(ui, &mut self.model, &self.samples);
+                let picked = pages::projects(ui, &mut self.model, &self.actions);
                 self.pick(picked);
             }
             Section::Overview => {
@@ -648,7 +675,7 @@ impl Shell {
     /// the jobs, the events, the presenter's answer) — on every page,
     /// the Simulator included, not only where a page is drawn.
     pub fn tick(&mut self, ctx: &egui::Context) {
-        self.reap_sample();
+        self.reap_action();
         if self.switch_to.is_none() {
             // On the Welcome page: the first project the agent makes or
             // opens is the one to show.
@@ -672,6 +699,7 @@ impl Shell {
         match picked {
             Some(Pick::Project(root)) => self.switch_to = Some(root),
             Some(Pick::Sample(name)) => self.open_sample(name),
+            Some(Pick::NewProject) => self.new_project_name = Some(String::new()),
             None => {}
         }
     }
@@ -681,6 +709,16 @@ impl Shell {
     /// viewer) has been drawn; the failure banner is a panel and goes
     /// before the page (`presenter_failure`).
     pub fn overlays(&mut self, ctx: &egui::Context) {
+        if let Some(name) = self.new_project_name.as_mut() {
+            match crate::onboarding::new_project_dialog(ctx, name) {
+                crate::onboarding::Dialog::Open => {}
+                crate::onboarding::Dialog::Cancel => self.new_project_name = None,
+                crate::onboarding::Dialog::Create(name) => {
+                    self.new_project_name = None;
+                    self.create_project(&name);
+                }
+            }
+        }
         self.keys(ctx);
         if let Some(palette) = self.palette.as_mut() {
             let (chosen, close) = crate::palette::show(ctx, palette, self.model.index());
@@ -1003,5 +1041,65 @@ impl Shell {
 impl Drop for Shell {
     fn drop(&mut self) {
         self.kill_presenter();
+    }
+}
+
+/// What a button's `trainnr` command came to, from its exit code and what
+/// it printed: the project folder to switch to (`sample open` prints the
+/// path; `call` prints the tool's JSON, whose `root` names it); a refusal
+/// with its reason; or `Err(None)`, a failure whose reason is in the log.
+fn action_outcome(code: Option<i32>, printed: &str) -> Result<std::path::PathBuf, Option<String>> {
+    let reply: Option<serde_json::Value> = serde_json::from_str(printed).ok();
+    if code == Some(REFUSED_EXIT) {
+        let reason = reply
+            .as_ref()
+            .and_then(|r| r.get("reason"))
+            .and_then(|r| r.as_str())
+            .map(str::to_owned);
+        return Err(reason.or_else(|| Some("the tool refused".to_owned())));
+    }
+    if code != Some(0) {
+        return Err(None);
+    }
+    let root = match reply.as_ref().and_then(|r| r.get("root")) {
+        Some(root) => root.as_str().map(std::path::PathBuf::from),
+        None => Some(std::path::PathBuf::from(printed.trim())),
+    };
+    root.filter(|r| r.join(crate::model::MANIFEST_FILE).is_file())
+        .ok_or_else(|| Some("it finished without naming a project".to_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_buttons_command_switches_only_to_a_project_it_names() {
+        let dir = std::env::temp_dir().join(format!("studio-action-{}", std::process::id()));
+        let project = dir.join("mine");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(project.join(crate::model::MANIFEST_FILE), "{}").unwrap();
+        let called = format!(r#"{{"status": "done", "root": "{}"}}"#, project.display());
+        assert_eq!(
+            action_outcome(Some(0), &called),
+            Ok(project.clone()),
+            "call's JSON"
+        );
+        let printed = format!("{}\n", project.display());
+        assert_eq!(
+            action_outcome(Some(0), &printed),
+            Ok(project.clone()),
+            "a path"
+        );
+        let refused = r#"{"status": "refused", "reason": "name taken"}"#;
+        assert_eq!(
+            action_outcome(Some(REFUSED_EXIT), refused),
+            Err(Some("name taken".to_owned()))
+        );
+        assert_eq!(action_outcome(Some(1), ""), Err(None), "the log says why");
+        assert_eq!(action_outcome(None, ""), Err(None), "killed");
+        let elsewhere = r#"{"status": "done", "root": "/nowhere/at/all"}"#;
+        assert!(matches!(action_outcome(Some(0), elsewhere), Err(Some(_))));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

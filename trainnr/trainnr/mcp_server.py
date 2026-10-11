@@ -3868,6 +3868,44 @@ def forbid_unknown_arguments(registered: Any) -> None:
     registered.parameters = model.model_json_schema(by_alias=True)
 
 
+class ToolCallError(RuntimeError):
+    """A tool call by name that did not run or did not succeed; the
+    message is what an agent would have read."""
+
+
+def call_tool(
+    name: str, arguments: dict[str, Any] | None = None, server: Any = None
+) -> Any:
+    """Call one tool by name, as an agent would: the same registry, the
+    same argument checks, the same refusals, the plugins' tools included.
+    What the Studio's buttons and `trainnr call` run, so a person working
+    in the app and an agent over MCP share one tool surface (the desktop
+    app plan, docs/85, 2026-10-11). Returns the tool's structured result
+    (a refusal comes back as the dict the tool returned); raises
+    ToolCallError for an unknown tool, bad arguments or a failed call."""
+    import asyncio  # noqa: PLC0415
+
+    from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
+    server = server or build_server()
+    known = {tool.name for tool in server._tool_manager.list_tools()}
+    if name not in known:
+        raise ToolCallError(f"no tool {name!r}; `trainnr call --list` lists them")
+    try:
+        result = asyncio.run(server.call_tool(name, arguments or {}))
+    except ToolError as why:
+        raise ToolCallError(str(why)) from why
+    text = " ".join(
+        getattr(part, "text", "") for part in getattr(result, "content", None) or []
+    ).strip()
+    if getattr(result, "is_error", False):
+        raise ToolCallError(text or f"{name} failed")
+    content = result.structured_content
+    if content is None:
+        return text
+    return content.get("result", content)
+
+
 def tool_api(server: Any) -> list[dict[str, Any]]:
     """What a client reads of `server`'s tools at session start, sorted by
     name: each tool's name, description, input schema and annotations.

@@ -8,6 +8,8 @@ All notable changes to trainnr. The format follows
 
 ### Added
 
+- `trainnr call <tool> --args '<json>'` runs one tool by name, as an agent would: the same registry, argument checks, refusals and plugin tools. It prints the result as JSON and exits 3 on a refusal. The Studio's buttons run it.
+- The Studio makes a project without an agent: New project on the Welcome page and the Projects page asks for a name and runs `create_project`. The Welcome page now reads "Work here, or let your coding agent drive it" (docs/85, the desktop app plan).
 - The Studio opens on a Welcome page before any project exists: start your own project through the agent, open the Go2 sample with one click, and the loop's nine stages; it follows to the first project the agent makes or opens. `launch_studio`, `trainnr studio` and the Studio's doors work before the first project; `trainnr sample list` and `trainnr sample open` do from a shell what the sample tools do. The Projects page lists the samples.
 - Sample projects: `list_samples` and `open_sample` open a finished project to explore before your own. The Go2 walk (12 MB) is the whole loop, from identification to a gated deployment and a drift check, downloaded once from the Hugging Face dataset at a pinned commit, size and SHA-256 checked, and unpacked into the projects home. `tools/make-sample.py` builds a sample from a real project, deterministically, refusing any file with a private marker.
 - The Python packages are uploaded to PyPI by `.github/workflows/pypi.yml` when a release is published (the release's own attested files, trusted publishing, a maintainer's approval per package); a release candidate goes to TestPyPI. `uvx --from "trainnr[sim,mcp]" trainnr mcp` runs the server with no checkout.
