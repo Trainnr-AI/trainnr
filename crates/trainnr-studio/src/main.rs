@@ -41,6 +41,7 @@ mod shell;
 mod simulator;
 mod spawn;
 mod theme;
+mod update;
 mod viewport;
 mod widgets;
 

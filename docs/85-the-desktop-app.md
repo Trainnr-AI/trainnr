@@ -178,10 +178,21 @@ Each phase ends with a check on a fresh machine, not with code merged.
    Code having started the server through the launcher on the fresh
    engine. Left: the connection status in the window (PR #32, once its
    review is answered).
-4. **Distribution.** Installers built by `release.yml`: a signed and
-   notarised macOS DMG, a signed Windows installer, a Linux AppImage; an
-   update check; a download page on trainnr.ai. *Check:* download, install
-   and first run take under five minutes, with no terminal.
+4. **Distribution.** Done on this branch, unsigned: the release builds
+   the app to double-click (`tools/package-studio.py`): a macOS `.app` in
+   a disk image with an Applications link to drag onto (`iconutil`,
+   `hdiutil` on the macOS runner) and a Linux AppImage (`appimagetool`
+   1.9.1, its SHA-256 pinned); Windows keeps its zip, whose `.exe` runs
+   where it is unpacked. The Studio looks for a newer release at most
+   once a day (`update.rs`; `TRAINNR_NO_UPDATE_CHECK=1` turns it off) and
+   says so in the status bar, linking the release page; it downloads
+   nothing itself. *Checked, 2026-10-11:* the AppImage built here (74 MB)
+   and ran under WSLg, answered the control channel and quit cleanly;
+   the macOS steps run only on the release's macOS runner, so the next
+   release candidate is their first check. Left: signing (an Apple
+   Developer ID and notarisation; a Windows certificate), until which
+   macOS asks to open the app from System Settings the first time; and a
+   download page on trainnr.ai (the README links the release page).
 5. **Messaging.** The README, the site and the plugin descriptions lead
    with the app.
 

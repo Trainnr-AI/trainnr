@@ -117,6 +117,8 @@ pub struct Shell {
     connect_open: bool,
     connect: crate::connect::Panel,
     connect_command: Option<crate::connect::ServerCommand>,
+    /// Whether a newer trainnr is out (`update.rs`).
+    update: crate::update::Check,
     /// A sample being opened by the Studio itself: its name, and where the
     /// answer arrives.
     sample_wait: Option<(
@@ -181,6 +183,7 @@ impl Shell {
             connect_open: false,
             connect: crate::connect::Panel::default(),
             connect_command: None,
+            update: crate::update::Check::start(),
         }
     }
 
@@ -616,6 +619,25 @@ impl Shell {
                                     .color(ui.visuals().weak_text_color()),
                             )
                             .on_hover_text("One frame, drawn to shown, on this machine");
+                            ui.add_space(6.0);
+                        }
+                        if let Some(newer) = self.update.newer() {
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new(format!("trainnr {newer} is out"))
+                                            .small()
+                                            .color(tokens.highlight_color),
+                                    )
+                                    .frame_when_inactive(false),
+                                )
+                                .on_hover_text("Open the release page to download it")
+                                .clicked()
+                            {
+                                ui.ctx().open_url(egui::OpenUrl::new_tab(
+                                    crate::update::RELEASES_PAGE,
+                                ));
+                            }
                             ui.add_space(6.0);
                         }
                         if ui

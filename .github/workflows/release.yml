@@ -10,6 +10,8 @@
 #     beside it, which the installer checks;
 #   - the Python packages, trainnr and trainnr-mjlab, each as an sdist and
 #     a wheel carrying the same licence files;
+#   - the app to double-click: a macOS disk image and a Linux AppImage
+#     (tools/package-studio.py), unsigned until a Developer ID exists;
 #   - the engine's runtime, the archive the desktop app sets up from
 #     (tools/runtime-archive.py), with its SHA-256;
 #   - a CycloneDX SBOM for each package and the Studio (tools/sbom.py);
@@ -167,12 +169,55 @@ jobs:
           cd dist
           if command -v sha256sum >/dev/null; then sha256sum "$archive" > "$archive.sha256"; else shasum -a 256 "$archive" > "$archive.sha256"; fi
           ls -la
+      # The app a person double-clicks (tools/package-studio.py, docs/85):
+      # an AppImage on Linux, a .app in a disk image on macOS. Unsigned
+      # until the maintainer has a Developer ID; Windows keeps its zip.
+      - name: the AppImage (Linux)
+        if: runner.os == 'Linux'
+        env:
+          APPIMAGETOOL_VERSION: "1.9.1"
+          APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+        run: |
+          bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
+          python3 tools/package-studio.py linux-appdir "$bin" build/app \
+            --version "$(python3 tools/release.py show)" --third-party notices/THIRD_PARTY_LICENSES.md
+          curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          echo "${APPIMAGETOOL_SHA256}  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          image="trainnr-${TAG}-x86_64.AppImage"
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool build/app/trainnr.AppDir "dist/$image"
+          (cd dist && sha256sum "$image" > "$image.sha256")
+      - name: the app and its disk image (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
+          python3 tools/package-studio.py macos-app "$bin" build/app \
+            --version "$(python3 tools/release.py show)" --third-party notices/THIRD_PARTY_LICENSES.md
+          resources=build/app/trainnr.app/Contents/Resources
+          mkdir -p build/trainnr.iconset
+          for size in 16 32 128 256; do
+            sips -z "$size" "$size" "$resources/trainnr.png" --out "build/trainnr.iconset/icon_${size}x${size}.png" > /dev/null
+          done
+          for size in 16 32 128; do
+            double=$((size * 2))
+            sips -z "$double" "$double" "$resources/trainnr.png" --out "build/trainnr.iconset/icon_${size}x${size}@2x.png" > /dev/null
+          done
+          iconutil -c icns build/trainnr.iconset -o "$resources/trainnr.icns"
+          rm "$resources/trainnr.png"
+          mkdir -p build/disk
+          cp -R build/app/trainnr.app build/disk/
+          ln -s /Applications build/disk/Applications
+          image="trainnr-${TAG}-macos-arm64.dmg"
+          hdiutil create -volname trainnr -srcfolder build/disk -ov -format UDZO "dist/$image"
+          (cd dist && shasum -a 256 "$image" > "$image.sha256")
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: studio-${{ matrix.target }}
           path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.AppImage
+            dist/*.dmg
             dist/*.sha256
           if-no-files-found: error
 
@@ -285,6 +330,10 @@ jobs:
           body = m.group(1).strip() if m else ""
           footer = (
               "## What this release holds\n\n"
+              "- The app to double-click: `trainnr-*-macos-arm64.dmg` (drag trainnr "
+              "onto Applications; unsigned, so open it once from System Settings, "
+              "Privacy & Security) and `trainnr-*-x86_64.AppImage` for Linux; on "
+              "Windows, unzip the Studio's archive and run `trainnr-studio.exe`.\n"
               "- The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
               "Windows (x86_64): the plugin and `trainnr studio` download the right one. "
               "Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and "
@@ -315,6 +364,8 @@ jobs:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.AppImage
+            dist/*.dmg
             dist/*.whl
             dist/*.cdx.json
             dist/SHA256SUMS
