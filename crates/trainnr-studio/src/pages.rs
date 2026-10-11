@@ -112,7 +112,9 @@ pub const KINDS: &[Kind] = &[
     Kind {
         name: kind::CERTIFICATE,
         section: Section::Certificates,
-        icon: &icons::SUCCESS,
+        // A histogram, not a check: an evaluation is a measurement, and a
+        // check on a 0 of 40 read as a pass (design review, 2026-10-12).
+        icon: &icons::VIEW_HISTOGRAM,
         word: "evaluation",
     },
     Kind {
@@ -269,10 +271,10 @@ impl Section {
             Self::Datasets => &icons::DATASET,
             Self::Experiments => &icons::VIEW_TIMESERIES,
             Self::Policies => &icons::COMPONENT_STATIC,
-            Self::Certificates => &icons::SUCCESS,
+            Self::Certificates => &icons::VIEW_HISTOGRAM,
             Self::Deployments => &icons::EXTERNAL_LINK,
             Self::Monitoring => &icons::LOOP,
-            Self::Findings => &icons::INFO,
+            Self::Findings => &icons::VIEW_TEXT,
             Self::Live => &icons::PLAY,
         }
     }
@@ -299,6 +301,44 @@ pub fn stage_label(name: &str) -> &str {
         "drift monitored" => "Monitoring",
         other => other,
     }
+}
+
+/// A drawer action with its own fill and edge: the light theme gives an
+/// inactive button no frame, so these read as text beside the filled
+/// "Show in viewer" (design review, 2026-10-12).
+fn framed_button<'a>(ui: &egui::Ui, label: &'a str) -> egui::Button<'a> {
+    let palette = crate::theme::palette(ui);
+    egui::Button::new(label)
+        .fill(palette.canvas)
+        .stroke(egui::Stroke::new(1.0, palette.edge))
+        .frame_when_inactive(true)
+}
+
+/// The index's next move as a person reads it: the tool names it carries
+/// for an agent ("(onboard_robot)") left out.
+fn without_tool_names(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open) = rest.find(" (") {
+        let after = &rest[open + 2..];
+        match after.find(')') {
+            Some(close)
+                if after[..close].contains('_')
+                    && after[..close]
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c == '_') =>
+            {
+                out.push_str(&rest[..open]);
+                rest = &after[close + 1..];
+            }
+            _ => {
+                out.push_str(&rest[..open + 2]);
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn section_of(kind: &str) -> Option<Section> {
@@ -667,8 +707,10 @@ pub fn project_grid(
 pub fn overview(
     ui: &mut egui::Ui,
     model: &Model,
+    forms: &crate::forms::Catalog,
     go_to: &mut Option<(Section, Option<String>)>,
     open_run: &mut Option<String>,
+    open_form: &mut Option<String>,
 ) {
     let Some(index) = model.index() else {
         return;
@@ -686,14 +728,16 @@ pub fn overview(
         });
         ui.add_space(24.0);
 
+        // Nothing yet: what to do first, above the stages it will light
+        // (the empty pipeline led the page until 2026-10-12).
+        if index.artifacts.is_empty() {
+            *open_form = crate::onboarding::start_here(ui, forms, &|k| index.count(k));
+            ui.add_space(24.0);
+        }
         pipeline_strip(ui, index);
         ui.add_space(24.0);
 
-        // Nothing yet: what to do first, not a row of zeros.
-        if index.artifacts.is_empty() {
-            crate::onboarding::start_here(ui);
-            ui.add_space(24.0);
-        } else {
+        if !index.artifacts.is_empty() {
             kpi_row(ui, index, go_to);
             ui.add_space(24.0);
             best_by_condition(ui, model, index, go_to);
@@ -904,10 +948,13 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         tokens.strong_fg_color,
                     )
                 } else if is_next {
+                    // The edge in the highlight, the words in the accent
+                    // as text: the highlight is a background token and
+                    // read 1.4:1 as text (design review, 2026-10-12).
                     (
                         egui::Color32::TRANSPARENT,
                         tokens.highlight_color,
-                        tokens.highlight_color,
+                        crate::theme::palette(ui).accent_text,
                     )
                 } else {
                     (
@@ -995,10 +1042,11 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         egui::RichText::new("Next")
                             .text_style(DesignTokens::welcome_screen_body())
                             .strong()
-                            .color(tokens.highlight_color),
+                            .color(crate::theme::palette(ui).accent_text),
                     );
                     ui.label(
-                        egui::RichText::new(next).text_style(DesignTokens::welcome_screen_body()),
+                        egui::RichText::new(without_tool_names(next))
+                            .text_style(DesignTokens::welcome_screen_body()),
                     );
                 });
             }
@@ -1355,21 +1403,29 @@ pub fn section(
                 };
                 // The page's own actions, the agent's tools as buttons.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Right to left: the page's first action, the filled
-                    // one, ends up rightmost; the others are plain.
-                    for (i, form) in forms.iter().enumerate() {
+                    // Drawn right to left in reverse, so they read left to
+                    // right in the registry's order, the first one filled:
+                    // Export, Run gate, Pre-flight is the workflow's order
+                    // (it read backwards until 2026-10-12).
+                    for (i, form) in forms.iter().enumerate().rev() {
                         if state.is_running(&form.tool) {
                             ui.label(state.busy_word("Running…"));
                             ui.spinner();
                             continue;
                         }
-                        let free = state.running.is_none();
+                        let missing = crate::forms::missing_input(form, &|k| index.count(k));
+                        let free = state.running.is_none() && missing.is_none();
                         let button = if i == 0 {
                             crate::onboarding::primary_button(ui, &form.label, free)
                         } else {
                             crate::onboarding::secondary_button(ui, &form.label, free)
                         };
-                        if button.on_hover_text(&form.summary).clicked() {
+                        let hover = missing.unwrap_or_else(|| form.summary.clone());
+                        if button
+                            .on_hover_text(&hover)
+                            .on_disabled_hover_text(&hover)
+                            .clicked()
+                        {
                             nav.form = Some(form.tool.clone());
                         }
                     }
@@ -1515,6 +1571,14 @@ fn card_rows(
                         let (name, hash) = split_stamp(&artifact.stamp);
                         let facts = summary_line(&artifact.summary)
                             .unwrap_or_else(|| artifact.path.clone());
+                        // An evaluation is told apart by its condition: the
+                        // policy repeats on every card (design review,
+                        // 2026-10-12), so the condition is the title.
+                        let (title, facts) = if artifact.kind == kind::CERTIFICATE {
+                            (facts, name.to_owned())
+                        } else {
+                            (name.to_owned(), facts)
+                        };
                         let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
                         let response = picture_card_with_id(
                             ui,
@@ -1524,7 +1588,7 @@ fn card_rows(
                                 .as_deref(),
                             Section::icon_for(&artifact.kind),
                             CardText {
-                                title: name,
+                                title: &title,
                                 facts: &facts,
                                 footer: Some(card_footer(artifact, hash)),
                             },
@@ -1602,6 +1666,8 @@ fn detail(
                 ui.horizontal(|ui| {
                     ui.set_width(ui.available_width());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // The drawer's actions at one height, padded alike.
+                        ui.spacing_mut().button_padding = egui::vec2(10.0, 5.0);
                         let mut buttons = |ui: &mut egui::Ui| {
                             // The artifact as itself: a robot in 3D, a recording as
                             // plots, a run's curves, a certificate's funnel — in the
@@ -1618,17 +1684,23 @@ fn detail(
                             let scenes = crate::model::viewport_scenes(artifact);
                             if let Some(((_, live), replays)) = scenes.split_first() {
                                 if !replays.is_empty() {
-                                    ui.menu_button("Replay in simulator", |ui| {
-                                        for (label, scene) in replays {
-                                            if ui.button(label).clicked() {
-                                                nav.scene = Some(scene.clone());
-                                                ui.close();
+                                    // Framed like a button, as Show is: the
+                                    // drawer's actions read as one set.
+                                    let replay = framed_button(ui, "Replay in simulator");
+                                    egui::containers::menu::MenuButton::from_button(replay).ui(
+                                        ui,
+                                        |ui| {
+                                            for (label, scene) in replays {
+                                                if ui.button(label).clicked() {
+                                                    nav.scene = Some(scene.clone());
+                                                    ui.close();
+                                                }
                                             }
-                                        }
-                                    });
+                                        },
+                                    );
                                 }
                                 if ui
-                                    .button("Play in simulator")
+                                    .add(framed_button(ui, "Play in simulator"))
                                     .on_hover_text(
                                         "The exported policy live in the Simulator's MuJoCo \
                                      viewport: drive it with WASD",
@@ -1820,6 +1892,18 @@ fn fact_grid(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_next_move_reads_without_tool_names() {
+        let next = "bring in the robot's model (onboard_robot), or its telemetry \
+                    (ingest_recording) or a public log of it (ingest_public_log)";
+        assert_eq!(
+            without_tool_names(next),
+            "bring in the robot's model, or its telemetry or a public log of it"
+        );
+        let plain = "an ONNX export (with its manifest) and the gate";
+        assert_eq!(without_tool_names(plain), plain, "prose in brackets stays");
+    }
 
     #[test]
     fn pages_parse_from_their_names_and_kinds_find_their_page() {

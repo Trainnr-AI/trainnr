@@ -65,7 +65,18 @@ pub fn tag(ui: &mut egui::Ui, text: &str) {
         .corner_radius(999.0)
         .inner_margin(egui::Margin::symmetric(7, 2))
         .show(ui, |ui| {
-            ui.label(egui::RichText::new(text).text_style(DesignTokens::welcome_screen_tag()));
+            // Rerun's default text grey in dark: its subdued grey read
+            // 4.4:1 on the tag fill (design review, 2026-10-12).
+            let ink = if ui.visuals().dark_mode {
+                tokens.text_default
+            } else {
+                palette.text
+            };
+            ui.label(
+                egui::RichText::new(text)
+                    .text_style(DesignTokens::welcome_screen_tag())
+                    .color(ink),
+            );
         });
 }
 

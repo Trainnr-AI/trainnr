@@ -303,6 +303,43 @@ A review of the whole branch found, and this branch fixed:
 - the update check looked once a day on its own, against the rule that
   no network call runs unasked: it is now a click on the version.
 
+### 5.9 The design review (2026-10-12)
+
+A design review of the branch (the impeccable plugin's critique: a
+design director's reading of 58 screens, and an independent measured
+audit of contrast, type, spacing and buttons) scored the Studio 23 of 40.
+Fixed here:
+- **Faint text.** `theme::align_visuals` stopped when the page was
+  already white, and Rerun's light page is white, so the light theme's
+  muted grey and link blue were never applied; it now checks those
+  colours. Dark muted text takes Rerun's own `Gray.500` (`DARK_MUTED`),
+  dark tags Rerun's `text_default`, and the highlight token (a
+  background) is no longer used as text: `Palette::accent_text` is the
+  link blue in light and Rerun's `info_text_color` in dark. The light
+  link blue went one notch darker (0, 96, 196) to clear 4.5:1 on every
+  surface. Measured after: secondary text 4.9:1 (dark) and 6.1 to
+  6.4:1 (light), "Next" 9.8 and 5.5, rail labels 6.1 and 17.9, step
+  numbers 5.1 and 16.0. A test holds the light palette to 4.5:1 on its
+  surfaces.
+- **Evaluation cards** are titled by their condition, with the policy
+  below, and wear a histogram, not a check mark: a check beside 0 of 40
+  read as a pass.
+- **The view switch** is a segmented control beside the count; the
+  page's buttons had covered it.
+- **The first step without an agent.** Start here leads an empty
+  project, above the pipeline, and each step has its buttons (Add robot;
+  Add recording, Add public log; Identify dynamics), with the prompt as
+  the other way in. An action whose required input the project does not
+  hold is off and says what to add (`forms::missing_input`). The "Next"
+  line leaves out the tool names it carries for agents.
+- **Order and weight.** The page buttons read left to right in the
+  workflow's order (Export, Run gate, Pre-flight), the first filled; the
+  deployment card leads with "95% success · gate passed"; the drawer's
+  actions share one framed style; a form shows each field's description
+  under its label ("smoke (minutes, saves nothing) or full").
+- The project switcher shows a dropdown arrow, not a download one;
+  Findings an outlined icon.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

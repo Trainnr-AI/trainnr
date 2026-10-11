@@ -670,9 +670,8 @@ pub enum StripClick {
 /// A chip's colour through the design tokens: the highlight while it runs,
 /// the weak text once done, the warning when it failed or died.
 fn chip_color(ui: &egui::Ui, state: ChipState) -> egui::Color32 {
-    use re_ui::UiExt as _;
     match state {
-        ChipState::Running => ui.tokens().highlight_color,
+        ChipState::Running => crate::theme::palette(ui).accent_text,
         ChipState::Done => ui.visuals().weak_text_color(),
         ChipState::Failed | ChipState::Died => ui.visuals().warn_fg_color,
     }

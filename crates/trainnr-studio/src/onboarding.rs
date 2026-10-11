@@ -270,31 +270,55 @@ const CHIP_PAD: egui::Vec2 = egui::vec2(12.0, 8.0);
 const CHIP_GAP: f32 = 10.0;
 const CHIP_ICON: f32 = 14.0;
 
-/// The first steps of a project, each with its words: what an empty
-/// project's Overview shows instead of zeros.
-const FIRST_STEPS: [(&str, &str, &str); 3] = [
-    (
-        "Bring in your robot",
-        "Its model enters as an asset: the parts, the joints, the actuators.",
-        "Onboard my robot from <path to its MJCF, URDF or USD>",
-    ),
-    (
-        "Give it data",
-        "Telemetry from the real robot, or a public log of the same robot.",
-        "Ingest my robot's telemetry from <path>",
-    ),
-    (
-        "Fit its dynamics",
-        "System identification turns the data into a simulation that behaves like \
-         the robot, with an interval on every parameter.",
-        "Identify my robot's dynamics from that recording",
-    ),
+/// A first step of a project: what it is, the buttons that do it (the
+/// tools whose forms they open, the first one filled), and the words to
+/// say to an agent instead.
+struct FirstStep {
+    title: &'static str,
+    body: &'static str,
+    actions: &'static [(&'static str, &'static str)],
+    prompt: &'static str,
+}
+
+/// What an empty project's Overview shows instead of zeros. Each step has
+/// its button since the app works without an agent (design review,
+/// 2026-10-12); the prompt is the other way in.
+const FIRST_STEPS: [FirstStep; 3] = [
+    FirstStep {
+        title: "Bring in your robot",
+        body: "Its model enters as an asset: the parts, the joints, the actuators.",
+        actions: &[("Add robot", "onboard_robot")],
+        prompt: "Onboard my robot from <path to its MJCF, URDF or USD>",
+    },
+    FirstStep {
+        title: "Give it data",
+        body: "Telemetry from the real robot, or a public log of the same robot.",
+        actions: &[
+            ("Add recording", "ingest_recording"),
+            ("Add public log", "ingest_public_log"),
+        ],
+        prompt: "Ingest my robot's telemetry from <path>",
+    },
+    FirstStep {
+        title: "Fit its dynamics",
+        body: "System identification turns the data into a simulation that behaves like \
+               the robot, with an interval on every parameter.",
+        actions: &[("Identify dynamics", "identify_system")],
+        prompt: "Identify my robot's dynamics from that recording",
+    },
 ];
 
-/// An empty project's start: what trainnr does with it, three steps, and
-/// where the rest of the loop goes.
-pub fn start_here(ui: &mut egui::Ui) {
+/// An empty project's start: three steps, each with its button and the
+/// words for an agent. Returns the tool whose form was asked for. A
+/// button whose step needs something the project does not hold yet is
+/// off, and says what (`forms::missing_input`).
+pub fn start_here(
+    ui: &mut egui::Ui,
+    forms: &crate::forms::Catalog,
+    count: &dyn Fn(&str) -> usize,
+) -> Option<String> {
     let palette = crate::theme::palette(ui);
+    let mut asked = None;
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.label(
@@ -306,45 +330,75 @@ pub fn start_here(ui: &mut egui::Ui) {
         ui.add_space(4.0);
         ui.label(
             egui::RichText::new(
-                "trainnr runs through your coding agent: say what you want in your own \
-                 words, and each stage above lights up as its result lands.",
+                "Each step is a button here, or say it to your coding agent in your own \
+                 words. The stages below light up as each result lands.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
         ui.add_space(16.0);
-        for (number, (title, body, prompt)) in FIRST_STEPS.iter().enumerate() {
+        for (number, step) in FIRST_STEPS.iter().enumerate() {
             ui.horizontal_top(|ui| {
                 step_number(ui, number + 1);
                 ui.add_space(10.0);
                 ui.vertical(|ui| {
                     ui.label(
-                        egui::RichText::new(*title)
+                        egui::RichText::new(step.title)
                             .text_style(DesignTokens::welcome_screen_body())
                             .strong()
                             .color(palette.text),
                     );
                     ui.label(
-                        egui::RichText::new(*body)
+                        egui::RichText::new(step.body)
                             .text_style(DesignTokens::welcome_screen_body())
                             .color(palette.text),
                     );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        for (i, (label, tool)) in step.actions.iter().enumerate() {
+                            let Some(form) = forms.form(tool) else {
+                                continue;
+                            };
+                            let missing = crate::forms::missing_input(form, count);
+                            let enabled = missing.is_none();
+                            let button = if i == 0 {
+                                primary_button(ui, label, enabled)
+                            } else {
+                                secondary_button(ui, label, enabled)
+                            };
+                            let hover = missing.unwrap_or_else(|| form.summary.clone());
+                            if button
+                                .on_hover_text(&hover)
+                                .on_disabled_hover_text(&hover)
+                                .clicked()
+                            {
+                                asked = Some((*tool).to_owned());
+                            }
+                        }
+                    });
                     ui.add_space(6.0);
-                    prompt_chip(ui, prompt);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            egui::RichText::new("or ask your agent:")
+                                .text_style(DesignTokens::welcome_screen_body())
+                                .color(palette.muted),
+                        );
+                        prompt_chip(ui, step.prompt);
+                    });
                 });
             });
-            ui.add_space(14.0);
+            ui.add_space(16.0);
         }
         ui.label(
             egui::RichText::new(
-                "Then define an environment, train, evaluate and deploy; the agent \
-                 knows each step. The README's quickstart walks the same path with \
-                 Unitree's Go2 and a public log.",
+                "Then define an environment, train, evaluate and deploy: each page has its \
+                 buttons, and your agent knows every step.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
     });
+    asked
 }
 
 /// A step's number in a soft disc.
@@ -359,7 +413,9 @@ fn step_number(ui: &mut egui::Ui, n: usize) {
         egui::Align2::CENTER_CENTER,
         n.to_string(),
         egui::FontId::proportional(13.0),
-        palette.text,
+        // The strongest text: the body grey on the dark selection blue
+        // read 1.6:1 (design review, 2026-10-12).
+        ui.visuals().strong_text_color(),
     );
 }
 

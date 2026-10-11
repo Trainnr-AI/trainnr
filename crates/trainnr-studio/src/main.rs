@@ -1466,7 +1466,7 @@ impl StudioShell {
         }
         self.frames.tick();
         self.theme_preference = ui.ctx().options(|o| o.theme_preference);
-        theme::align_light_visuals(ui.ctx());
+        theme::align_visuals(ui.ctx());
         let state = control::StudioState {
             schema: control::STATE_SCHEMA,
             pid: std::process::id(),

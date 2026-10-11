@@ -191,6 +191,24 @@ pub fn output_files(
     Ok((create(out)?, create(log)?))
 }
 
+/// Why a form cannot run yet: a required field picks an artifact kind the
+/// project holds none of ("Needs a robot in this project first"), so
+/// the button stays off instead of opening a form that cannot run
+/// (design review, 2026-10-12). `count` is the project's count of a kind.
+pub fn missing_input(form: &Form, count: &dyn Fn(&str) -> usize) -> Option<String> {
+    form.fields
+        .iter()
+        .filter(|f| f.required)
+        .filter_map(|f| f.kind.as_deref())
+        .find(|kind| count(kind) == 0)
+        .map(|kind| {
+            format!(
+                "Needs a {} in this project first",
+                crate::pages::kind_word(kind)
+            )
+        })
+}
+
 /// The forms this build was made with (`forms.json`, written by
 /// `trainnr forms` and pinned to it by `tests/test_studio_mirrors.py`):
 /// the built-in tools' forms, without a plugin's.
@@ -414,7 +432,17 @@ fn field_row(
             .color(palette.text),
     );
     if !field.description.is_empty() {
+        // Visible, not only on hover: "smoke (minutes, saves nothing) or
+        // full" is what a person needs before starting a long run (design
+        // review, 2026-10-12).
         label.on_hover_text(&field.description);
+        if field.kind_of_value != "boolean" {
+            ui.label(
+                egui::RichText::new(&field.description)
+                    .small()
+                    .color(palette.muted),
+            );
+        }
     }
     if field.kind_of_value == "boolean" {
         let flag = open.flags.entry(field.name.clone()).or_insert(false);
@@ -578,6 +606,18 @@ mod tests {
             Err("Robot is needed".to_owned()),
             "the required picker starts empty"
         );
+    }
+
+    #[test]
+    fn a_form_that_needs_a_missing_artifact_says_which() {
+        let form = parse(LISTED).expect("reads").remove(0);
+        let none = |_: &str| 0;
+        assert_eq!(
+            missing_input(&form, &none).as_deref(),
+            Some("Needs a robot in this project first")
+        );
+        let one = |_: &str| 1;
+        assert_eq!(missing_input(&form, &one), None);
     }
 
     #[test]

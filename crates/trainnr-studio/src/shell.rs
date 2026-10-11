@@ -585,7 +585,7 @@ impl Shell {
                     let (text, color) = match crate::running::indicator_line(&self.model.jobs, t) {
                         Some(line) => {
                             ui.ctx().request_repaint_after(crate::running::ROTATE_EVERY);
-                            (line, tokens.highlight_color)
+                            (line, crate::theme::palette(ui).accent_text)
                         }
                         None => ("idle".to_owned(), ui.visuals().weak_text_color()),
                     };
@@ -662,7 +662,7 @@ impl Shell {
                             State::Newer(v) => (
                                 format!("trainnr {v} is out"),
                                 "Open the release page to download it".to_owned(),
-                                tokens.highlight_color,
+                                crate::theme::palette(ui).accent_text,
                             ),
                             State::Failed(why) => (
                                 format!("v{THIS_VERSION} · could not check"),
@@ -762,7 +762,7 @@ impl Shell {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.small_icon(
-                            &icons::ARROW_DOWN,
+                            &icons::DROPDOWN_ARROW,
                             Some(ui.tokens().label_button_icon_color),
                         );
                         ui.label(egui::RichText::new(name).strong());
@@ -886,7 +886,20 @@ impl Shell {
             Section::Overview => {
                 let mut go_to = None;
                 let mut open_run = None;
-                pages::overview(ui, &self.model, &mut go_to, &mut open_run);
+                let mut open_form = None;
+                pages::overview(
+                    ui,
+                    &self.model,
+                    &self.forms,
+                    &mut go_to,
+                    &mut open_run,
+                    &mut open_form,
+                );
+                if let Some(tool) = open_form {
+                    if let Some(form) = self.forms.form(&tool) {
+                        self.open_form = Some(crate::forms::Open::new(form.clone()));
+                    }
+                }
                 if let Some(id) = open_run {
                     // A chip on the Compute card: the panel opens on it.
                     self.running_open = true;

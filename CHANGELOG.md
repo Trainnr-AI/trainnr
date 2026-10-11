@@ -9,6 +9,7 @@ All notable changes to trainnr. The format follows
 ### Added
 
 - `trainnr call <tool> --args '<json>'` runs one tool by name, as an agent would: the same registry, argument checks, refusals and plugin tools. It prints the result as JSON and exits 3 on a refusal. The Studio's buttons run it.
+- After a design review: secondary text reads at 4.5:1 or better in both themes (the light theme's muted grey was never applied); evaluation cards are titled by their condition and no longer show a check mark; the view switch is no longer covered by the page's buttons; an empty project's Start here has a button for each step; actions stay off until their input exists and say what is missing; deployment steps read in the workflow's order.
 - The README opens with the app: download it, open the sample, make a project, connect your coding agent; the plugin's path follows.
 - The release carries the app to double-click: a macOS disk image (drag trainnr onto Applications) and a Linux AppImage (`tools/package-studio.py`), unsigned for now. A click on the Studio's version in the status bar looks for a newer release and links its page; it never looks on its own.
 - Connect your agent: a panel from the Welcome page and the status bar adds trainnr to Claude Code, Codex or Cursor with one button each (nothing is written at launch), shows which already have it, and gives the line for any other client. The entry runs a launcher at a fixed path (`<trainnr home>/engine/bin/trainnr`), so an update does not break it.
