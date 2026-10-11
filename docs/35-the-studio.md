@@ -235,12 +235,20 @@ overwriting each other every heartbeat while the first to exit deleted it
 out from under the other (review, 2026-10-11: two servers half a second
 apart flipped the recorded pid twice a second, and the file went missing
 for 0.7 s of 3 s when one left). A folder gives each session its own name;
-the reader counts the live ones and says "2 agents connected". With more
+the reader counts the live ones and says "2 agent sessions connected". With more
 than one it names no last tool, because naming one would be a guess at
 whose. A session killed before it can tidy up leaves its file behind, so
 the next server to start sweeps anything older than an hour — by age
 alone, since a pid check there would drag the project layer into the
 serving path.
+
+**Several are counted as sessions, not agents.** A first-run pass that
+installed the plugin over an existing checkout (2026-10-12) found Claude
+Code loading both servers side by side, `plugin:trainnr:trainnr` and
+`trainnr`, with no name collision: one agent window, two serving
+processes, announced as two agents. What the folder holds is sessions,
+so that is what the plural says. One is still "Agent connected", since
+one session is one agent either way.
 
 **Three things that are deliberate, each one a bug first.**
 
