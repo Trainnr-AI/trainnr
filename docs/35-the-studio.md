@@ -214,6 +214,31 @@ asks for focus every frame takes it back the frame Enter releases it, so
 Enter never submitted; it now takes focus once and reads Enter itself
 (a headless test draws it).
 
+### 5.5 Forms over the tools (2026-10-11)
+
+A page's header carries its actions: Robots has Add robot and Identify
+dynamics, Recordings Add recording, Environments Check environment,
+Experiments Train, Evaluations Evaluate, Deployments Export, Monitoring
+Check for drift. The first is filled and rightmost; the others are plain.
+Which tool sits on which page, and what an argument is beyond its type,
+is `trainnr/forms.py`: an artifact of the open project to pick (`kind`),
+a file or folder to choose (`files`, `folder`; `*` is any file, because
+a recording's reader is picked by what the file holds and plugins add
+readers), or one of a few words (`choices`). Everything else comes from
+the tool's own input schema, through `trainnr forms`, which the Studio
+runs once per session (`forms::Catalog`); the hints stay out of the
+schema an agent reads, which every session pays for in tokens.
+
+A submitted form runs `trainnr call <tool>` with `TRAINNR_PROJECT` set to
+the window's project: the tools otherwise act on the projects home's
+`.current`, which switching project in the window does not move. A tool
+that starts a job opens Running now on it; one that finishes in place
+says Done under the header; a refusal says its reason there. File
+dialogs (`rfd`, the version and backend Rerun already builds) run on
+their own thread, so the window keeps drawing. When `trainnr forms`
+cannot run, the status bar says "buttons unavailable" with the reason;
+the agent can still run every tool.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

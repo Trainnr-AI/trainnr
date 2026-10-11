@@ -369,8 +369,17 @@ pub const SAMPLES: &[SampleCard] = &[SampleCard {
 /// at a time: the buttons are disabled while one runs.
 #[derive(Default)]
 pub struct ActionState {
-    pub running: Option<&'static str>,
-    pub failed: Option<(&'static str, String)>,
+    pub running: Option<String>,
+    pub failed: Option<(String, String)>,
+    /// The last command that finished well: its key and a word on it.
+    pub done: Option<(String, String)>,
+}
+
+impl ActionState {
+    /// Whether the command under `key` is the one running.
+    pub fn is_running(&self, key: &str) -> bool {
+        self.running.as_deref() == Some(key)
+    }
 }
 
 /// The key a new project's `trainnr call create_project` runs under.
@@ -461,10 +470,36 @@ pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Re
     ui.add_enabled(enabled, button)
 }
 
+/// The outlined button a page's other actions wear, the primary's size.
+pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
+    let palette = crate::theme::palette(ui);
+    ui.spacing_mut().button_padding = BUTTON_PADDING;
+    let button = egui::Button::new(
+        egui::RichText::new(label)
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(palette.text),
+    )
+    .fill(palette.surface)
+    .stroke(egui::Stroke::new(1.0, palette.edge))
+    .corner_radius(8.0)
+    .min_size(egui::vec2(0.0, 36.0));
+    ui.add_enabled(enabled, button)
+}
+
+/// A line under a button when the last run under `key` went well.
+pub fn done_line(ui: &mut egui::Ui, state: &ActionState, key: &str) {
+    if let Some((done, what)) = &state.done {
+        if done == key {
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(what).color(crate::theme::palette(ui).text));
+        }
+    }
+}
+
 /// A failure line under a button, when the last run under `key` failed.
 pub fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &str) {
     if let Some((failed, why)) = &state.failed {
-        if *failed == key {
+        if failed == key {
             ui.add_space(8.0);
             ui.label(
                 egui::RichText::new(format!("{what}: {why}")).color(ui.visuals().warn_fg_color),
@@ -613,7 +648,7 @@ fn start_your_own(ui: &mut egui::Ui, actions: &ActionState, home: Option<&Path>)
             .color(palette.text),
         );
         ui.add_space(16.0);
-        if actions.running == Some(NEW_PROJECT) {
+        if actions.is_running(NEW_PROJECT) {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label(egui::RichText::new("Creating…").color(palette.text));
@@ -734,7 +769,7 @@ fn sample_body(
     sample_text(ui, sample);
     ui.add_space(16.0);
     let mut clicked = false;
-    if samples.running == Some(sample.name) {
+    if samples.is_running(sample.name) {
         ui.horizontal(|ui| {
             ui.spinner();
             ui.label(

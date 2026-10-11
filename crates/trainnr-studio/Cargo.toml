@@ -49,6 +49,9 @@ serde_json = { version = "1", features = ["preserve_order"] }
 # Tables for the section views; already in the tree via re_ui (which
 # styles them: `setup_table_body`). No new dependency weight.
 egui_extras = "0.36.1"
+# Native file dialogs for the forms' file fields; the same version and
+# backend re_viewer already builds (xdg-portal), so no new crate.
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 # PNG encoding for the agent's screenshots (control.rs); already in the
 # tree through egui_extras, pinned to the same major.
 image = { version = "0.25", default-features = false, features = ["png"] }

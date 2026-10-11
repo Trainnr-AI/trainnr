@@ -404,6 +404,8 @@ pub struct Nav {
     /// own move, logged as such rather than as the human's click
     /// (the feed said "you selected go2-walk" for it until 2026-09-28).
     pub auto_selected: bool,
+    /// A form button was clicked: the tool whose form to open.
+    pub form: Option<String>,
 }
 
 struct CardText<'a> {
@@ -550,7 +552,7 @@ pub fn projects(
             ui.add_space(8.0);
             tag(ui, &list.len().to_string());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if samples.running == Some(crate::onboarding::NEW_PROJECT) {
+                if samples.is_running(crate::onboarding::NEW_PROJECT) {
                     ui.label("Creating…");
                     ui.spinner();
                 } else {
@@ -1313,6 +1315,7 @@ fn sort_newest(rows: &mut [&Artifact]) {
     });
 }
 
+#[allow(clippy::too_many_arguments)] // one page, one argument per thing it reads or asks
 pub fn section(
     ui: &mut egui::Ui,
     model: &Model,
@@ -1321,7 +1324,9 @@ pub fn section(
     show: &mut Option<String>,
     explore: &mut Option<crate::detail::Section>,
     nav: &mut Nav,
+    actions: (&[&crate::forms::Form], &crate::onboarding::ActionState),
 ) {
+    let (forms, state) = actions;
     let Some(index) = model.index() else {
         return;
     };
@@ -1339,7 +1344,7 @@ pub fn section(
                 heading(ui, section.title());
                 ui.add_space(8.0);
                 tag(ui, &rows.len().to_string());
-                if rows.is_empty() {
+                let view = if rows.is_empty() {
                     crate::listing::View::Cards
                 } else {
                     crate::listing::view_switch(
@@ -1347,9 +1352,35 @@ pub fn section(
                         section,
                         crate::listing::matrix_available(&rows),
                     )
-                }
+                };
+                // The page's own actions, the agent's tools as buttons.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Right to left: the page's first action, the filled
+                    // one, ends up rightmost; the others are plain.
+                    for (i, form) in forms.iter().enumerate() {
+                        if state.is_running(&form.tool) {
+                            ui.label("Running…");
+                            ui.spinner();
+                            continue;
+                        }
+                        let free = state.running.is_none();
+                        let button = if i == 0 {
+                            crate::onboarding::primary_button(ui, &form.label, free)
+                        } else {
+                            crate::onboarding::secondary_button(ui, &form.label, free)
+                        };
+                        if button.on_hover_text(&form.summary).clicked() {
+                            nav.form = Some(form.tool.clone());
+                        }
+                    }
+                });
+                view
             })
             .inner;
+        for form in forms {
+            crate::onboarding::failure_line(ui, state, &form.tool, &form.label);
+            crate::onboarding::done_line(ui, state, &form.tool);
+        }
         // Work this page's kinds are still becoming (a capture listening, a
         // scene being captured), from the index's `in_progress`.
         for p in index

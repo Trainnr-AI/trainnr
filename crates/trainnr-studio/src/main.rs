@@ -25,6 +25,7 @@
 mod chrome;
 mod control;
 mod detail;
+mod forms;
 mod keys;
 mod listing;
 mod model;

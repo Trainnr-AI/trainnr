@@ -94,13 +94,33 @@ pub struct Shell {
     pub viewer_request: Option<std::path::PathBuf>,
     /// A button's `trainnr` command while it runs (a sample opening, a
     /// new project): its key, the process, and the log its errors go to.
-    action_job: Option<(&'static str, std::process::Child, std::path::PathBuf)>,
+    action_job: Option<ActionJob>,
     /// What the running command prints (`ACTION_OUT`), read when it ends.
     action_out: std::path::PathBuf,
     /// What the buttons show: the command running, the last failure.
     pub actions: ActionState,
     /// The New project dialog's name, while the dialog is open.
     new_project_name: Option<String>,
+    /// The forms over the agent's tools (`trainnr forms`), loaded once.
+    pub forms: crate::forms::Catalog,
+    /// A form being filled in.
+    open_form: Option<crate::forms::Open>,
+}
+
+/// A button's `trainnr` command while it runs.
+struct ActionJob {
+    key: String,
+    child: std::process::Child,
+    log: std::path::PathBuf,
+    after: After,
+}
+
+/// What a button's command leads to when it ends well.
+enum After {
+    /// Open the project it made or opened.
+    OpenProject,
+    /// Stay on the page: a job opens Running now, anything else says done.
+    Stay,
 }
 
 impl Shell {
@@ -134,6 +154,8 @@ impl Shell {
             action_out: std::path::PathBuf::new(),
             actions: ActionState::default(),
             new_project_name: None,
+            forms: crate::forms::Catalog::default(),
+            open_form: None,
         }
     }
 
@@ -146,6 +168,9 @@ impl Shell {
     pub fn open_project(&mut self) {
         if !self.model.welcome {
             self.ensure_presenter();
+            if let Some(home) = crate::model::user_projects_home() {
+                self.forms.load(&home.join(crate::model::INDEX_DIR));
+            }
         }
     }
 
@@ -153,7 +178,7 @@ impl Shell {
     /// unpacks and indexes it and makes it current; `tick` switches to
     /// the folder it prints.
     pub fn open_sample(&mut self, name: &'static str) {
-        self.run_action(name, &["sample", "open", name]);
+        self.run_action(name, &["sample", "open", name], After::OpenProject);
     }
 
     /// Make a project without an agent: the same `create_project` tool an
@@ -166,13 +191,22 @@ impl Shell {
         self.run_action(
             crate::onboarding::NEW_PROJECT,
             &["call", "create_project", "--args", &arguments],
+            After::OpenProject,
         );
     }
 
-    /// Run `trainnr <args>` for a button, one at a time. Not killed with
-    /// the window: a sample's download cut short leaves its temporary
-    /// folder in the projects home.
-    fn run_action(&mut self, key: &'static str, args: &[&str]) {
+    /// Run a form: its tool on the open project, through `trainnr call`.
+    pub fn run_form(&mut self, tool: &str, arguments: &serde_json::Value) {
+        let arguments = arguments.to_string();
+        self.run_action(tool, &["call", tool, "--args", &arguments], After::Stay);
+    }
+
+    /// Run `trainnr <args>` for a button, one at a time, on the open
+    /// project: `$TRAINNR_PROJECT` names it, because the tools otherwise
+    /// act on the projects home's `.current`, which a switch in this
+    /// window does not move. Not killed with the window: a sample's
+    /// download cut short leaves its temporary folder in the home.
+    fn run_action(&mut self, key: &str, args: &[&str], after: After) {
         if self.action_job.is_some() {
             return;
         }
@@ -181,11 +215,13 @@ impl Shell {
             .join(crate::model::INDEX_DIR);
         let log = dir.join(ACTION_LOG);
         let out = dir.join(ACTION_OUT);
-        let files = std::fs::create_dir_all(&dir)
-            .and_then(|()| Ok((std::fs::File::create(&log)?, std::fs::File::create(&out)?)));
-        let Ok((errors, printed)) = files else {
-            self.actions.failed = Some((key, format!("cannot write in {}", dir.display())));
-            return;
+        let (printed, errors) = match crate::forms::output_files(&dir, &out, &log) {
+            Ok(files) => files,
+            Err(why) => {
+                let why = format!("cannot write in {}: {why}", dir.display());
+                self.actions.failed = Some((key.to_owned(), why));
+                return;
+            }
         };
         let mut command = trainnr_command();
         command
@@ -193,50 +229,77 @@ impl Shell {
             .stdin(std::process::Stdio::null())
             .stdout(printed)
             .stderr(errors);
+        if self.model.welcome {
+            command.env_remove(crate::model::PROJECT_ENV);
+        } else {
+            command.env(crate::model::PROJECT_ENV, &self.model.project_root);
+        }
         self.action_out = out;
         self.actions.failed = None;
+        self.actions.done = None;
         match command.spawn() {
             Ok(child) => {
-                self.actions.running = Some(key);
-                self.action_job = Some((key, child, log));
+                self.actions.running = Some(key.to_owned());
+                self.action_job = Some(ActionJob {
+                    key: key.to_owned(),
+                    child,
+                    log,
+                    after,
+                });
             }
-            Err(why) => self.actions.failed = Some((key, format!("uv did not start: {why}"))),
+            Err(why) => {
+                self.actions.failed = Some((key.to_owned(), format!("uv did not start: {why}")));
+            }
         }
     }
 
-    /// A button's command, when it ended: switch to the project it made
-    /// or opened, or say why not (a refusal's reason, else the log's last
-    /// line).
+    /// A button's command, when it ended: open the project it made, or
+    /// open Running now on the job it started, or say it is done; or say
+    /// why not (a refusal's reason, else the log's last line).
     fn reap_action(&mut self) {
-        let Some((key, child, log)) = self.action_job.as_mut() else {
+        let Some(job) = self.action_job.as_mut() else {
             return;
         };
-        let status = match child.try_wait() {
+        let status = match job.child.try_wait() {
             Ok(None) => return,
             Ok(Some(status)) => Some(status),
             Err(_) => None,
         };
-        let printed = std::fs::read_to_string(&self.action_out).unwrap_or_default();
-        let key = *key;
-        let outcome = action_outcome(status.and_then(|s| s.code()), &printed);
-        match outcome {
-            Ok(root) => self.switch_to = Some(root),
-            Err(None) => {
-                let why = std::fs::read_to_string(&*log)
-                    .ok()
-                    .and_then(|text| {
-                        text.lines()
-                            .rev()
-                            .find(|l| !l.trim().is_empty())
-                            .map(str::to_owned)
-                    })
-                    .unwrap_or_else(|| "it exited without saying why".to_owned());
-                self.actions.failed = Some((key, why));
-            }
-            Err(Some(reason)) => self.actions.failed = Some((key, reason)),
-        }
+        let Some(job) = self.action_job.take() else {
+            return;
+        };
         self.actions.running = None;
-        self.action_job = None;
+        let printed = std::fs::read_to_string(&self.action_out).unwrap_or_default();
+        let code = status.and_then(|s| s.code());
+        let failed = match job.after {
+            After::OpenProject => match action_outcome(code, &printed) {
+                Ok(root) => {
+                    self.switch_to = Some(root);
+                    None
+                }
+                Err(why) => Some(why),
+            },
+            After::Stay => match stay_outcome(code, &printed) {
+                Ok(Some(job_id)) => {
+                    // A job: Running now opens on it.
+                    self.running_open = true;
+                    self.runs_listed = false;
+                    self.run_selected = Some(job_id);
+                    let note = "Started; it runs in Running now.".to_owned();
+                    self.actions.done = Some((job.key.clone(), note));
+                    None
+                }
+                Ok(None) => {
+                    self.actions.done = Some((job.key.clone(), "Done.".to_owned()));
+                    None
+                }
+                Err(why) => Some(why),
+            },
+        };
+        if let Some(why) = failed {
+            let why = why.unwrap_or_else(|| crate::forms::last_line(&job.log));
+            self.actions.failed = Some((job.key, why));
+        }
     }
 
     pub fn show(&mut self, stamp: &str) {
@@ -407,6 +470,18 @@ impl Shell {
                         if !self.running_open {
                             self.close_log();
                         }
+                    }
+                    if let Some(why) = self.forms.problem() {
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new("buttons unavailable")
+                                .small()
+                                .color(ui.visuals().warn_fg_color),
+                        )
+                        .on_hover_text(format!(
+                            "The pages' buttons could not load (trainnr forms): {why}. \
+                             Your agent can still run every tool."
+                        ));
                     }
                     if !self.model.welcome && !self.presenter_running() {
                         ui.add_space(8.0);
@@ -638,6 +713,7 @@ impl Shell {
                     entered: std::mem::take(&mut self.entered),
                     ..Default::default()
                 };
+                let forms = self.forms.for_page(section);
                 pages::section(
                     ui,
                     &self.model,
@@ -646,7 +722,13 @@ impl Shell {
                     &mut show,
                     &mut explore,
                     &mut nav,
+                    (&forms, &self.actions),
                 );
+                if let Some(tool) = nav.form.take() {
+                    if let Some(form) = self.forms.form(&tool) {
+                        self.open_form = Some(crate::forms::Open::new(form.clone()));
+                    }
+                }
                 if let Some(stamp) = show {
                     self.show(&stamp);
                 }
@@ -685,6 +767,7 @@ impl Shell {
     /// the Simulator included, not only where a page is drawn.
     pub fn tick(&mut self, ctx: &egui::Context) {
         self.reap_action();
+        self.forms.poll();
         if self.switch_to.is_none() {
             // On the Welcome page: the first project the agent makes or
             // opens is the one to show.
@@ -728,6 +811,30 @@ impl Shell {
                 }
             }
             // The dialog has the keys: no palette, no page moves under it.
+            return;
+        }
+        if let Some(open) = self.open_form.as_mut() {
+            let artifacts = |kind: &str| -> Vec<String> {
+                self.model
+                    .index()
+                    .map(|index| {
+                        index
+                            .by_kind(kind)
+                            .iter()
+                            .map(|a| a.stamp.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            match crate::forms::dialog(ctx, open, &artifacts) {
+                crate::forms::Answer::Open => {}
+                crate::forms::Answer::Cancel => self.open_form = None,
+                crate::forms::Answer::Submit(arguments) => {
+                    let tool = open.form.tool.clone();
+                    self.open_form = None;
+                    self.run_form(&tool, &arguments);
+                }
+            }
             return;
         }
         self.keys(ctx);
@@ -1062,12 +1169,7 @@ impl Drop for Shell {
 fn action_outcome(code: Option<i32>, printed: &str) -> Result<std::path::PathBuf, Option<String>> {
     let reply: Option<serde_json::Value> = serde_json::from_str(printed).ok();
     if code == Some(REFUSED_EXIT) {
-        let reason = reply
-            .as_ref()
-            .and_then(|r| r.get("reason"))
-            .and_then(|r| r.as_str())
-            .map(str::to_owned);
-        return Err(reason.or_else(|| Some("the tool refused".to_owned())));
+        return Err(Some(refusal_reason(reply.as_ref())));
     }
     if code != Some(0) {
         return Err(None);
@@ -1080,9 +1182,49 @@ fn action_outcome(code: Option<i32>, printed: &str) -> Result<std::path::PathBuf
         .ok_or_else(|| Some("it finished without naming a project".to_owned()))
 }
 
+/// What a form's `trainnr call` came to: the job it started (its
+/// `job_id`), or `None` for a tool that finished in place; a refusal
+/// with its reason; or `Err(None)`, a failure whose reason is in the log.
+fn stay_outcome(code: Option<i32>, printed: &str) -> Result<Option<String>, Option<String>> {
+    let reply: Option<serde_json::Value> = serde_json::from_str(printed).ok();
+    if code == Some(REFUSED_EXIT) {
+        return Err(Some(refusal_reason(reply.as_ref())));
+    }
+    if code != Some(0) {
+        return Err(None);
+    }
+    Ok(reply
+        .as_ref()
+        .and_then(|r| r.get("job_id"))
+        .and_then(|j| j.as_str())
+        .map(str::to_owned))
+}
+
+/// A refusal's reason, from the tool's reply.
+fn refusal_reason(reply: Option<&serde_json::Value>) -> String {
+    reply
+        .and_then(|r| r.get("reason"))
+        .and_then(|r| r.as_str())
+        .map_or_else(|| "the tool refused".to_owned(), str::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_forms_command_opens_its_job_or_says_it_is_done() {
+        let started = serde_json::json!({ "job_id": "j1", "status": "started" }).to_string();
+        assert_eq!(stay_outcome(Some(0), &started), Ok(Some("j1".to_owned())));
+        let done = serde_json::json!({ "status": "done" }).to_string();
+        assert_eq!(stay_outcome(Some(0), &done), Ok(None));
+        let refused = serde_json::json!({ "status": "refused", "reason": "no robot" });
+        assert_eq!(
+            stay_outcome(Some(REFUSED_EXIT), &refused.to_string()),
+            Err(Some("no robot".to_owned()))
+        );
+        assert_eq!(stay_outcome(Some(1), ""), Err(None));
+    }
 
     #[test]
     fn a_buttons_command_switches_only_to_a_project_it_names() {

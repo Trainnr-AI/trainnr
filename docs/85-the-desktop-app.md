@@ -125,11 +125,13 @@ local HTTP port, no tokens to manage.
 
 Each phase ends with a check on a fresh machine, not with code merged.
 
-1. **Actions in the app.** New project and Open sample (done on this
-   branch); then Add robot (a file picker over `onboard_robot`), Ingest a
-   recording, Identify, Define and check a task, Train (smoke, then full),
-   Evaluate, Export and gate, Check for drift, each a form from its schema
-   and a job in Running now. *Check:* a person walks the Go2 quickstart in
+1. **Actions in the app.** Done on this branch: New project and Open
+   sample; forms over eight tools (Add robot, Identify dynamics, Add
+   recording, Check environment, Train, Evaluate, Export, Check for
+   drift), each drawn from the tool's schema with the hints in
+   `trainnr/forms.py`, a job opening Running now. Left: Define an
+   environment (`create_task` takes a family and a settings object, which
+   needs its own form), the deployment gates, and a fresh-machine walk. *Check:* a person walks the Go2 quickstart in
    the app with no agent.
 2. **The engine, on demand and without a checkout.** The scripts jobs
    run move into the package (`python -m trainnr.…`); `trainnr-mjlab`
