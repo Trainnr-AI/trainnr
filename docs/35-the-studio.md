@@ -387,6 +387,92 @@ The second round, the same day:
   values (a drift record's rule, its joint lists) wrap at body size, not
   small monospace.
 
+### 5.10 Whether an agent is connected (2026-10-10)
+
+The Welcome page says trainnr is "run from your coding agent", and an
+empty project's Overview says each stage "lights up as its result lands".
+Neither said whether an agent was there. A user whose MCP configuration
+had not taken — the wrong session root, a client not restarted — saw
+exactly the window a correctly wired user saw, and the only way to tell
+them apart was to call a tool and watch for a change. A first-run report
+on a clean Mac (2026-10-10) spent most of its setup time there.
+
+The **status bar** carries a dot and one word on every page, at every
+stage of a project: an agent can drop at any time, and the two screens
+that spell it out are only shown while a project is empty. Its hover
+gives the call count and the last tool, or the commands to run.
+
+Those two screens — the Welcome page and an empty project's **Start
+here** card — carry the fuller line: a dot and **Agent connected**, with
+the last tool it called, or **No agent connected** followed by the
+README's plugin install and a chip that copies each command. They are
+where the promise is made, so they are where the fix is spelled out. The
+block keeps the tallest height it has drawn, so the cards beneath do not
+jump when the state flips. None of this is a chat panel and none of it
+wants to become one (§8, §10.2).
+
+**How it is known, without the Studio speaking MCP.** An MCP server over
+stdio lives exactly as long as the client session that spawned it, so a
+server's liveness *is* the answer. `trainnr mcp` writes
+`<user home>/agents/<pid>.json` while it serves
+(`trainnr/trainnr/mcp_link.py`), with its pid, a heartbeat refreshed every
+second on a daemon thread, the number of tool calls and the last tool's
+name; it removes its own file on the way out. The Studio reads the folder
+once a second and judges each file the way the Python side judges the
+Studio's own state file: connected needs a heartbeat that is fresh **and**
+not in the future, **and** a live pid.
+
+**One file per server, not one per machine.** Two sessions are ordinary —
+two Claude Code windows, or Claude Code and Cursor. A single file had them
+overwriting each other every heartbeat while the first to exit deleted it
+out from under the other (review, 2026-10-11: two servers half a second
+apart flipped the recorded pid twice a second, and the file went missing
+for 0.7 s of 3 s when one left). A folder gives each session its own name;
+the reader counts the live ones and says "2 agent sessions connected". With more
+than one it names no last tool, because naming one would be a guess at
+whose. A session killed before it can tidy up leaves its file behind, so
+the next server to start sweeps anything older than an hour — by age
+alone, since a pid check there would drag the project layer into the
+serving path.
+
+**Several are counted as sessions, not agents.** A first-run pass that
+installed the plugin over an existing checkout (2026-10-12) found Claude
+Code loading both servers side by side, `plugin:trainnr:trainnr` and
+`trainnr`, with no name collision: one agent window, two serving
+processes, announced as two agents. What the folder holds is sessions,
+so that is what the plural says. One is still "Agent connected", since
+one session is one agent either way.
+
+**Three things that are deliberate, each one a bug first.**
+
+- The heartbeat cannot wait for a tool call: an agent that has asked for
+  nothing in an hour is still connected. It is a thread, not a tool hook.
+  A call only moves the counters in memory; the thread writes them.
+- A heartbeat may not be stamped in the future. Without a bound, a clock
+  that steps back (a VM resume) left a file reading as connected for ever,
+  and on Windows `pid_alive` is true for every pid, so nothing else would
+  have caught it. The slack is `project/control.py`'s own.
+- `$TRAINNR_HOME` is read the way Python reads it — blanks stripped, a
+  leading `~` expanded. Reading it literally sent the two halves to
+  different folders and the window said "no agent" for ever.
+  `user_projects_home()` now shares that rule rather than repeating it.
+
+The files sit under the user's home and not in a project because an agent
+is connected to the machine, not to a project — the Welcome page is shown
+before any project exists, and that is exactly where the answer is needed.
+They join the index and the job table as the third thing in the contract
+between the halves; the folder, the schema and both thresholds are pinned
+to the writer's by `tests/test_studio_mirrors.py`, which also pins the
+commands the window shows to the README's own.
+
+**Not done here:** naming the client (Claude Code, Cursor) would mean
+reading the MCP handshake's `clientInfo`, and detecting a client that is
+installed but not running would mean reading other tools' configuration
+files. Neither is needed to answer "is my agent there", and the second has
+a privacy cost; both are left until someone asks. On macOS `pid_alive`
+still starts a `kill -0` process, once a second per live file; a
+`libc::kill` would avoid it.
+
 ## 6. Performance lessons, all measured
 
 These are the ones that cost real time and are worth not rediscovering:

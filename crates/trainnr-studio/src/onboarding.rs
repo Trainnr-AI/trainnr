@@ -342,6 +342,9 @@ pub fn start_here(
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
+        ui.add_space(12.0);
+        // That sentence is a promise; this says whether it is being kept.
+        crate::agent::status(ui);
         ui.add_space(16.0);
         for (number, step) in FIRST_STEPS.iter().enumerate() {
             ui.horizontal_top(|ui| {
