@@ -13,7 +13,7 @@
 # is one deliberate PR per minor, mjlab's own ritual.
 [project]
 name = "trainnr-mjlab"
-version = "0.2.0-rc.1"
+version = "0.2.0-rc.2"
 description = "The mjlab trainer for trainnr: identified actuator physics (BAM) as mjlab actuators, randomization from measured intervals, and a linter that refuses silent no-ops."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

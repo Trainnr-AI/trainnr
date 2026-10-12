@@ -19,7 +19,7 @@ authors:
     affiliation: Trainnr AI
 repository-code: "https://github.com/Trainnr-AI/trainnr"
 license-url: "https://github.com/Trainnr-AI/trainnr/blob/main/LICENSE"
-version: 0.2.0-rc.1
+version: 0.2.0-rc.2
 keywords:
   - robotics
   - system identification

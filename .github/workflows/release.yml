@@ -294,11 +294,19 @@ jobs:
           iconutil -c icns build/trainnr.iconset -o "$resources/trainnr.icns"
           rm "$resources/trainnr.png"
           # The bundle is sealed last, once its resources are final; the
-          # binary inside is the one signed above.
+          # binary inside is the one signed above. Without a Developer ID
+          # it is sealed ad hoc: the linker's own signature on the binary
+          # covers no bundle, and a downloaded app whose bundle is unsealed
+          # is called "damaged" by Gatekeeper, with no way to open it
+          # (v0.2.0-rc.1 on macOS, 2026-10-13). Sealed ad hoc, it is an
+          # unidentified developer's app, opened from Privacy & Security.
           if [ -n "${SIGN_IDENTITY:-}" ]; then
             codesign --force --sign "$SIGN_IDENTITY" --keychain "$SIGNING_KEYCHAIN" --timestamp --options runtime build/app/trainnr.app
-            codesign --verify --deep --strict --verbose=2 build/app/trainnr.app
+          else
+            codesign --force --sign - build/app/trainnr.app
           fi
+          codesign --verify --deep --strict --verbose=2 build/app/trainnr.app
+          codesign --display --verbose=2 build/app/trainnr.app
           mkdir -p build/disk
           cp -R build/app/trainnr.app build/disk/
           ln -s /Applications build/disk/Applications

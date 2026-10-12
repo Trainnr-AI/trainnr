@@ -193,7 +193,11 @@ Each phase ends with a check on a fresh machine, not with code merged.
    statically (`crates/trainnr-studio/.cargo/config.toml`): v0.1.0's
    imported VCRUNTIME140.dll, which a fresh Windows may lack, and the
    release now checks the imports (`package-studio.py
-   windows-crt-check`). The Studio's version in the status bar looks for a newer release
+   windows-crt-check`).
+   A macOS app built without a Developer ID is sealed ad hoc
+   (`codesign --sign -`): the binary's own linker signature covers no
+   bundle, and Gatekeeper called v0.2.0-rc.1's downloaded app damaged,
+   with no way to open it; the release now verifies the seal either way. The Studio's version in the status bar looks for a newer release
    when clicked, never on its own (`update.rs`: the repository allows no
    network call the user did not ask for), and links the release page;
    it downloads nothing itself. *Checked, 2026-10-11:* the AppImage built here (74 MB)
