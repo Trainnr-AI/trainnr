@@ -189,10 +189,11 @@ Each phase ends with a check on a fresh machine, not with code merged.
    it downloads nothing itself. *Checked, 2026-10-11:* the AppImage built here (74 MB)
    and ran under WSLg, answered the control channel and quit cleanly;
    the macOS steps run only on the release's macOS runner, so the next
-   release candidate is their first check. Left: signing (an Apple
-   Developer ID and notarisation; a Windows certificate), until which
-   macOS asks to open the app from System Settings the first time; and a
-   download page on trainnr.ai (the README links the release page).
+   release candidate is their first check. Signing is wired in the
+   release (2026-10-12, §7) and runs once the certificates are in the
+   `release` environment's secrets; until then macOS asks to open the
+   app from System Settings the first time. Left: a download page on
+   trainnr.ai (the README links the release page).
 5. **Messaging.** Done on this branch: the README opens with the app
    ("a desktop app to work in, that your coding agent can drive"), its
    Quickstart starts with the app (download, the sample, New project,
@@ -214,7 +215,39 @@ Each phase ends with a check on a fresh machine, not with code merged.
 
 ## 7. Open questions for Prakhar
 
-- **Signing:** an Apple Developer account (99 USD a year) for notarised
-  macOS builds, and a Windows code-signing certificate. Without them the
-  first launch shows the operating system's warning.
+- **Signing** (researched from the vendors' own pages, 2026-10-12; the
+  release workflow signs as soon as these secrets exist, and builds
+  unsigned without them):
+  - *macOS:* the Apple Developer Program as an individual, 99 USD a year
+    in local currency (in India, enrolment is only through the Apple
+    Developer app, with a photographed government ID). The certificate
+    reads "Developer ID Application: Prakhar Aggarwal"; "Trainnr AI"
+    would need a legal entity with a D-U-N-S number, and new
+    certificates. Since macOS Sequoia an unsigned app cannot be opened
+    with Control-click, only from System Settings. Secrets:
+    `MACOS_CERTIFICATE_P12` (the Developer ID Application certificate,
+    exported as .p12, base64), `MACOS_CERTIFICATE_PASSWORD`, and a team
+    App Store Connect API key (Users and Access, Integrations, Team Keys;
+    individual keys cannot notarize): `APPLE_API_KEY_P8` (the .p8 file's
+    text), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`. The binary, the
+    `.app` and the disk image are signed with the hardened runtime and a
+    secure timestamp, no entitlements; the binary and the disk image are
+    notarized (`tools/notarize.py`) and the disk image stapled.
+  - *Windows:* Microsoft's own service (Azure Artifact Signing, about
+    120 USD a year) issues to organizations in a list of countries and to
+    individuals in the United States and Canada only, so not to India;
+    EV certificates need a registered business and, by Microsoft's own
+    page, no longer skip SmartScreen. The fit is SSL.com's individual
+    (IV) certificate, 129 USD a year, no business needed, the name on it
+    the person's, with its cloud signing (eSigner, from 20 USD a month)
+    and its official action, pinned in the release: about 310 to 370 USD
+    a year in all. Certum (about 209 EUR) is cheaper but has no supported
+    way to sign from CI. Secrets: `ES_USERNAME`, `ES_PASSWORD`,
+    `ES_CREDENTIAL_ID`, `ES_TOTP_SECRET`. A new certificate still shows
+    SmartScreen's "unrecognized app" (with the publisher's name) until
+    the files earn reputation over weeks of installs; signing every
+    release with the same certificate carries it forward.
+  - *Where the secrets live:* the repository's `release` environment
+    (Settings, Environments), with the build job bound to it, so no other
+    job sees them; a required reviewer on it is advised.
 - **The site:** when trainnr.ai gets its download page (phase 4).
