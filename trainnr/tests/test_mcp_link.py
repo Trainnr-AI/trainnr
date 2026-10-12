@@ -154,6 +154,16 @@ class Sweep(unittest.TestCase):
         self.assertTrue(junk.exists())
         self.assertTrue(other.exists())
 
+    @unittest.skipIf(os.name == "nt", "symbolic links need privileges on Windows")
+    def test_a_linked_folder_is_never_swept(self) -> None:
+        """Debris is removed through `safe_write`, never through a link:
+        a linked `agents` folder would point the sweep somewhere else."""
+        self.write("111", SWEEP_AFTER_S + 60)
+        linked = Path(self.tmp.name) / "elsewhere"
+        linked.symlink_to(self.folder, target_is_directory=True)
+        self.assertEqual(sweep(linked), 0)
+        self.assertTrue((self.folder / "111.json").exists())
+
     def test_a_missing_folder_is_not_an_error(self) -> None:
         self.assertEqual(sweep(Path(self.tmp.name) / "nope"), 0)
 

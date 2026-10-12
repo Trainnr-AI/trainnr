@@ -63,6 +63,14 @@ impl ServerCommand {
     }
 }
 
+/// Whether `path` sits in the system's temporary folder (as given, or
+/// with its links resolved: macOS's `/var/folders` is `/private/var`).
+pub fn in_temporary_folder(path: &Path) -> bool {
+    let temp = std::env::temp_dir();
+    let resolved = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    path.starts_with(&temp) || resolved(path).starts_with(resolved(&temp))
+}
+
 /// The Python of the environment under `root` (a checkout or the
 /// engine's runtime), where `uv sync` made it.
 fn venv_python(root: &Path) -> PathBuf {
@@ -507,6 +515,8 @@ pub fn panel(
             )
             .color(palette.text),
         );
+        ui.add_space(10.0);
+        crate::agent::status_line(ui, &crate::agent::link(ui));
         ui.add_space(14.0);
         let Some(command) = command else {
             match engine.state() {
@@ -542,6 +552,22 @@ pub fn panel(
             }
             return;
         };
+        // An entry pointing into the system's temporary folder stops
+        // working when that folder is cleared: a Studio run on a scratch
+        // home once added one to Claude Code that later failed to start
+        // (2026-10-12). Say so, and keep Add and Update off.
+        let temporary = in_temporary_folder(&command.program);
+        if temporary {
+            ui.label(
+                egui::RichText::new(format!(
+                    "This window runs from a temporary folder ({}). An agent added from \
+                     here stops working when that folder is cleared, so Add is off.",
+                    command.program.display()
+                ))
+                .color(palette.warn),
+            );
+            ui.add_space(8.0);
+        }
         for client in CLIENTS {
             let (present, configured, current) = state.fact(client);
             ui.horizontal(|ui| {
@@ -554,7 +580,7 @@ pub fn panel(
                     if state.adding == Some(client) {
                         ui.spinner();
                     } else if configured && !current {
-                        let free = state.adding.is_none();
+                        let free = state.adding.is_none() && !temporary;
                         if crate::onboarding::secondary_button(ui, "Update", free)
                             .on_hover_text("Its entry runs an older engine: point it at this one")
                             .clicked()
@@ -564,7 +590,7 @@ pub fn panel(
                     } else if configured {
                         ui.label(egui::RichText::new("added").color(palette.text));
                     } else if present {
-                        let free = state.adding.is_none();
+                        let free = state.adding.is_none() && !temporary;
                         let label = format!("Add to {}", client.label());
                         if crate::onboarding::secondary_button(ui, &label, free)
                             .on_hover_text(client.what())
@@ -620,6 +646,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_launcher_in_the_temporary_folder_is_caught() {
+        let scratch = std::env::temp_dir()
+            .join("studio-home")
+            .join("engine/bin/trainnr");
+        assert!(in_temporary_folder(&scratch));
+        assert!(!in_temporary_folder(&PathBuf::from("/e/bin/trainnr")));
     }
 
     fn command() -> ServerCommand {

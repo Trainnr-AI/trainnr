@@ -265,7 +265,7 @@ bytes into the header itself.
 ### 5.7 Connect your agent (2026-10-11)
 
 The Welcome page's "Connect your coding agent" and the status bar's
-"connect agent" open one panel (`connect.rs`): Claude Code, Codex and
+"Connect agent" open one panel (`connect.rs`): Claude Code, Codex and
 Cursor, each with whether it is on this machine, whether it already has
 trainnr, and an Add button; then the command line for any other client,
 to copy. The agent's entry runs `<trainnr home>/engine/bin/trainnr mcp`,
@@ -387,28 +387,24 @@ The second round, the same day:
   values (a drift record's rule, its joint lists) wrap at body size, not
   small monospace.
 
-### 5.10 Whether an agent is connected (2026-10-10)
+### 5.10 Whether an agent is connected (2026-10-10, #32)
 
-The Welcome page says trainnr is "run from your coding agent", and an
-empty project's Overview says each stage "lights up as its result lands".
-Neither said whether an agent was there. A user whose MCP configuration
-had not taken — the wrong session root, a client not restarted — saw
-exactly the window a correctly wired user saw, and the only way to tell
-them apart was to call a tool and watch for a change. A first-run report
-on a clean Mac (2026-10-10) spent most of its setup time there.
+A first-run report on a clean Mac (2026-10-10, from the contributor who
+then built this) spent most of its setup time on one question: had the
+MCP configuration taken? A user whose agent was not wired up saw exactly
+the window a wired user saw.
 
-The **status bar** carries a dot and one word on every page, at every
-stage of a project: an agent can drop at any time, and the two screens
-that spell it out are only shown while a project is empty. Its hover
-gives the call count and the last tool, or the commands to run.
-
-Those two screens — the Welcome page and an empty project's **Start
-here** card — carry the fuller line: a dot and **Agent connected**, with
-the last tool it called, or **No agent connected** followed by the
-README's plugin install and a chip that copies each command. They are
-where the promise is made, so they are where the fix is spelled out. The
-block keeps the tallest height it has drawn, so the cards beneath do not
-jump when the state flips. None of this is a chat panel and none of it
+**Where it shows.** Since the merge into the app (2026-10-12), where
+connecting lives: the status bar's Connect agent button says "● Connect
+agent", "● Agent connected" or "● 2 agent sessions", with the call count
+and the last tool on hover, and opens the Connect panel (§5.7); the
+panel and the Welcome page (beside its Connect button) carry the fuller
+line, "Agent connected · last call list_robots". No agent is an ordinary
+state for an app used on its own, so it is said in the muted colour,
+never as a warning; the first cut, written for the agent-first window,
+put "no agent" in orange on every page and the plugin's install commands
+on the Welcome page and Start here, and held their height when an agent
+connected, which left a gap. None of this is a chat panel and none of it
 wants to become one (§8, §10.2).
 
 **How it is known, without the Studio speaking MCP.** An MCP server over
@@ -462,16 +458,18 @@ is connected to the machine, not to a project — the Welcome page is shown
 before any project exists, and that is exactly where the answer is needed.
 They join the index and the job table as the third thing in the contract
 between the halves; the folder, the schema and both thresholds are pinned
-to the writer's by `tests/test_studio_mirrors.py`, which also pins the
-commands the window shows to the README's own.
+to the writer's by `tests/test_studio_mirrors.py`.
 
 **Not done here:** naming the client (Claude Code, Cursor) would mean
 reading the MCP handshake's `clientInfo`, and detecting a client that is
 installed but not running would mean reading other tools' configuration
 files. Neither is needed to answer "is my agent there", and the second has
-a privacy cost; both are left until someone asks. On macOS `pid_alive`
-still starts a `kill -0` process, once a second per live file; a
-`libc::kill` would avoid it.
+a privacy cost; both are left until someone asks. `pid_alive` asks the
+kernel in-process (`kill(pid, 0)` through rustix, no unsafe code): on
+macOS it started a `kill -0` process, once a second per live file, until
+the merge. The connection files are written and removed through
+`safe_write`, checked up to the user home, so a linked `agents` folder
+is refused rather than followed.
 
 ## 6. Performance lessons, all measured
 

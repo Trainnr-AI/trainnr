@@ -342,9 +342,6 @@ pub fn start_here(
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
-        ui.add_space(12.0);
-        // That sentence is a promise; this says whether it is being kept.
-        crate::agent::status(ui);
         ui.add_space(16.0);
         for (number, step) in FIRST_STEPS.iter().enumerate() {
             ui.horizontal_top(|ui| {
@@ -735,12 +732,21 @@ pub fn welcome(
             .color(palette.text),
         );
         ui.add_space(12.0);
-        if secondary_button(ui, "Connect your coding agent", true)
-            .on_hover_text("Claude Code, Codex, Cursor or any MCP client")
-            .clicked()
-        {
-            picked = Some(Pick::ConnectAgent);
-        }
+        ui.horizontal(|ui| {
+            if secondary_button(ui, "Connect your coding agent", true)
+                .on_hover_text("Claude Code, Codex, Cursor or any MCP client")
+                .clicked()
+            {
+                picked = Some(Pick::ConnectAgent);
+            }
+            // Beside the button, one row high either way, so nothing below
+            // moves when an agent arrives or leaves.
+            let link = crate::agent::link(ui);
+            if link.connected() {
+                ui.add_space(12.0);
+                crate::agent::status_line(ui, &link);
+            }
+        });
         ui.add_space(22.0);
         let mut create = false;
         let mut open = false;

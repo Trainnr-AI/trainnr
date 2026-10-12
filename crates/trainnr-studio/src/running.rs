@@ -263,26 +263,29 @@ pub fn parse_etime(text: &str) -> Option<f64> {
     Some(days * 86_400.0 + seconds)
 }
 
-/// Whether a process id is alive. Linux answers through `/proc`; any
-/// other unix (macOS) through `kill -0`, the same binary `spawn.rs`
-/// signals with; Windows has no dependency-free check here and answers
-/// "alive", so there the exit file alone decides (the runner writes it).
+/// Whether a process id is alive: unix through `kill(pid, 0)`; Windows
+/// has no dependency-free check here and answers "alive", so there the
+/// exit file alone decides (the runner writes it).
 pub fn pid_alive(pid: u32) -> bool {
     if pid == 0 {
         return false;
     }
-    if cfg!(target_os = "linux") {
-        return Path::new(&format!("/proc/{pid}")).exists();
-    }
+    // `kill(pid, 0)`, in-process: it spawned the `kill` command until
+    // 2026-10-12, which the connection dot (#32) did once a second per
+    // agent on macOS. A process another user owns answers "not
+    // permitted", and is alive all the same.
     #[cfg(unix)]
     {
-        std::process::Command::new("kill")
-            .args(["-0", "--", &pid.to_string()])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(true)
+        let Ok(raw) = i32::try_from(pid) else {
+            return false;
+        };
+        let Some(pid) = rustix::process::Pid::from_raw(raw) else {
+            return false;
+        };
+        match rustix::process::test_kill_process(pid) {
+            Ok(()) => true,
+            Err(errno) => errno == rustix::io::Errno::PERM,
+        }
     }
     #[cfg(not(unix))]
     {

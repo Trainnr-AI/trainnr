@@ -68,6 +68,12 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 winit = { version = "0.30", default-features = false, features = ["x11"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
+# `kill(pid, 0)` without spawning a process or writing unsafe code: is a
+# recorded pid alive (running::pid_alive). Already in the tree through
+# eframe's and tokio's dependencies; 1.x locked.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "process"] }
+
 # This standalone workspace has no [workspace.lints] to inherit from, so
 # the lint is stated here: no unsafe code in this crate, `forbid` so it
 # can't be switched off locally with an `#[allow]`

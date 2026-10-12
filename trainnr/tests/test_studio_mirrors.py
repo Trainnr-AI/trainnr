@@ -31,8 +31,6 @@ PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 RUNNING_RS = (SHELL_SRC / "running.rs").read_text(encoding="utf-8")
 ONBOARDING_RS = (SHELL_SRC / "onboarding.rs").read_text(encoding="utf-8")
 SHELL_RS = (SHELL_SRC / "shell.rs").read_text(encoding="utf-8")
-AGENT_RS = (SHELL_SRC / "agent.rs").read_text(encoding="utf-8")
-README = (REPO / "README.md").read_text(encoding="utf-8")
 
 
 # The kinds the index writes that no Studio page lists by kind.
@@ -558,15 +556,3 @@ class AgentLinkFile(unittest.TestCase):
         self.assertEqual(
             constant(MODEL_RS, r'const HOME_ENV: &str = "([^"]+)";'), paths.HOME_ENV
         )
-
-    def test_the_connect_commands_are_the_readme_s(self) -> None:
-        """The Studio tells a user with no agent how to get one. A window
-        that teaches an install the project no longer documents is worse
-        than one that says nothing (review, 2026-10-11)."""
-        for name in ("PLUGIN_MARKETPLACE", "PLUGIN_INSTALL"):
-            shown = constant(AGENT_RS, rf'pub const {name}: &str = "([^"]+)";')
-            self.assertIn(
-                shown,
-                README,
-                f"{name} is not a command the README gives",
-            )

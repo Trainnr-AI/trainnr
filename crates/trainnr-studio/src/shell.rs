@@ -743,14 +743,10 @@ impl Shell {
                             ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
                         }
                         ui.add_space(6.0);
-                        if ui
-                            .add(
-                                egui::Button::new(egui::RichText::new("Connect agent").small())
-                                    .frame_when_inactive(false),
-                            )
-                            .on_hover_text("Connect Claude Code, Codex, Cursor or another agent")
-                            .clicked()
-                        {
+                        // Says whether an agent is connected, and opens the
+                        // Connect panel (#32's status, here since 2026-10-12).
+                        let link = crate::agent::link(ui);
+                        if crate::agent::status_bar_button(ui, &link).clicked() {
                             self.open_connect();
                         }
                         ui.add_space(6.0);
