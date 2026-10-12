@@ -71,13 +71,25 @@ jobs:
           done
       - name: it names this release's version
         run: |
-          want="${TAG#v}"; want="${want%-rc.*}"
+          # A candidate either rehearses its version (tag v0.2.0-rc.2 on a
+          # tree at 0.2.0: files named 0.2.0) or is one (a tree at
+          # 0.2.0-rc.1: files named as PEP 440 writes it, 0.2.0rc1).
+          tagged="${TAG#v}"
+          rehearsed="${tagged%-rc.*}"
+          normal="$(printf '%s' "$tagged" | sed -E 's/-rc\.?([0-9]+)$/rc\1/')"
           name="${PACKAGE//-/_}"
           for file in dist/*; do
-            case "$(basename "$file")" in
-              "$PACKAGE"-"$want".tar.gz|"$name"-"$want".tar.gz|"$PACKAGE"-"$want"-*.whl|"$name"-"$want"-*.whl) ;;
-              *) echo "::error::$file is not $PACKAGE $want"; exit 1 ;;
-            esac
+            base="$(basename "$file")"
+            ok=no
+            for want in "$rehearsed" "$normal"; do
+              case "$base" in
+                "$PACKAGE"-"$want".tar.gz|"$name"-"$want".tar.gz|"$PACKAGE"-"$want"-*.whl|"$name"-"$want"-*.whl) ok=yes ;;
+              esac
+            done
+            if [ "$ok" != yes ]; then
+              echo "::error::$file is not $PACKAGE $rehearsed or $normal"
+              exit 1
+            fi
           done
       - name: upload to TestPyPI (a release candidate)
         if: contains(env.TAG, '-rc.')
