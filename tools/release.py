@@ -4,6 +4,7 @@
     python3 tools/release.py check            # every copy agrees (CI runs this)
     python3 tools/release.py bump 0.2.0       # write the new version everywhere
     python3 tools/release.py show             # print the version
+    python3 tools/release.py show --python    # as Python names its files (0.2.0rc1)
 
 The source of truth is `trainnr/pyproject.toml`. The Python packages and
 their uv lockfiles, the Studio and its Cargo.lock, the Claude Code plugin
@@ -247,11 +248,34 @@ def bump(new: str) -> int:
     return check()
 
 
+#: A pre-release's words as PEP 440 writes them in a normalized version.
+_PRE_RELEASE = {"a": "a", "alpha": "a", "b": "b", "beta": "b", "rc": "rc", "c": "rc"}
+
+
+def python_version(version: str) -> str:
+    """The version as the Python packages' files are named (PEP 440's
+    normal form): `0.2.0-rc.1` is `0.2.0rc1`, so the wheel is
+    `trainnr-0.2.0rc1-py3-none-any.whl`. The release named them with the
+    product's spelling and could not find them (v0.2.0-rc.1, 2026-10-12)."""
+    match = re.fullmatch(
+        r"(\d+(?:\.\d+)*)(?:[-_.]?([a-z]+)[-_.]?(\d*))?", version.lower()
+    )
+    if match is None or (match.group(2) and match.group(2) not in _PRE_RELEASE):
+        raise ValueError(f"{version!r} is not a version this tool can normalize")
+    release, word, number = match.groups()
+    if not word:
+        return release
+    return f"{release}{_PRE_RELEASE[word]}{number or 0}"
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["check"]:
         return check()
-    if argv[:1] == ["show"]:
+    if argv == ["show"]:
         print(source_version())
+        return 0
+    if argv == ["show", "--python"]:
+        print(python_version(source_version()))
         return 0
     if argv[:1] == ["bump"] and len(argv[1:]) == 1:
         return bump(argv[1])

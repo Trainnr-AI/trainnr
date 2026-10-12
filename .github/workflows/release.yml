@@ -464,6 +464,9 @@ jobs:
       - name: one checksum file over every file
         run: |
           echo "VERSION=$(python3 tools/release.py show)" >> "$GITHUB_ENV"
+          # The Python packages' files carry the version as PEP 440 writes
+          # it: 0.2.0-rc.1 is 0.2.0rc1.
+          echo "PY_VERSION=$(python3 tools/release.py show --python)" >> "$GITHUB_ENV"
           cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
       - name: notes from the CHANGELOG
         run: |
@@ -532,16 +535,16 @@ jobs:
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-path: |
-            dist/trainnr-${{ env.VERSION }}.tar.gz
-            dist/trainnr-${{ env.VERSION }}-py3-none-any.whl
+            dist/trainnr-${{ env.PY_VERSION }}.tar.gz
+            dist/trainnr-${{ env.PY_VERSION }}-py3-none-any.whl
           sbom-path: dist/trainnr-${{ env.VERSION }}.cdx.json
       - name: trainnr-mjlab's SBOM, attested for its sdist and wheel
         if: ${{ !github.event.repository.private }}
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-path: |
-            dist/trainnr_mjlab-${{ env.VERSION }}.tar.gz
-            dist/trainnr_mjlab-${{ env.VERSION }}-py3-none-any.whl
+            dist/trainnr_mjlab-${{ env.PY_VERSION }}.tar.gz
+            dist/trainnr_mjlab-${{ env.PY_VERSION }}-py3-none-any.whl
           sbom-path: dist/trainnr-mjlab-${{ env.VERSION }}.cdx.json
       - name: attach to a draft release
         run: |
