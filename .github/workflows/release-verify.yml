@@ -73,9 +73,13 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then bin=clean/Scripts; exe=.exe; else bin=clean/bin; exe=; fi
           uv pip install --python "$bin/python$exe" rel/trainnr-*-py3-none-any.whl
           got=$("$bin/trainnr$exe" version)
-          want="${TAG#v}"; want="${want%-rc.*}"
+          # A candidate rehearses its version (tag v0.2.0-rc.2 on a tree at
+          # 0.2.0: trainnr says 0.2.0) or is one (a tree at 0.2.0-rc.1:
+          # trainnr says it as PEP 440 writes it, 0.2.0rc1).
+          tagged="${TAG#v}"
+          normal="$(printf '%s' "$tagged" | sed -E 's/-rc\.?([0-9]+)$/rc\1/')"
           echo "trainnr version: $got (release $TAG)"
-          test "$got" = "$want"
+          test "$got" = "${tagged%-rc.*}" || test "$got" = "$normal"
       - name: the Studio installs through trainnr's installer
         env:
           TRAINNR_STUDIO_RELEASE: ${{ github.event.inputs.tag || github.event.release.tag_name }}

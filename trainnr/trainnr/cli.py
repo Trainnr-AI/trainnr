@@ -19,8 +19,6 @@ import argparse
 import sys
 from importlib.metadata import PackageNotFoundError, version
 
-from trainnr.mcp_jobs import REFUSED
-
 PACKAGE = "trainnr"
 DEFAULT_SAMPLE = "go2-walk"
 REFUSED_EXIT = 3  # `trainnr call`: the tool ran and refused, with its reason
@@ -143,6 +141,12 @@ def _call(tool: str | None, raw: str, *, listing: bool) -> int:
         print(f"trainnr call {tool}: {why}", file=sys.stderr)
         return 1
     print(json.dumps(result, indent=1, default=str))
+    # Imported here: mcp_jobs pulls in the project layer and, through the
+    # index, MuJoCo, which a plain `pip install trainnr` does not have; at
+    # the top of this module it broke `trainnr version` there
+    # (release-verify, v0.2.0-rc.1).
+    from trainnr.mcp_jobs import REFUSED  # noqa: PLC0415
+
     refused = isinstance(result, dict) and result.get("status") == REFUSED
     return REFUSED_EXIT if refused else 0
 
