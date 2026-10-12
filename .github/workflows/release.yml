@@ -10,7 +10,8 @@
 #     beside it, which the installer checks;
 #   - the Python packages, trainnr and trainnr-mjlab, each as an sdist and
 #     a wheel carrying the same licence files;
-#   - the app to double-click: a macOS disk image and a Linux AppImage
+#   - the app to double-click: a macOS disk image, a Linux AppImage and a
+#     Windows installer
 #     (tools/package-studio.py); signed and notarized on macOS when the
 #     maintainer's Developer ID is in the secrets, unsigned otherwise;
 #   - the engine's runtime, the archive the desktop app sets up from
@@ -197,6 +198,12 @@ jobs:
         with:
           name: third-party-licenses
           path: notices
+      # The exe carries its C runtime (crates/trainnr-studio/.cargo):
+      # checked here, since a fresh Windows without the Visual C++
+      # Redistributable would refuse to start it.
+      - name: no Visual C++ runtime needed (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/package-studio.py windows-crt-check "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe"
       # Windows: SSL.com's cloud signing (eSigner), a certificate in the
       # maintainer's name whose key never leaves SSL.com's HSM, as the code
       # signing rules require since 2023; timestamped by the tool itself.
@@ -249,7 +256,8 @@ jobs:
           ls -la
       # The app a person double-clicks (tools/package-studio.py, docs/85):
       # an AppImage on Linux, a .app in a disk image on macOS. Unsigned
-      # until the maintainer has a Developer ID; Windows keeps its zip.
+      # until the maintainer has a Developer ID; Windows has its installer
+      # (below) and keeps its zip for the plugin and `trainnr studio`.
       - name: the AppImage (Linux)
         if: runner.os == 'Linux'
         env:
@@ -306,6 +314,42 @@ jobs:
             spctl --assess --type execute --verbose=2 build/app/trainnr.app
           fi
           (cd dist && shasum -a 256 "$image" > "$image.sha256")
+      # The Windows installer: one setup.exe (Inno Setup, already on the
+      # runner) that installs per user with no administrator prompt, adds
+      # a Start-menu entry and an uninstaller (tools/windows-installer.iss).
+      - name: the installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe"
+          $version = python tools/release.py show
+          $iss = python tools/package-studio.py windows-installer $bin build/app --version $version --third-party notices/THIRD_PARTY_LICENSES.md
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe" }
+          $name = "trainnr-$env:TAG-windows-x64-setup"
+          & $iscc /Q "/O$PWD\dist" "/F$name" $iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "INSTALLER=dist/$name.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: sign the installer (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING == 'true'
+        uses: SSLcom/esigner-codesign@cf5f6c1d38ad10f47e3ed9aca873f429b1a8d85b # v1.3.2
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ github.workspace }}/${{ env.INSTALLER }}
+          override: true
+          environment_name: PROD
+      - name: the installer's checksum (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd dist
+          image="$(basename "$INSTALLER")"
+          sha256sum "$image" > "$image.sha256"
+          ls -la
       - name: remove the signing keychain (macOS)
         if: always() && runner.os == 'macOS' && env.SIGNING_KEYCHAIN != ''
         run: |
@@ -319,6 +363,7 @@ jobs:
             dist/*.zip
             dist/*.AppImage
             dist/*.dmg
+            dist/*-setup.exe
             dist/*.sha256
           if-no-files-found: error
 
@@ -434,9 +479,10 @@ jobs:
               "- The app to double-click: `trainnr-*-macos-arm64.dmg` (drag trainnr "
               "onto Applications; if macOS says it cannot check the app, a build "
               "made before signing, open it once from System Settings, Privacy & "
-              "Security) and `trainnr-*-x86_64.AppImage` for Linux; on Windows, "
-              "unzip the Studio's archive and run `trainnr-studio.exe` (if "
-              "SmartScreen warns, More info, then Run anyway).\n"
+              "Security), `trainnr-*-x86_64.AppImage` for Linux, and "
+              "`trainnr-*-windows-x64-setup.exe` for Windows, which installs for "
+              "you alone with no administrator prompt (if SmartScreen warns, More "
+              "info, then Run anyway).\n"
               "- The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
               "Windows (x86_64): the plugin and `trainnr studio` download the right one. "
               "Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and "
@@ -469,6 +515,7 @@ jobs:
             dist/*.zip
             dist/*.AppImage
             dist/*.dmg
+            dist/*-setup.exe
             dist/*.whl
             dist/*.cdx.json
             dist/SHA256SUMS

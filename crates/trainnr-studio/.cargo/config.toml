@@ -1,0 +1,8 @@
+# Windows: the C runtime linked into the Studio, so `trainnr-studio.exe`
+# runs on a fresh Windows with nothing else installed. Dynamically linked,
+# it needed VCRUNTIME140.dll and VCRUNTIME140_1.dll from the Visual C++
+# Redistributable, which a new machine may not have (found 2026-10-12 in
+# the v0.1.0 exe's imports). The release checks the imports after the
+# build (tools/package-studio.py windows-crt-check).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

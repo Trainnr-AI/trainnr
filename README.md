@@ -103,7 +103,7 @@ Download the app. The current build is the release candidate
 
 | System | Download | Then |
 |---|---|---|
-| Windows (x64) | [trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip) | unzip it and run `trainnr-studio.exe` |
+| Windows 10 or 11 (x64) | [trainnr-v0.2.0-rc.1-windows-x64-setup.exe](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-windows-x64-setup.exe) | run it: it installs for you alone, with no administrator prompt, and adds trainnr to the Start menu |
 | macOS (Apple Silicon) | [trainnr-v0.2.0-rc.1-macos-arm64.dmg](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-macos-arm64.dmg) | drag trainnr onto Applications |
 | Linux (x86_64) | [trainnr-v0.2.0-rc.1-x86_64.AppImage](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage) | make it executable and run it |
 
@@ -117,6 +117,8 @@ chmod +x trainnr-v0.2.0-rc.1-x86_64.AppImage
 APPIMAGE_EXTRACT_AND_RUN=1 ./trainnr-v0.2.0-rc.1-x86_64.AppImage
 ```
 
+Windows also has the app without an installer: [the zip](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip),
+whose `trainnr-studio.exe` runs where it is unpacked.
 Each file has its SHA-256 beside it (`<file>.sha256`), and every
 release is on the [releases page](https://github.com/Trainnr-AI/trainnr/releases).
 The builds are not signed yet: the first time, macOS asks you to open

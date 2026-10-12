@@ -182,8 +182,18 @@ Each phase ends with a check on a fresh machine, not with code merged.
    the app to double-click (`tools/package-studio.py`): a macOS `.app` in
    a disk image with an Applications link to drag onto (`iconutil`,
    `hdiutil` on the macOS runner) and a Linux AppImage (`appimagetool`
-   1.9.1, its SHA-256 pinned); Windows keeps its zip, whose `.exe` runs
-   where it is unpacked. The Studio's version in the status bar looks for a newer release
+   1.9.1, its SHA-256 pinned); and, since 2026-10-12, a Windows
+   installer (`tools/windows-installer.iss`, compiled by Inno Setup on the
+   runner): one `setup.exe` that installs per user under
+   `%LOCALAPPDATA%\Programs\trainnr` with no administrator prompt, a
+   Start-menu entry, an optional desktop one and an uninstaller, leaving
+   the projects and the engine in place. Windows keeps its zip as well,
+   whose `.exe` runs where it is unpacked (the plugin's installer and
+   `trainnr studio` download that). The exe links its C runtime
+   statically (`crates/trainnr-studio/.cargo/config.toml`): v0.1.0's
+   imported VCRUNTIME140.dll, which a fresh Windows may lack, and the
+   release now checks the imports (`package-studio.py
+   windows-crt-check`). The Studio's version in the status bar looks for a newer release
    when clicked, never on its own (`update.rs`: the repository allows no
    network call the user did not ask for), and links the release page;
    it downloads nothing itself. *Checked, 2026-10-11:* the AppImage built here (74 MB)
