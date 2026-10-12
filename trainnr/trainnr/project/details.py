@@ -79,6 +79,7 @@ from trainnr.project.kinds import (
     UNREVIEWED,
 )
 from trainnr.project.locate import INDEX_DIR, Project
+from trainnr.project.task_ref import DECLARED, REGISTERED
 from trainnr.tasks.overlay import jsonable as _plain_jsonable
 
 if TYPE_CHECKING:
@@ -638,6 +639,13 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+# Where a task's definition lives, by its `task.json` kind.
+_TASK_SOURCE = {
+    REGISTERED: "built into trainnr",
+    DECLARED: "in this project (a spec overlay)",
+}
+
+
 def _task(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     ref = read_json(root / TASK_FILE)
     task_id = ref.get("task_id", "")
@@ -647,7 +655,9 @@ def _task(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             [
                 ("task", task_id),
                 ("version", ref.get("stamp", "unversioned")),
-                ("declared as", ref.get("kind", "")),
+                # "declared as: declared" read the kind twice (design
+                # review, 2026-10-12): say where the task comes from.
+                ("defined", _TASK_SOURCE.get(ref.get("kind", ""), ref.get("kind", ""))),
             ],
         )
     ]

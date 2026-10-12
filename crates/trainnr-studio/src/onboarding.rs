@@ -181,9 +181,14 @@ pub fn prompt_chip(ui: &mut egui::Ui, prompt: &str) {
 }
 
 /// A command, shown as it is typed rather than quoted as speech, and
-/// copied without the quotes a prompt wears.
+/// copied as it is.
 pub fn command_chip(ui: &mut egui::Ui, command: &str) {
-    chip(ui, command, command, "Copy, then run it in your terminal");
+    chip(
+        ui,
+        command,
+        command,
+        "Copy, then use it in your agent's MCP settings",
+    );
 }
 
 /// The chip both of those wear: `shown` on its face, `copy` to the
@@ -205,7 +210,7 @@ fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
         .layout_no_wrap("copied".to_owned(), font, palette.link);
     let trailing = if copied { mark.size().x } else { CHIP_ICON };
     let size = egui::vec2(
-        CHIP_PAD.x * 2.0 + words.size().x + CHIP_GAP + trailing,
+        CHIP_PAD.x * 2.0 + words.size().x + COPY_ICON_GAP + trailing,
         CHIP_PAD.y * 2.0 + words.size().y.max(CHIP_ICON),
     );
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
@@ -246,6 +251,11 @@ fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
                 .paint_at(ui, icon);
         }
     }
+    // Painted, so it names itself to a screen reader: a copy button with
+    // its words (it was unlabelled until the 2026-10-12 design review).
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Copy {shown}"))
+    });
     let response = response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(hover);
@@ -260,36 +270,61 @@ fn chip(ui: &mut egui::Ui, shown: &str, copy: &str, hover: &str) {
     }
 }
 
-/// A chip's inner margin, the gap before its icon, and the icon's size.
+/// A copy chip's inner margin, the gap before its icon, and the icon's
+/// size (named apart from `running::CHIP_GAP`, the gap between run chips).
 const CHIP_PAD: egui::Vec2 = egui::vec2(12.0, 8.0);
-const CHIP_GAP: f32 = 10.0;
+const COPY_ICON_GAP: f32 = 10.0;
 const CHIP_ICON: f32 = 14.0;
 
-/// The first steps of a project, each with its words: what an empty
-/// project's Overview shows instead of zeros.
-const FIRST_STEPS: [(&str, &str, &str); 3] = [
-    (
-        "Bring in your robot",
-        "Its model enters as an asset: the parts, the joints, the actuators.",
-        "Onboard my robot from <path to its MJCF, URDF or USD>",
-    ),
-    (
-        "Give it data",
-        "Telemetry from the real robot, or a public log of the same robot.",
-        "Ingest my robot's telemetry from <path>",
-    ),
-    (
-        "Fit its dynamics",
-        "System identification turns the data into a simulation that behaves like \
-         the robot, with an interval on every parameter.",
-        "Identify my robot's dynamics from that recording",
-    ),
+/// A first step of a project: what it is, the buttons that do it (the
+/// tools whose forms they open, the first one filled), and the words to
+/// say to an agent instead.
+struct FirstStep {
+    title: &'static str,
+    body: &'static str,
+    actions: &'static [(&'static str, &'static str)],
+    prompt: &'static str,
+}
+
+/// What an empty project's Overview shows instead of zeros. Each step has
+/// its button since the app works without an agent (design review,
+/// 2026-10-12); the prompt is the other way in.
+const FIRST_STEPS: [FirstStep; 3] = [
+    FirstStep {
+        title: "Bring in your robot",
+        body: "Its model enters as an asset: the parts, the joints, the actuators.",
+        actions: &[("Add robot", "onboard_robot")],
+        prompt: "Onboard my robot from <path to its MJCF, URDF or USD>",
+    },
+    FirstStep {
+        title: "Give it data",
+        body: "Telemetry from the real robot, or a public log of the same robot.",
+        actions: &[
+            ("Add recording", "ingest_recording"),
+            ("Add public log", "ingest_public_log"),
+        ],
+        prompt: "Ingest my robot's telemetry from <path>",
+    },
+    FirstStep {
+        title: "Fit its dynamics",
+        body: "System identification turns the data into a simulation that behaves like \
+               the robot, with an interval on every parameter.",
+        actions: &[("Identify dynamics", "identify_system")],
+        prompt: "Identify my robot's dynamics from that recording",
+    },
 ];
 
-/// An empty project's start: what trainnr does with it, three steps, and
-/// where the rest of the loop goes.
-pub fn start_here(ui: &mut egui::Ui) {
+/// An empty project's start: three steps, each with its button and the
+/// words for an agent. Returns the tool whose form was asked for. A
+/// button whose step needs something the project does not hold yet is
+/// off, and says what (`forms::missing_input`).
+pub fn start_here(
+    ui: &mut egui::Ui,
+    forms: &crate::forms::Catalog,
+    count: &dyn Fn(&str) -> usize,
+) -> Option<String> {
     let palette = crate::theme::palette(ui);
+    let mut asked = None;
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.label(
@@ -301,55 +336,89 @@ pub fn start_here(ui: &mut egui::Ui) {
         ui.add_space(4.0);
         ui.label(
             egui::RichText::new(
-                "trainnr runs through your coding agent: say what you want in your own \
-                 words, and each stage above lights up as its result lands.",
+                "Each step is a button here, or say it to your coding agent in your own \
+                 words. The stages below light up as each result lands.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
-        ui.add_space(12.0);
-        // That sentence is a promise; this says whether it is being kept.
-        crate::agent::status(ui);
         ui.add_space(16.0);
-        for (number, (title, body, prompt)) in FIRST_STEPS.iter().enumerate() {
+        for (number, step) in FIRST_STEPS.iter().enumerate() {
             ui.horizontal_top(|ui| {
                 step_number(ui, number + 1);
                 ui.add_space(10.0);
                 ui.vertical(|ui| {
                     ui.label(
-                        egui::RichText::new(*title)
+                        egui::RichText::new(step.title)
                             .text_style(DesignTokens::welcome_screen_body())
                             .strong()
                             .color(palette.text),
                     );
                     ui.label(
-                        egui::RichText::new(*body)
+                        egui::RichText::new(step.body)
                             .text_style(DesignTokens::welcome_screen_body())
                             .color(palette.text),
                     );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        for (i, (label, tool)) in step.actions.iter().enumerate() {
+                            let Some(form) = forms.form(tool) else {
+                                continue;
+                            };
+                            let missing = crate::forms::missing_input(form, count);
+                            let enabled = missing.is_none();
+                            let button = if i == 0 {
+                                primary_button(ui, label, enabled)
+                            } else {
+                                secondary_button(ui, label, enabled)
+                            };
+                            let hover = missing.unwrap_or_else(|| form.summary.clone());
+                            if button
+                                .on_hover_text(&hover)
+                                .on_disabled_hover_text(&hover)
+                                .clicked()
+                            {
+                                asked = Some((*tool).to_owned());
+                            }
+                        }
+                    });
                     ui.add_space(6.0);
-                    prompt_chip(ui, prompt);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            egui::RichText::new("or ask your agent:")
+                                .text_style(DesignTokens::welcome_screen_body())
+                                .color(palette.muted),
+                        );
+                        prompt_chip(ui, step.prompt);
+                    });
                 });
             });
-            ui.add_space(14.0);
+            ui.add_space(16.0);
         }
         ui.label(
             egui::RichText::new(
-                "Then define an environment, train, evaluate and deploy; the agent \
-                 knows each step. The README's quickstart walks the same path with \
-                 Unitree's Go2 and a public log.",
+                "Then define an environment, train, evaluate and deploy: each page has its \
+                 buttons, and your agent knows every step.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
     });
+    asked
 }
+
+/// A step number's disc, across, and the gap before its words.
+const STEP_DISC: f32 = 24.0;
+const STEP_TEXT_GAP: f32 = 6.0;
 
 /// A step's number in a soft disc.
 fn step_number(ui: &mut egui::Ui, n: usize) {
     let palette = crate::theme::palette(ui);
-    let size = egui::vec2(24.0, 24.0);
-    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let size = egui::vec2(STEP_DISC, STEP_DISC);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("Step {n}"))
+    });
     ui.painter()
         .circle_filled(rect.center(), size.x / 2.0, palette.accent_soft);
     ui.painter().text(
@@ -357,7 +426,9 @@ fn step_number(ui: &mut egui::Ui, n: usize) {
         egui::Align2::CENTER_CENTER,
         n.to_string(),
         egui::FontId::proportional(13.0),
-        palette.text,
+        // The strongest text: the body grey on the dark selection blue
+        // read 1.6:1 (design review, 2026-10-12).
+        ui.visuals().strong_text_color(),
     );
 }
 
@@ -372,6 +443,10 @@ pub struct SampleCard {
     /// The folder it unpacks to in the projects home.
     pub project: &'static str,
     pub bytes: u64,
+    /// The archive's SHA-256, and where it is (`trainnr/samples.py`'s
+    /// dataset at its pinned commit): the Studio opens it itself.
+    pub sha256: &'static str,
+    pub url: &'static str,
 }
 
 pub const SAMPLES: &[SampleCard] = &[SampleCard {
@@ -379,26 +454,233 @@ pub const SAMPLES: &[SampleCard] = &[SampleCard {
     title: "Go2 walk",
     summary: "A Unitree Go2 through the whole loop: identified from a public log, a walk declared and accepted, trained by reinforcement, evaluated in seven conditions, exported and gated against Unitree's own runtime in simulation, and checked for drift.",
     project: "go2-walk-sample",
-    bytes: 11_973_917,
+    bytes: 12_555_361,
+    sha256: "8b0b3fb5a029c41ad674984c6b152df9ae0d637abc210c57d6a3dca8ad182cc5",
+    url: "https://huggingface.co/datasets/trainnr/trainnr-artifacts/resolve/e5879a2709763f23967fff911e3fbb39d9e6a074/samples/go2-walk-sample.tar.gz",
 }];
 
-/// Where opening a sample stands: the one being opened, or the last
-/// failure (the sample's name and why).
+/// Where a button's `trainnr` command stands (a sample opening, a new
+/// project): the one running, or the last failure (its key and why). One
+/// at a time: the buttons are disabled while one runs.
 #[derive(Default)]
-pub struct SampleState {
-    pub opening: Option<&'static str>,
-    pub failed: Option<(&'static str, String)>,
+pub struct ActionState {
+    pub running: Option<String>,
+    pub failed: Option<(String, String)>,
+    /// The last command that finished well: its key and a word on it.
+    pub done: Option<(String, String)>,
+    /// What the engine's setup is doing while the running command waits
+    /// on it (`engine.rs`): shown in place of the button's own word.
+    pub progress: Option<String>,
+    /// The running download's progress and its cancel: the sample's, or
+    /// the engine's while a command waits on its setup.
+    pub transfer: Option<std::sync::Arc<crate::engine::Transfer>>,
 }
+
+/// What a running button shows in its place: the download's bar and
+/// Cancel while one runs, else a spinner and its word.
+pub fn busy_line(ui: &mut egui::Ui, actions: &ActionState, own: &str) {
+    match &actions.transfer {
+        Some(transfer) => transfer_row(ui, actions.busy_word(own), transfer),
+        None => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(
+                    egui::RichText::new(actions.busy_word(own))
+                        .color(crate::theme::palette(ui).text),
+                );
+            });
+        }
+    }
+}
+
+impl ActionState {
+    /// Whether the command under `key` is the one running.
+    pub fn is_running(&self, key: &str) -> bool {
+        self.running.as_deref() == Some(key)
+    }
+
+    /// What a running button says: the engine's step while it sets up,
+    /// else its own word.
+    pub fn busy_word<'a>(&'a self, own: &'a str) -> &'a str {
+        self.progress.as_deref().unwrap_or(own)
+    }
+}
+
+/// The key a new project's `trainnr call create_project` runs under.
+pub const NEW_PROJECT: &str = "new-project";
 
 /// What a click on the Welcome or Projects page asks for.
 pub enum Pick {
     Project(PathBuf),
     Sample(&'static str),
+    /// The New project dialog, to name it.
+    NewProject,
+    /// The Connect your agent panel.
+    ConnectAgent,
+}
+
+/// What the New project dialog answered this frame.
+pub enum Dialog {
+    Open,
+    Create(String),
+    Cancel,
+}
+
+/// The New project dialog: a name, Create and Cancel; Enter creates and
+/// Escape cancels. The name is checked by `create_project` itself, which
+/// refuses by name, so the rule lives in one place.
+pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
+    let mut answer = Dialog::Open;
+    let modal = egui::Modal::new(egui::Id::new("new-project")).show(ctx, |ui| {
+        let palette = crate::theme::palette(ui);
+        ui.set_width(NEW_PROJECT_DIALOG_WIDTH);
+        ui.label(
+            egui::RichText::new("New project")
+                .text_style(DesignTokens::welcome_screen_h2())
+                .strong()
+                .color(ui.visuals().strong_text_color()),
+        );
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new("One project per robot effort. Name it for the robot or the task.")
+                .color(palette.text),
+        );
+        ui.add_space(12.0);
+        let field = ui.add(
+            egui::TextEdit::singleline(name)
+                .hint_text("my-robot")
+                .desired_width(f32::INFINITY),
+        );
+        // Focus once, when the dialog opens: asking every frame took the
+        // focus back the frame Enter released it, and Enter never created.
+        if ui.memory(|m| m.focused().is_none()) {
+            field.request_focus();
+        }
+        // Enter in the field creates; Enter on Cancel cancels. egui 0.36
+        // keeps the field focused the frame Enter is pressed (measured in
+        // the test below), so the field's focus, kept or just given up,
+        // tells the two apart.
+        let in_field = field.has_focus() || field.lost_focus();
+        let entered = in_field && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        ui.add_space(14.0);
+        egui::Sides::new().height(BUTTON_HEIGHT).show(
+            ui,
+            |_ui| {},
+            |ui| {
+                let ready = !name.trim().is_empty();
+                if primary_button(ui, "Create", ready).clicked() || (entered && ready) {
+                    answer = Dialog::Create(name.trim().to_owned());
+                }
+                if secondary_button(ui, "Cancel", true).clicked() {
+                    answer = Dialog::Cancel;
+                }
+            },
+        );
+    });
+    if crate::widgets::escape_closes(&modal) && matches!(answer, Dialog::Open) {
+        answer = Dialog::Cancel;
+    }
+    answer
+}
+
+/// A download under way: its step in words, a bar when its size is known
+/// (a spinner when it is not), the megabytes so far, and Cancel. The work
+/// stops at its next look at the flag; until then Cancel says so.
+pub fn transfer_row(ui: &mut egui::Ui, step: &str, transfer: &crate::engine::Transfer) {
+    let palette = crate::theme::palette(ui);
+    ui.label(egui::RichText::new(step).color(palette.text));
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        match transfer.fraction() {
+            Some(done) => {
+                ui.add(
+                    egui::ProgressBar::new(done.min(1.0))
+                        .desired_width(TRANSFER_BAR_WIDTH)
+                        .fill(palette.link),
+                );
+            }
+            None => {
+                ui.spinner();
+            }
+        }
+        if let Some(amount) = transfer.amount() {
+            ui.label(egui::RichText::new(amount).color(palette.muted));
+        }
+        let stopping = transfer.is_cancelled();
+        let label = if stopping { "Cancelling…" } else { "Cancel" };
+        if secondary_button(ui, label, !stopping).clicked() {
+            transfer.cancel();
+        }
+    });
+    ui.ctx().request_repaint_after(TRANSFER_REDRAW);
+}
+
+/// A download bar's width: room for the words beside it on a card.
+const TRANSFER_BAR_WIDTH: f32 = 220.0;
+/// How often a download's bar is redrawn.
+const TRANSFER_REDRAW: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// The filled button a page's one main action wears.
+pub fn primary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
+    let palette = crate::theme::palette(ui);
+    ui.spacing_mut().button_padding = BUTTON_PADDING;
+    let button = egui::Button::new(
+        egui::RichText::new(label)
+            .text_style(DesignTokens::welcome_screen_body())
+            .strong()
+            .color(ui.visuals().strong_text_color()),
+    )
+    .fill(palette.accent_soft)
+    .stroke(egui::Stroke::new(1.0, palette.link))
+    .corner_radius(8.0)
+    .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
+    ui.add_enabled(enabled, button)
+}
+
+/// The outlined button a page's other actions wear, the primary's size.
+pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> egui::Response {
+    let palette = crate::theme::palette(ui);
+    ui.spacing_mut().button_padding = BUTTON_PADDING;
+    let button = egui::Button::new(
+        egui::RichText::new(label)
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(palette.text),
+    )
+    .fill(palette.surface)
+    .stroke(egui::Stroke::new(1.0, palette.edge))
+    .corner_radius(8.0)
+    .min_size(egui::vec2(0.0, BUTTON_HEIGHT));
+    ui.add_enabled(enabled, button)
+}
+
+/// A line under a button when the last run under `key` went well.
+pub fn done_line(ui: &mut egui::Ui, state: &ActionState, key: &str) {
+    if let Some((done, what)) = &state.done {
+        if done == key {
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(what).color(crate::theme::palette(ui).text));
+        }
+    }
+}
+
+/// A failure line under a button, when the last run under `key` failed.
+pub fn failure_line(ui: &mut egui::Ui, state: &ActionState, key: &str, what: &str) {
+    if let Some((failed, why)) = &state.failed {
+        if failed == key {
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(format!("{what}: {why}")).color(crate::theme::palette(ui).warn),
+            );
+        }
+    }
 }
 
 /// The Welcome page's widest pair of cards side by side; narrower, one
 /// above the other.
 const WELCOME_TWO_UP: f32 = 760.0;
+/// The height of a primary or secondary button, and of the row of them
+/// a dialog ends with.
+pub const BUTTON_HEIGHT: f32 = 36.0;
 /// Room around an Open button's words.
 const BUTTON_PADDING: egui::Vec2 = egui::vec2(16.0, 8.0);
 /// The two cards' height, so they read as a pair.
@@ -419,13 +701,15 @@ pub const LOOP_STATES: [(&str, Section); 9] = [
 ];
 /// What a user says to start their own project.
 const START_PROMPT: &str = "Create a project called my-robot";
+/// The New project dialog's width.
+const NEW_PROJECT_DIALOG_WIDTH: f32 = 380.0;
 
 /// The window before any project exists: what trainnr is, start your own
 /// project, or explore a sample; then the projects already there.
 pub fn welcome(
     ui: &mut egui::Ui,
     projects: &[ProjectSummary],
-    samples: &SampleState,
+    samples: &ActionState,
     home: Option<&Path>,
 ) -> Option<Pick> {
     let palette = crate::theme::palette(ui);
@@ -441,23 +725,33 @@ pub fn welcome(
         ui.add_space(6.0);
         ui.label(
             egui::RichText::new(
-                "The end-to-end robotics platform, run from your coding agent: \
-                 real-to-sim, train, sim-to-real, and back.",
+                "The robotics platform on your desktop: real-to-sim, train, \
+                 sim-to-real, and back. Work here, or let your coding agent drive it.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
-        ui.add_space(14.0);
-        // The first screen a new user sees says trainnr is run from an
-        // agent; this is where they find out whether theirs is there.
-        crate::agent::status(ui);
-        ui.add_space(28.0);
-        let start = |ui: &mut egui::Ui| start_your_own(ui, home);
-        let mut explore = |ui: &mut egui::Ui| {
-            if explore_a_sample(ui, samples, projects) {
-                picked = Some(Pick::Sample(SAMPLES[0].name));
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            if secondary_button(ui, "Connect your coding agent", true)
+                .on_hover_text("Claude Code, Codex, Cursor or any MCP client")
+                .clicked()
+            {
+                picked = Some(Pick::ConnectAgent);
             }
-        };
+            // Beside the button, one row high either way, so nothing below
+            // moves when an agent arrives or leaves.
+            let link = crate::agent::link(ui);
+            if link.connected() {
+                ui.add_space(12.0);
+                crate::agent::status_line(ui, &link);
+            }
+        });
+        ui.add_space(22.0);
+        let mut create = false;
+        let mut open = false;
+        let mut start = |ui: &mut egui::Ui| create = start_your_own(ui, samples, home);
+        let mut explore = |ui: &mut egui::Ui| open = explore_a_sample(ui, samples, projects);
         if ui.available_width() >= WELCOME_TWO_UP {
             ui.columns(2, |cols| {
                 start(&mut cols[0]);
@@ -467,6 +761,11 @@ pub fn welcome(
             start(ui);
             ui.add_space(16.0);
             explore(ui);
+        }
+        if create {
+            picked = Some(Pick::NewProject);
+        } else if open {
+            picked = Some(Pick::Sample(SAMPLES[0].name));
         }
         ui.add_space(16.0);
         the_loop(ui);
@@ -501,18 +800,41 @@ fn the_loop(ui: &mut egui::Ui) {
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(6.0, 10.0);
+            // One row height, the disc's, so every item centres on the same
+            // line: the nested rows grew it step by step and the row sloped
+            // (design review, 2026-10-12).
+            ui.set_row_height(STEP_DISC);
             for (number, (state, section)) in LOOP_STATES.iter().enumerate() {
                 if number > 0 {
-                    ui.label(egui::RichText::new("›").color(palette.muted));
-                }
-                ui.horizontal(|ui| {
-                    step_number(ui, number + 1);
                     ui.label(
-                        egui::RichText::new(crate::pages::stage_label(state))
+                        egui::RichText::new("›")
                             .text_style(DesignTokens::welcome_screen_body())
-                            .color(palette.text),
+                            .color(palette.muted),
                     );
-                })
+                }
+                // A block of the disc's height, its width measured: a nested
+                // row grew the wrapped row a little each time.
+                let words = crate::pages::stage_label(state);
+                let font = DesignTokens::welcome_screen_body().resolve(ui.style());
+                let text_w = ui
+                    .painter()
+                    .layout_no_wrap(words.to_owned(), font, palette.text)
+                    .size()
+                    .x;
+                let size = egui::vec2(STEP_DISC + STEP_TEXT_GAP + text_w, STEP_DISC);
+                ui.allocate_ui_with_layout(
+                    size,
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.x = STEP_TEXT_GAP;
+                        step_number(ui, number + 1);
+                        ui.label(
+                            egui::RichText::new(words)
+                                .text_style(DesignTokens::welcome_screen_body())
+                                .color(palette.text),
+                        );
+                    },
+                )
                 .response
                 .on_hover_text(section.guide().body);
             }
@@ -520,19 +842,27 @@ fn the_loop(ui: &mut egui::Ui) {
     });
 }
 
-/// The left card: a project of one's own, through the agent.
-fn start_your_own(ui: &mut egui::Ui, home: Option<&Path>) {
+/// The left card: a project of one's own, made here or by the agent.
+/// Whether New project was clicked.
+fn start_your_own(ui: &mut egui::Ui, actions: &ActionState, home: Option<&Path>) -> bool {
     let palette = crate::theme::palette(ui);
+    let mut clicked = false;
     welcome_card(ui, Section::Robots.icon(), "Start your own", |ui| {
         ui.label(
             egui::RichText::new(
                 "A project holds one robot effort: its model, its data, and \
-                 everything trained from them. Your agent makes it, and this \
-                 window opens it the moment it exists.",
+                 everything trained from them.",
             )
             .text_style(DesignTokens::welcome_screen_body())
             .color(palette.text),
         );
+        ui.add_space(16.0);
+        if actions.is_running(NEW_PROJECT) {
+            busy_line(ui, actions, "Creating…");
+        } else {
+            clicked = primary_button(ui, "New project", actions.running.is_none()).clicked();
+        }
+        failure_line(ui, actions, NEW_PROJECT, "It was not created");
         ui.add_space(16.0);
         ask_your_agent(ui, &[START_PROMPT]);
         if let Some(home) = home {
@@ -546,10 +876,11 @@ fn start_your_own(ui: &mut egui::Ui, home: Option<&Path>) {
             );
         }
     });
+    clicked
 }
 
 /// The right card: the first sample, with its Open button.
-fn explore_a_sample(ui: &mut egui::Ui, samples: &SampleState, projects: &[ProjectSummary]) -> bool {
+fn explore_a_sample(ui: &mut egui::Ui, samples: &ActionState, projects: &[ProjectSummary]) -> bool {
     let mut clicked = false;
     welcome_card(ui, &icons::PLAY, "Explore a sample", |ui| {
         clicked = sample_body(ui, &SAMPLES[0], samples, projects);
@@ -589,7 +920,7 @@ fn welcome_card(ui: &mut egui::Ui, icon: &Icon, title: &str, add: impl FnOnce(&m
 pub fn sample_card(
     ui: &mut egui::Ui,
     sample: &SampleCard,
-    samples: &SampleState,
+    samples: &ActionState,
     projects: &[ProjectSummary],
     open: &Path,
 ) -> bool {
@@ -634,7 +965,7 @@ fn sample_text(ui: &mut egui::Ui, sample: &SampleCard) {
 fn sample_body(
     ui: &mut egui::Ui,
     sample: &SampleCard,
-    samples: &SampleState,
+    samples: &ActionState,
     projects: &[ProjectSummary],
 ) -> bool {
     let palette = crate::theme::palette(ui);
@@ -644,18 +975,13 @@ fn sample_body(
     sample_text(ui, sample);
     ui.add_space(16.0);
     let mut clicked = false;
-    if samples.opening == Some(sample.name) {
-        ui.horizontal(|ui| {
-            ui.spinner();
-            ui.label(
-                egui::RichText::new(if here {
-                    "Opening…"
-                } else {
-                    "Downloading and checking…"
-                })
-                .color(palette.text),
-            );
-        });
+    if samples.is_running(sample.name) {
+        let own = if here {
+            "Opening…"
+        } else {
+            "Downloading and checking…"
+        };
+        busy_line(ui, samples, own);
     } else {
         let label = if here {
             format!("Open the {}", sample.title)
@@ -666,19 +992,7 @@ fn sample_body(
                 sample.bytes as f64 / 1e6
             )
         };
-        ui.spacing_mut().button_padding = BUTTON_PADDING;
-        let button = egui::Button::new(
-            egui::RichText::new(label)
-                .text_style(DesignTokens::welcome_screen_body())
-                .strong()
-                .color(ui.visuals().strong_text_color()),
-        )
-        .fill(palette.accent_soft)
-        .stroke(egui::Stroke::new(1.0, palette.link))
-        .corner_radius(8.0)
-        .min_size(egui::vec2(0.0, 36.0));
-        clicked = ui
-            .add_enabled(samples.opening.is_none(), button)
+        clicked = primary_button(ui, &label, samples.running.is_none())
             .on_hover_text(if here {
                 "Open it: it is in your projects"
             } else {
@@ -686,15 +1000,7 @@ fn sample_body(
             })
             .clicked();
     }
-    if let Some((name, why)) = &samples.failed {
-        if *name == sample.name {
-            ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(format!("It did not open: {why}"))
-                    .color(ui.visuals().warn_fg_color),
-            );
-        }
-    }
+    failure_line(ui, samples, sample.name, "It did not open");
     ui.add_space(8.0);
     ui.label(
         egui::RichText::new(
@@ -709,6 +1015,58 @@ fn sample_body(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The New project dialog stays open while typed into, creates the
+    /// trimmed name on Enter, and cancels on Escape; drawn headless.
+    #[test]
+    fn the_new_project_dialog_creates_on_enter_and_cancels_on_escape() {
+        let press = |key| egui::RawInput {
+            events: vec![egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            ..Default::default()
+        };
+        let frame = |ctx: &egui::Context, input, name: &mut String| {
+            let mut answer = Dialog::Open;
+            let mut output = ctx.run_ui(input, |ui| answer = new_project_dialog(ui.ctx(), name));
+            output.textures_delta.clear(); // no renderer here to apply them
+            answer
+        };
+        let ctx = egui::Context::default();
+        re_ui::apply_style_and_install_loaders(&ctx);
+        let mut name = "  lab-arm ".to_owned();
+        assert!(matches!(
+            frame(&ctx, Default::default(), &mut name),
+            Dialog::Open
+        ));
+        assert!(matches!(
+            frame(&ctx, Default::default(), &mut name),
+            Dialog::Open
+        ));
+        match frame(&ctx, press(egui::Key::Enter), &mut name) {
+            Dialog::Create(made) => assert_eq!(made, "lab-arm"),
+            _ => panic!("Enter did not create"),
+        }
+        let ctx = egui::Context::default();
+        re_ui::apply_style_and_install_loaders(&ctx);
+        let mut empty = String::new();
+        let _ = frame(&ctx, Default::default(), &mut empty);
+        assert!(
+            matches!(
+                frame(&ctx, press(egui::Key::Enter), &mut empty),
+                Dialog::Open
+            ),
+            "an empty name creates nothing"
+        );
+        assert!(matches!(
+            frame(&ctx, press(egui::Key::Escape), &mut empty),
+            Dialog::Cancel
+        ));
+    }
 
     /// Every page that can be empty says what it is for, and a prompt is
     /// words to paste, never a tool call.

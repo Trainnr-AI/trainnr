@@ -45,6 +45,20 @@ class Names(unittest.TestCase):
         self.assertEqual(plain_name("go2-walk_2"), "go2-walk_2")
         self.assertEqual(plain_name("console"), "console")
 
+    def test_a_name_typed_into_the_studio_is_one_every_os_can_hold(self) -> None:
+        """New project made names typed text (2026-10-11): a blank name,
+        a character Windows refuses and a trailing dot are refused by the
+        project rule too, and a name with a space is still a name."""
+        from trainnr.project import create_project  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for bad in ("  ", " lead", "a?", 'a"b', "a|b", "a*", "x."):
+                with self.subTest(name=bad), self.assertRaises(ValueError):
+                    create_project(Path(tmp) / "p", bad)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+            made = create_project(Path(tmp) / "lab arm", "lab arm")
+            self.assertEqual(made.name, "lab arm")
+
 
 class TheUnitreeManifest(unittest.TestCase):
     def test_a_manifest_naming_a_program_path_is_refused(self) -> None:

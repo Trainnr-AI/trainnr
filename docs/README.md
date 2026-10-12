@@ -30,6 +30,7 @@ not in this repository.
 | [34 The rented GPU](34-cloud-gpu.md) | The provider seam, the RunPod adapter, the runbook, measured costs | current, prices as of 2026-08-27 |
 | [80 Names and repositories](80-trainnr-names-and-repos.md) | The names, the repository layout, the layering rules, the rename from the former identifiers; since 2026-10-04 this repository is where trainnr is developed (§8) | decided 2026-10-03 |
 | [84 mjsim](84-mjsim.md) | The plan to cut the Studio's simulator window into its own module | planned, not started, 2026-10-03 |
+| [85 The desktop app](85-the-desktop-app.md) | The app people download and use on their own, which an agent can also drive over MCP: the evidence from Paper and Spline, the architecture, the phases | phases 1 to 5 built on feat/desktop-app, 2026-10-11; signing and the Mac and Windows checks left |
 
 ## Research
 

@@ -10,6 +10,12 @@
 #     beside it, which the installer checks;
 #   - the Python packages, trainnr and trainnr-mjlab, each as an sdist and
 #     a wheel carrying the same licence files;
+#   - the app to double-click: a macOS disk image, a Linux AppImage and a
+#     Windows installer
+#     (tools/package-studio.py); signed and notarized on macOS when the
+#     maintainer's Developer ID is in the secrets, unsigned otherwise;
+#   - the engine's runtime, the archive the desktop app sets up from
+#     (tools/runtime-archive.py), with its SHA-256;
 #   - a CycloneDX SBOM for each package and the Studio (tools/sbom.py);
 #   - SHA256SUMS over every file.
 #
@@ -96,6 +102,10 @@ jobs:
 
   build:
     needs: licenses
+    # The signing credentials are this environment's secrets, so a job
+    # outside it never sees them; its protection rules (a required
+    # reviewer, tags only) are set in the repository's settings.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -115,6 +125,11 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
       CARGO_TERM_COLOR: never
       CARGO_PROFILE_RELEASE_STRIP: "true"
+      # Signing runs only when the maintainer's credentials are in the
+      # repository's secrets (docs/85 §7); without them the release is
+      # built exactly as before, unsigned.
+      MACOS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
+      WINDOWS_SIGNING: ${{ secrets.ES_USERNAME != '' && secrets.ES_CREDENTIAL_ID != '' }}
     defaults:
       run:
         shell: bash
@@ -137,10 +152,84 @@ jobs:
       - name: build
         run: cargo build --release --locked --target ${{ matrix.target }}
         working-directory: crates/trainnr-studio
+      # macOS: the Developer ID certificate in a keychain of this job's own,
+      # deleted at the end; the identity is read from it, never typed here.
+      - name: signing keychain (macOS)
+        if: runner.os == 'macOS' && env.MACOS_SIGNING == 'true'
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode -o "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/developer-id.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          rm "$RUNNER_TEMP/developer-id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)
+          if [ -z "$identity" ]; then
+            echo "::error::the certificate holds no Developer ID Application identity"
+            exit 1
+          fi
+          printf '%s' "$API_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      # Hardened runtime and a secure timestamp, as notarization requires;
+      # the Studio needs no entitlements (no JIT, no other team's plug-ins).
+      # Signed before it is packaged, so the archive the installer
+      # downloads and the app in the disk image carry the same signature.
+      - name: sign and notarize the binary (macOS)
+        if: runner.os == 'macOS' && env.MACOS_SIGNING == 'true'
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
+          codesign --force --sign "$SIGN_IDENTITY" --keychain "$SIGNING_KEYCHAIN" --timestamp --options runtime "$bin"
+          codesign --verify --strict --verbose=2 "$bin"
+          python3 tools/notarize.py "$bin" --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: third-party-licenses
           path: notices
+      # The exe carries its C runtime (crates/trainnr-studio/.cargo):
+      # checked here, since a fresh Windows without the Visual C++
+      # Redistributable would refuse to start it.
+      - name: no Visual C++ runtime needed (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/package-studio.py windows-crt-check "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe"
+      # Windows: SSL.com's cloud signing (eSigner), a certificate in the
+      # maintainer's name whose key never leaves SSL.com's HSM, as the code
+      # signing rules require since 2023; timestamped by the tool itself.
+      # Microsoft's own service does not issue to India (docs/85 §7).
+      - name: sign the binary (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING == 'true'
+        uses: SSLcom/esigner-codesign@cf5f6c1d38ad10f47e3ed9aca873f429b1a8d85b # v1.3.2
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ github.workspace }}/crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe
+          override: true
+          environment_name: PROD
+      - name: the signature holds (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe"
+          $signature | Format-List Status, StatusMessage, SignerCertificate, TimeStamperCertificate
+          if ($signature.Status -ne 'Valid' -or $null -eq $signature.TimeStamperCertificate) {
+            Write-Error "trainnr-studio.exe is not validly signed and timestamped"
+            exit 1
+          }
       - name: package
         run: |
           name="trainnr-studio-${TAG}-${{ matrix.target }}"
@@ -165,12 +254,116 @@ jobs:
           cd dist
           if command -v sha256sum >/dev/null; then sha256sum "$archive" > "$archive.sha256"; else shasum -a 256 "$archive" > "$archive.sha256"; fi
           ls -la
+      # The app a person double-clicks (tools/package-studio.py, docs/85):
+      # an AppImage on Linux, a .app in a disk image on macOS. Unsigned
+      # until the maintainer has a Developer ID; Windows has its installer
+      # (below) and keeps its zip for the plugin and `trainnr studio`.
+      - name: the AppImage (Linux)
+        if: runner.os == 'Linux'
+        env:
+          APPIMAGETOOL_VERSION: "1.9.1"
+          APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+        run: |
+          bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
+          python3 tools/package-studio.py linux-appdir "$bin" build/app \
+            --version "$(python3 tools/release.py show)" --third-party notices/THIRD_PARTY_LICENSES.md
+          curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
+          echo "${APPIMAGETOOL_SHA256}  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          image="trainnr-${TAG}-x86_64.AppImage"
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool build/app/trainnr.AppDir "dist/$image"
+          (cd dist && sha256sum "$image" > "$image.sha256")
+      - name: the app and its disk image (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
+          python3 tools/package-studio.py macos-app "$bin" build/app \
+            --version "$(python3 tools/release.py show)" --third-party notices/THIRD_PARTY_LICENSES.md
+          resources=build/app/trainnr.app/Contents/Resources
+          mkdir -p build/trainnr.iconset
+          for size in 16 32 128 256; do
+            sips -z "$size" "$size" "$resources/trainnr.png" --out "build/trainnr.iconset/icon_${size}x${size}.png" > /dev/null
+          done
+          for size in 16 32 128; do
+            double=$((size * 2))
+            sips -z "$double" "$double" "$resources/trainnr.png" --out "build/trainnr.iconset/icon_${size}x${size}@2x.png" > /dev/null
+          done
+          iconutil -c icns build/trainnr.iconset -o "$resources/trainnr.icns"
+          rm "$resources/trainnr.png"
+          # The bundle is sealed last, once its resources are final; the
+          # binary inside is the one signed above.
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" --keychain "$SIGNING_KEYCHAIN" --timestamp --options runtime build/app/trainnr.app
+            codesign --verify --deep --strict --verbose=2 build/app/trainnr.app
+          fi
+          mkdir -p build/disk
+          cp -R build/app/trainnr.app build/disk/
+          ln -s /Applications build/disk/Applications
+          image="trainnr-${TAG}-macos-arm64.dmg"
+          hdiutil create -volname trainnr -srcfolder build/disk -ov -format UDZO "dist/$image"
+          # The disk image signed, notarized and stapled, so Gatekeeper
+          # opens it without asking, offline included.
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" --keychain "$SIGNING_KEYCHAIN" --timestamp "dist/$image"
+            python3 tools/notarize.py "dist/$image" --key "$RUNNER_TEMP/notary.p8" \
+              --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID"
+            spctl --assess --type open --context context:primary-signature --verbose=2 "dist/$image"
+            spctl --assess --type execute --verbose=2 build/app/trainnr.app
+          fi
+          (cd dist && shasum -a 256 "$image" > "$image.sha256")
+      # The Windows installer: one setup.exe (Inno Setup, already on the
+      # runner) that installs per user with no administrator prompt, adds
+      # a Start-menu entry and an uninstaller (tools/windows-installer.iss).
+      - name: the installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe"
+          $version = python tools/release.py show
+          $iss = python tools/package-studio.py windows-installer $bin build/app --version $version --third-party notices/THIRD_PARTY_LICENSES.md
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe" }
+          $name = "trainnr-$env:TAG-windows-x64-setup"
+          & $iscc /Q "/O$PWD\dist" "/F$name" $iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "INSTALLER=dist/$name.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: sign the installer (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_SIGNING == 'true'
+        uses: SSLcom/esigner-codesign@cf5f6c1d38ad10f47e3ed9aca873f429b1a8d85b # v1.3.2
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ github.workspace }}/${{ env.INSTALLER }}
+          override: true
+          environment_name: PROD
+      - name: the installer's checksum (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd dist
+          image="$(basename "$INSTALLER")"
+          sha256sum "$image" > "$image.sha256"
+          ls -la
+      - name: remove the signing keychain (macOS)
+        if: always() && runner.os == 'macOS' && env.SIGNING_KEYCHAIN != ''
+        run: |
+          security delete-keychain "$SIGNING_KEYCHAIN" || true
+          rm -f "$RUNNER_TEMP/notary.p8"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: studio-${{ matrix.target }}
           path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.AppImage
+            dist/*.dmg
+            dist/*-setup.exe
             dist/*.sha256
           if-no-files-found: error
 
@@ -197,6 +390,11 @@ jobs:
             (cd "$package" && uv build --out-dir "$GITHUB_WORKSPACE/dist")
           done
           ls -la dist
+      # The engine's runtime: what the desktop app downloads, the first
+      # time an action needs it, to run the tools with no checkout
+      # (tools/runtime-archive.py, docs/85). Its SHA-256 sits beside it.
+      - name: the engine's runtime
+        run: python3 tools/runtime-archive.py "$(python3 tools/release.py show)" --out dist
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-packages
@@ -278,11 +476,21 @@ jobs:
           body = m.group(1).strip() if m else ""
           footer = (
               "## What this release holds\n\n"
+              "- The app to double-click: `trainnr-*-macos-arm64.dmg` (drag trainnr "
+              "onto Applications; if macOS says it cannot check the app, a build "
+              "made before signing, open it once from System Settings, Privacy & "
+              "Security), `trainnr-*-x86_64.AppImage` for Linux, and "
+              "`trainnr-*-windows-x64-setup.exe` for Windows, which installs for "
+              "you alone with no administrator prompt (if SmartScreen warns, More "
+              "info, then Run anyway).\n"
               "- The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
               "Windows (x86_64): the plugin and `trainnr studio` download the right one. "
               "Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and "
               "THIRD_PARTY_LICENSES.md, with its SHA-256 beside it.\n"
               "- The Python packages `trainnr` and `trainnr-mjlab`, as an sdist and a wheel each.\n"
+              "- The engine's runtime (`trainnr-runtime-v*.tar.gz`): what the Studio "
+              "downloads the first time an action needs it, to run the tools without "
+              "a checkout, with its SHA-256 beside it.\n"
               "- A CycloneDX SBOM (`*.cdx.json`) for each package and the Studio.\n"
               "- `SHA256SUMS` over every file.\n\n"
               "## Verify what you downloaded\n\n"
@@ -305,6 +513,9 @@ jobs:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.AppImage
+            dist/*.dmg
+            dist/*-setup.exe
             dist/*.whl
             dist/*.cdx.json
             dist/SHA256SUMS

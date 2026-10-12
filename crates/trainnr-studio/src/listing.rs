@@ -90,21 +90,38 @@ pub fn view_switch(ui: &mut egui::Ui, section: Section, matrix_available: bool) 
     if view == View::Matrix && !matrix_available {
         view = View::Cards;
     }
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-        for choice in View::ALL
-            .iter()
-            .copied()
-            .rev()
-            .filter(|v| *v != View::Matrix || matrix_available)
-        {
-            if ui
-                .selectable_label(view == choice, choice.label())
-                .clicked()
-            {
-                view = choice;
-            }
-        }
-    });
+    // A segmented control right after the page's count, left to right:
+    // aligned to the right edge it sat under the page's action buttons,
+    // and only "Cards" showed (design review, 2026-10-12).
+    let palette = crate::theme::palette(ui);
+    ui.add_space(12.0);
+    egui::Frame::new()
+        .fill(palette.surface)
+        .stroke(egui::Stroke::new(1.0, palette.hairline))
+        .corner_radius(6.0)
+        .inner_margin(egui::Margin::same(2))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                ui.spacing_mut().button_padding = egui::vec2(8.0, 3.0);
+                for choice in View::ALL
+                    .iter()
+                    .copied()
+                    .filter(|v| *v != View::Matrix || matrix_available)
+                {
+                    if ui
+                        .selectable_label(view == choice, choice.label())
+                        .on_hover_text(format!(
+                            "Show this page as {}",
+                            choice.label().to_lowercase()
+                        ))
+                        .clicked()
+                    {
+                        view = choice;
+                    }
+                }
+            });
+        });
     set_view(ui.ctx(), section, view);
     view
 }
@@ -365,9 +382,9 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
     let mut clicked = None;
     ui.label(
         egui::RichText::new(format!(
-            "{} policies × {} conditions · a cell is the newest evaluation of that policy under that condition; the fill is its success rate",
-            policies.len(),
-            conditions.len()
+            "{} × {} · a cell is the newest evaluation of that policy under that condition; the fill is its success rate",
+            crate::widgets::count_word(policies.len(), "policy"),
+            crate::widgets::count_word(conditions.len(), "condition")
         ))
         .color(ui.visuals().weak_text_color()),
     );

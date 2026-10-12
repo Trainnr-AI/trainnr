@@ -263,26 +263,29 @@ pub fn parse_etime(text: &str) -> Option<f64> {
     Some(days * 86_400.0 + seconds)
 }
 
-/// Whether a process id is alive. Linux answers through `/proc`; any
-/// other unix (macOS) through `kill -0`, the same binary `spawn.rs`
-/// signals with; Windows has no dependency-free check here and answers
-/// "alive", so there the exit file alone decides (the runner writes it).
+/// Whether a process id is alive: unix through `kill(pid, 0)`; Windows
+/// has no dependency-free check here and answers "alive", so there the
+/// exit file alone decides (the runner writes it).
 pub fn pid_alive(pid: u32) -> bool {
     if pid == 0 {
         return false;
     }
-    if cfg!(target_os = "linux") {
-        return Path::new(&format!("/proc/{pid}")).exists();
-    }
+    // `kill(pid, 0)`, in-process: it spawned the `kill` command until
+    // 2026-10-12, which the connection dot (#32) did once a second per
+    // agent on macOS. A process another user owns answers "not
+    // permitted", and is alive all the same.
     #[cfg(unix)]
     {
-        std::process::Command::new("kill")
-            .args(["-0", "--", &pid.to_string()])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(true)
+        let Ok(raw) = i32::try_from(pid) else {
+            return false;
+        };
+        let Some(pid) = rustix::process::Pid::from_raw(raw) else {
+            return false;
+        };
+        match rustix::process::test_kill_process(pid) {
+            Ok(()) => true,
+            Err(errno) => errno == rustix::io::Errno::PERM,
+        }
     }
     #[cfg(not(unix))]
     {
@@ -625,7 +628,7 @@ pub fn summary(ui: &mut egui::Ui, job: &Job, now: f64) {
         } else if job.exit == Some(0) {
             ui.visuals().weak_text_color()
         } else {
-            ui.visuals().warn_fg_color
+            crate::theme::palette(ui).warn
         };
         ui.label(egui::RichText::new(job.state_word()).small().color(color));
     });
@@ -649,7 +652,7 @@ pub fn summary(ui: &mut egui::Ui, job: &Job, now: f64) {
     let line = if status.stage.is_empty() {
         facts.join(" · ")
     } else {
-        format!("{} — {}", status.stage, facts.join(" · "))
+        format!("{} · {}", status.stage, facts.join(" · "))
     };
     ui.label(
         egui::RichText::new(line)
@@ -670,11 +673,10 @@ pub enum StripClick {
 /// A chip's colour through the design tokens: the highlight while it runs,
 /// the weak text once done, the warning when it failed or died.
 fn chip_color(ui: &egui::Ui, state: ChipState) -> egui::Color32 {
-    use re_ui::UiExt as _;
     match state {
-        ChipState::Running => ui.tokens().highlight_color,
+        ChipState::Running => crate::theme::palette(ui).accent_text,
         ChipState::Done => ui.visuals().weak_text_color(),
-        ChipState::Failed | ChipState::Died => ui.visuals().warn_fg_color,
+        ChipState::Failed | ChipState::Died => crate::theme::palette(ui).warn,
     }
 }
 
@@ -877,17 +879,19 @@ pub fn row(
         }
         if job.running() {
             if armed {
-                let warn = ui.visuals().warn_fg_color;
+                let warn = crate::theme::palette(ui).warn;
                 if ui
-                    .small_button(egui::RichText::new(format!("stop pid {}?", job.pid)).color(warn))
+                    .small_button(
+                        egui::RichText::new(format!("Stop process {}?", job.pid)).color(warn),
+                    )
                     .clicked()
                 {
                     action = Some(RowAction::Stop);
                 }
-                if ui.small_button("keep running").clicked() {
+                if ui.small_button("Keep running").clicked() {
                     action = Some(RowAction::Disarm);
                 }
-            } else if ui.small_button("stop").clicked() {
+            } else if ui.small_button("Stop").clicked() {
                 action = Some(RowAction::ArmStop);
             }
         }

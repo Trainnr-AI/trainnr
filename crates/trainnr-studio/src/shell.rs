@@ -11,15 +11,27 @@
 use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::model::Model;
-use crate::onboarding::{Pick, SampleState};
+use crate::onboarding::{ActionState, Pick};
 use crate::pages::{self, Section, RAIL_ICON};
 use crate::spawn::{end_tree, pipeline_command, trainnr_command, PRESENTER_SCRIPT};
 use crate::widgets::icon_at;
 
 /// The rail's width: wide enough for "Environments" plus a count.
 const RAIL_WIDTH: f32 = 196.0;
-/// The log a sample's opening writes, in the projects home's `.index`.
-const SAMPLE_LOG: &str = "sample-open.log";
+/// The title bar's Search button: wide enough to read as a search box.
+const SEARCH_BUTTON_WIDTH: f32 = 200.0;
+/// The status bar's smallest hit target, in points.
+const STATUS_TARGET: f32 = 24.0;
+/// The files a button's `trainnr` command writes, in the projects home's
+/// `.index`: its errors, and what it prints. A file, never a pipe: a
+/// pipe read only after the exit fills at about 64 KB and the command
+/// then waits forever on its write (review, 2026-10-11).
+/// Each window's own, by its process id, removed once read: two windows
+/// on one projects home never truncate each other's (review, 2026-10-11).
+const ACTION_FILE: &str = "studio-action";
+/// `trainnr call`'s exit code for a tool that ran and refused
+/// (`trainnr/cli.py::REFUSED_EXIT`).
+const REFUSED_EXIT: i32 = 3;
 /// Width of the macOS traffic-light cluster the top bar must clear.
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHTS_INSET: f32 = 72.0;
@@ -85,11 +97,57 @@ pub struct Shell {
     /// A run's viewer file to load into the viewer, taken by the frame
     /// loop that owns the viewer.
     pub viewer_request: Option<std::path::PathBuf>,
-    /// A sample being opened (`trainnr sample open`): its name, the
-    /// process, and the log its errors go to.
-    sample_job: Option<(&'static str, std::process::Child, std::path::PathBuf)>,
-    /// What the sample cards show: the one opening, the last failure.
-    pub samples: SampleState,
+    /// A button's `trainnr` command while it runs (a sample opening, a
+    /// new project): its key, the process, and the log its errors go to.
+    action_job: Option<ActionJob>,
+    /// What the running command prints (`ACTION_FILE`), read when it ends.
+    action_out: std::path::PathBuf,
+    /// What the buttons show: the command running, the last failure.
+    pub actions: ActionState,
+    /// The New project dialog's name, while the dialog is open.
+    new_project_name: Option<String>,
+    /// The forms over the agent's tools (`trainnr forms`), loaded once.
+    pub forms: crate::forms::Catalog,
+    /// A form being filled in.
+    open_form: Option<crate::forms::Open>,
+    /// The engine's setup, started by the first action that needs it.
+    engine: crate::engine::Installer,
+    /// The action that waits on the engine's setup, run when it is ready.
+    pending: Option<(String, Vec<String>, After)>,
+    /// The engine's setup finished in this session: the project's presenter
+    /// and forms have been started once for it.
+    engine_settled: bool,
+    /// The agents' launcher was checked against this engine this session.
+    launcher_checked: bool,
+    /// The Connect your agent panel, while it is open, and the command
+    /// agents run, made once the engine is there (`connect.rs`).
+    connect_open: bool,
+    connect: crate::connect::Panel,
+    connect_command: Option<crate::connect::ServerCommand>,
+    /// Whether a newer trainnr is out, once the person asks (`update.rs`).
+    update: crate::update::Check,
+    /// A sample being opened by the Studio itself: its name, and where the
+    /// answer arrives.
+    sample_wait: Option<(
+        String,
+        std::sync::mpsc::Receiver<Result<std::path::PathBuf, String>>,
+    )>,
+}
+
+/// A button's `trainnr` command while it runs.
+struct ActionJob {
+    key: String,
+    child: std::process::Child,
+    log: std::path::PathBuf,
+    after: After,
+}
+
+/// What a button's command leads to when it ends well.
+enum After {
+    /// Open the project it made or opened.
+    OpenProject,
+    /// Stay on the page: a job opens Running now, anything else says done.
+    Stay,
 }
 
 impl Shell {
@@ -119,8 +177,21 @@ impl Shell {
             runs_listed: false,
             stop_note: None,
             viewer_request: None,
-            sample_job: None,
-            samples: SampleState::default(),
+            action_job: None,
+            action_out: std::path::PathBuf::new(),
+            actions: ActionState::default(),
+            new_project_name: None,
+            forms: crate::forms::Catalog::default(),
+            open_form: None,
+            engine: crate::engine::Installer::default(),
+            pending: None,
+            engine_settled: false,
+            launcher_checked: false,
+            sample_wait: None,
+            connect_open: false,
+            connect: crate::connect::Panel::default(),
+            connect_command: None,
+            update: crate::update::Check::default(),
         }
     }
 
@@ -131,76 +202,263 @@ impl Shell {
     /// console log into its record and re-indexes (the Go2 run was
     /// invisible until a Show, 2026-09-10).
     pub fn open_project(&mut self) {
-        if !self.model.welcome {
+        if !self.model.welcome && crate::spawn::engine_ready() {
             self.ensure_presenter();
+            self.load_forms();
+        }
+        if !self.launcher_checked && crate::spawn::engine_ready() {
+            self.launcher_checked = true;
+            self.refresh_launcher();
         }
     }
 
-    /// Open a sample: `trainnr sample open <name>` downloads, checks,
-    /// unpacks and indexes it and makes it current; `tick` switches to
-    /// the folder it prints. Not killed with the window: a download cut
-    /// short leaves its temporary folder in the projects home.
+    /// The forms over this build's tools, once the engine can list them;
+    /// until then the pages show the ones built in (`forms::built_in`).
+    fn load_forms(&mut self) {
+        if let Some(home) = crate::model::user_projects_home() {
+            self.forms.load(&home.join(crate::model::INDEX_DIR));
+        }
+    }
+
+    /// Why the engine's setup failed, when it did.
+    pub fn engine_failure(&self) -> Option<String> {
+        match self.engine.state() {
+            crate::engine::Setup::Failed(why) => Some(why),
+            _ => None,
+        }
+    }
+
+    /// Whether the engine can run a tool now; when it cannot, its setup
+    /// starts (the first action that needs it), and false is returned.
+    pub fn ensure_engine(&mut self) -> bool {
+        if crate::spawn::engine_ready() {
+            return true;
+        }
+        self.engine.start();
+        false
+    }
+
+    /// The engine's setup, each frame while it runs: its step shown on the
+    /// waiting button; when it is done, the waiting action runs (or says
+    /// why it cannot), and the project's presenter and forms start.
+    fn follow_engine(&mut self) {
+        use crate::engine::Setup;
+        match self.engine.state() {
+            // Idle with a command waiting: the setup was cancelled, so the
+            // command is dropped and its button comes back.
+            Setup::Idle => {
+                if self.pending.take().is_some() {
+                    self.actions.running = None;
+                    self.actions.progress = None;
+                    self.actions.transfer = None;
+                }
+            }
+            Setup::Working(step) => {
+                self.actions.progress = Some(step);
+                self.actions.transfer = Some(self.engine.transfer());
+            }
+            Setup::Ready => {
+                self.actions.progress = None;
+                self.actions.transfer = None;
+                if let Some((key, args, after)) = self.pending.take() {
+                    self.actions.running = None;
+                    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+                    self.run_action(&key, &args, after);
+                }
+                if !self.engine_settled {
+                    self.engine_settled = true;
+                    self.open_project();
+                    self.refresh_launcher();
+                }
+            }
+            Setup::Failed(why) => {
+                self.actions.progress = None;
+                self.actions.transfer = None;
+                if let Some((key, _, _)) = self.pending.take() {
+                    self.actions.running = None;
+                    self.actions.failed = Some((key, format!("the engine did not set up: {why}")));
+                }
+            }
+        }
+    }
+
+    /// Open a sample with no engine: the Studio downloads, checks and
+    /// unpacks it itself (`sample.rs`), and `tick` switches to it.
     pub fn open_sample(&mut self, name: &'static str) {
-        if self.sample_job.is_some() {
+        if self.action_job.is_some() || self.pending.is_some() || self.sample_wait.is_some() {
+            return;
+        }
+        let Some(sample) = crate::onboarding::SAMPLES.iter().find(|s| s.name == name) else {
+            return;
+        };
+        let Some(home) = crate::model::user_projects_home() else {
+            self.actions.failed = Some((name.to_owned(), "no projects home".to_owned()));
+            return;
+        };
+        self.actions.failed = None;
+        self.actions.done = None;
+        self.actions.running = Some(name.to_owned());
+        let transfer = std::sync::Arc::new(crate::engine::Transfer::default());
+        self.actions.transfer = Some(std::sync::Arc::clone(&transfer));
+        self.sample_wait = Some((
+            name.to_owned(),
+            crate::sample::open_in_background(sample, home, transfer),
+        ));
+    }
+
+    /// The sample's opening, when it has ended: switch to it, or say why not.
+    fn follow_sample(&mut self) {
+        let Some((key, receive)) = &self.sample_wait else {
+            return;
+        };
+        let Ok(outcome) = receive.try_recv() else {
+            return;
+        };
+        let key = key.clone();
+        self.sample_wait = None;
+        self.actions.running = None;
+        let cancelled = self
+            .actions
+            .transfer
+            .take()
+            .is_some_and(|t| t.is_cancelled());
+        match outcome {
+            Ok(root) => self.switch_to = Some(root),
+            Err(_) if cancelled => {}
+            Err(why) => self.actions.failed = Some((key, why)),
+        }
+    }
+
+    /// Make a project without an agent: the same `create_project` tool an
+    /// agent calls (`trainnr call`), which checks the name and refuses by
+    /// name; `tick` switches to the project it made.
+    pub fn create_project(&mut self, name: &str) {
+        // The name alone: create_project makes it a folder in the projects
+        // home, and refuses a name that is not one.
+        let arguments = serde_json::json!({ "name": name }).to_string();
+        self.run_action(
+            crate::onboarding::NEW_PROJECT,
+            &["call", "create_project", "--args", &arguments],
+            After::OpenProject,
+        );
+    }
+
+    /// Run a form: its tool on the open project, through `trainnr call`.
+    pub fn run_form(&mut self, tool: &str, arguments: &serde_json::Value) {
+        let arguments = arguments.to_string();
+        self.run_action(tool, &["call", tool, "--args", &arguments], After::Stay);
+    }
+
+    /// Run `trainnr <args>` for a button, one at a time, on the open
+    /// project: `$TRAINNR_PROJECT` names it, because the tools otherwise
+    /// act on the projects home's `.current`, which a switch in this
+    /// window does not move. Not killed with the window: a sample's
+    /// download cut short leaves its temporary folder in the home.
+    fn run_action(&mut self, key: &str, args: &[&str], after: After) {
+        if self.action_job.is_some() || self.pending.is_some() {
+            return;
+        }
+        if !self.ensure_engine() {
+            // The first action: it runs once the engine is set up.
+            self.actions.failed = None;
+            self.actions.done = None;
+            self.actions.running = Some(key.to_owned());
+            let args = args.iter().map(|a| (*a).to_owned()).collect();
+            self.pending = Some((key.to_owned(), args, after));
             return;
         }
         let dir = crate::model::user_projects_home()
             .unwrap_or_else(std::env::temp_dir)
             .join(crate::model::INDEX_DIR);
-        let log = dir.join(SAMPLE_LOG);
-        let sink = std::fs::create_dir_all(&dir).and_then(|()| std::fs::File::create(&log));
+        let log = dir.join(format!("{ACTION_FILE}-{}.log", std::process::id()));
+        let out = dir.join(format!("{ACTION_FILE}-{}.out", std::process::id()));
+        let (printed, errors) = match crate::forms::output_files(&dir, &out, &log) {
+            Ok(files) => files,
+            Err(why) => {
+                let why = format!("cannot write in {}: {why}", dir.display());
+                self.actions.failed = Some((key.to_owned(), why));
+                return;
+            }
+        };
         let mut command = trainnr_command();
         command
-            .args(["sample", "open", name])
+            .args(args)
             .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped());
-        if let Ok(sink) = sink {
-            command.stderr(sink);
+            .stdout(printed)
+            .stderr(errors);
+        if self.model.welcome {
+            command.env_remove(crate::model::PROJECT_ENV);
+        } else {
+            command.env(crate::model::PROJECT_ENV, &self.model.project_root);
         }
-        self.samples.failed = None;
+        self.action_out = out;
+        self.actions.failed = None;
+        self.actions.done = None;
         match command.spawn() {
             Ok(child) => {
-                self.samples.opening = Some(name);
-                self.sample_job = Some((name, child, log));
+                self.actions.running = Some(key.to_owned());
+                self.action_job = Some(ActionJob {
+                    key: key.to_owned(),
+                    child,
+                    log,
+                    after,
+                });
             }
-            Err(why) => self.samples.failed = Some((name, format!("uv did not start: {why}"))),
+            Err(why) => {
+                self.actions.failed = Some((key.to_owned(), format!("uv did not start: {why}")));
+            }
         }
     }
 
-    /// The sample's opening, when it ended: switch to its folder, or say
-    /// why it did not open (the log's last line).
-    fn reap_sample(&mut self) {
-        let Some((name, child, log)) = self.sample_job.as_mut() else {
+    /// A button's command, when it ended: open the project it made, or
+    /// open Running now on the job it started, or say it is done; or say
+    /// why not (a refusal's reason, else the log's last line).
+    fn reap_action(&mut self) {
+        let Some(job) = self.action_job.as_mut() else {
             return;
         };
-        let status = match child.try_wait() {
+        let status = match job.child.try_wait() {
             Ok(None) => return,
             Ok(Some(status)) => Some(status),
             Err(_) => None,
         };
-        let mut printed = String::new();
-        if let Some(mut out) = child.stdout.take() {
-            use std::io::Read as _;
-            let _ = out.read_to_string(&mut printed);
+        let Some(job) = self.action_job.take() else {
+            return;
+        };
+        self.actions.running = None;
+        let printed = std::fs::read_to_string(&self.action_out).unwrap_or_default();
+        let code = status.and_then(|s| s.code());
+        let failed = match job.after {
+            After::OpenProject => match action_outcome(code, &printed) {
+                Ok(root) => {
+                    self.switch_to = Some(root);
+                    None
+                }
+                Err(why) => Some(why),
+            },
+            After::Stay => match stay_outcome(code, &printed) {
+                Ok(Some(job_id)) => {
+                    // A job: Running now opens on it.
+                    self.running_open = true;
+                    self.runs_listed = false;
+                    self.run_selected = Some(job_id);
+                    let note = "Started; it runs in Running now.".to_owned();
+                    self.actions.done = Some((job.key.clone(), note));
+                    None
+                }
+                Ok(None) => {
+                    self.actions.done = Some((job.key.clone(), "Done.".to_owned()));
+                    None
+                }
+                Err(why) => Some(why),
+            },
+        };
+        if let Some(why) = failed {
+            let why = why.unwrap_or_else(|| crate::forms::last_line(&job.log));
+            self.actions.failed = Some((job.key, why));
         }
-        let name = *name;
-        let root = std::path::PathBuf::from(printed.trim());
-        if status.is_some_and(|s| s.success()) && root.join(crate::model::MANIFEST_FILE).is_file() {
-            self.switch_to = Some(root);
-        } else {
-            let why = std::fs::read_to_string(&*log)
-                .ok()
-                .and_then(|text| {
-                    text.lines()
-                        .rev()
-                        .find(|l| !l.trim().is_empty())
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| "it exited without saying why".to_owned());
-            self.samples.failed = Some((name, why));
-        }
-        self.samples.opening = None;
-        self.sample_job = None;
+        let _ = std::fs::remove_file(&self.action_out);
+        let _ = std::fs::remove_file(&job.log);
     }
 
     pub fn show(&mut self, stamp: &str) {
@@ -238,6 +496,9 @@ impl Shell {
     }
 
     fn ensure_presenter(&mut self) {
+        if !self.ensure_engine() {
+            return; // started with the project once the engine is ready
+        }
         if let Some(child) = self.presenter.as_mut() {
             if matches!(child.try_wait(), Ok(None)) {
                 return;
@@ -303,6 +564,12 @@ impl Shell {
                             // re_ui's caption buttons: close, maximize,
                             // minimize, in the platform's own order.
                             ui.native_window_buttons_ui();
+                            ui.add_space(12.0);
+                        }
+                        // The palette, visible: only the key opened it
+                        // until the 2026-10-12 design review.
+                        if !self.model.welcome && self.search_button(ui).clicked() {
+                            self.palette = Some(crate::palette::Palette::open(None));
                         }
                     });
                 });
@@ -315,6 +582,25 @@ impl Shell {
             rect.bottom() - 0.5,
             egui::Stroke::new(1.0, palette.edge),
         );
+    }
+
+    /// The search box's stand-in on the title bar: an icon, "Search" and
+    /// the palette's key, which open the palette.
+    fn search_button(&self, ui: &mut egui::Ui) -> egui::Response {
+        let palette = crate::theme::palette(ui);
+        let key = ui.ctx().format_shortcut(&crate::palette::SHORTCUT);
+        ui.add(
+            egui::Button::image_and_text(
+                icons::SEARCH.as_image().tint(palette.muted),
+                egui::RichText::new("Search").color(palette.muted),
+            )
+            .right_text(egui::RichText::new(key).small().color(palette.muted))
+            .fill(palette.surface)
+            .stroke(egui::Stroke::new(1.0, palette.hairline))
+            .corner_radius(6.0)
+            .min_size(egui::vec2(SEARCH_BUTTON_WIDTH, 0.0)),
+        )
+        .on_hover_text("Go to a page or an artifact")
     }
 
     /// The status bar along the bottom, after Zed's: on the left what
@@ -340,6 +626,9 @@ impl Shell {
             .inner_margin(egui::Margin::symmetric(10, 4))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
+                // 24-point targets for the bar's small buttons (WCAG 2.2's
+                // minimum; they were 18, design review 2026-10-12).
+                ui.spacing_mut().interact_size.y = STATUS_TARGET;
                 ui.horizontal(|ui| {
                     // What runs, whoever started it: a click opens the
                     // Running now panel (2026-09-25). The line rotates
@@ -349,9 +638,9 @@ impl Shell {
                     let (text, color) = match crate::running::indicator_line(&self.model.jobs, t) {
                         Some(line) => {
                             ui.ctx().request_repaint_after(crate::running::ROTATE_EVERY);
-                            (line, tokens.highlight_color)
+                            (line, crate::theme::palette(ui).accent_text)
                         }
-                        None => ("idle".to_owned(), ui.visuals().weak_text_color()),
+                        None => ("Idle".to_owned(), ui.visuals().weak_text_color()),
                     };
                     if self.model.running_jobs() > 0 {
                         ui.small_icon(&icons::PLAY, Some(tokens.highlight_color));
@@ -372,22 +661,27 @@ impl Shell {
                             self.close_log();
                         }
                     }
-                    // Whether the agent driving all of this is still
-                    // there. On every page and at every stage of a
-                    // project: a session can drop at any time, and the
-                    // pages that spell it out are only shown while a
-                    // project is empty (2026-10-10).
-                    ui.add_space(8.0);
-                    let link = crate::agent::link(ui);
-                    crate::agent::status_bar_chip(ui, &link);
-                    if !self.model.welcome && !self.presenter_running() {
+                    if let Some(why) = self.forms.problem() {
                         ui.add_space(8.0);
                         ui.label(
-                            egui::RichText::new("presenter stopped")
+                            egui::RichText::new("Buttons unavailable")
                                 .small()
-                                .color(ui.visuals().warn_fg_color),
+                                .color(crate::theme::palette(ui).warn),
                         )
-                        .on_hover_text("The process that draws the cards and shows recordings is not running; launch_studio restarts it");
+                        .on_hover_text(format!(
+                            "The pages' buttons could not load (trainnr forms): {why}. \
+                             Your agent can still run every tool."
+                        ));
+                    }
+                    let presenting = self.presenter_running() || !crate::spawn::engine_ready();
+                    if !self.model.welcome && !presenting {
+                        ui.add_space(8.0);
+                        ui.label(
+                            egui::RichText::new("Previews stopped")
+                                .small()
+                                .color(crate::theme::palette(ui).warn),
+                        )
+                        .on_hover_text("The process that draws the cards and plays recordings is not running. Ask your agent to relaunch the Studio.");
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if let Some(ms) = frame_ms {
@@ -399,6 +693,63 @@ impl Shell {
                             .on_hover_text("One frame, drawn to shown, on this machine");
                             ui.add_space(6.0);
                         }
+                        // The version: a click looks for a newer release (only
+                        // then: no network call runs unasked).
+                        use crate::update::{State, THIS_VERSION};
+                        let (word, hover, colour) = match self.update.state() {
+                            State::Idle => (
+                                format!("v{THIS_VERSION}"),
+                                "Check for a newer release".to_owned(),
+                                ui.visuals().weak_text_color(),
+                            ),
+                            State::Looking => (
+                                "Checking…".to_owned(),
+                                "Asking GitHub for the latest release".to_owned(),
+                                ui.visuals().weak_text_color(),
+                            ),
+                            State::UpToDate => (
+                                format!("v{THIS_VERSION} · up to date"),
+                                "This is the latest release; click to look again".to_owned(),
+                                ui.visuals().weak_text_color(),
+                            ),
+                            State::Newer(v) => (
+                                format!("trainnr {v} is out"),
+                                "Open the release page to download it".to_owned(),
+                                crate::theme::palette(ui).accent_text,
+                            ),
+                            State::Failed(why) => (
+                                format!("v{THIS_VERSION} · could not check"),
+                                format!("{why}; click to try again"),
+                                crate::theme::palette(ui).warn,
+                            ),
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new(word).small().color(colour))
+                                    .frame_when_inactive(false),
+                            )
+                            .on_hover_text(hover)
+                            .clicked()
+                        {
+                            if let State::Newer(_) = self.update.state() {
+                                ui.ctx().open_url(egui::OpenUrl::new_tab(
+                                    crate::update::RELEASES_PAGE,
+                                ));
+                            } else {
+                                self.update.look();
+                            }
+                        }
+                        if self.update.state() == State::Looking {
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+                        }
+                        ui.add_space(6.0);
+                        // Says whether an agent is connected, and opens the
+                        // Connect panel (#32's status, here since 2026-10-12).
+                        let link = crate::agent::link(ui);
+                        if crate::agent::status_bar_button(ui, &link).clicked() {
+                            self.open_connect();
+                        }
+                        ui.add_space(6.0);
                         // Dark, light or the system's: egui's own switch,
                         // so the embedded viewer and this chrome change
                         // together.
@@ -460,7 +811,7 @@ impl Shell {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.small_icon(
-                            &icons::ARROW_DOWN,
+                            &icons::DROPDOWN_ARROW,
                             Some(ui.tokens().label_button_icon_color),
                         );
                         ui.label(egui::RichText::new(name).strong());
@@ -564,7 +915,7 @@ impl Shell {
             let picked = crate::onboarding::welcome(
                 ui,
                 self.model.projects(),
-                &self.samples,
+                &self.actions,
                 home.as_deref(),
             );
             self.pick(picked);
@@ -578,13 +929,26 @@ impl Shell {
         }
         match self.section {
             Section::Projects => {
-                let picked = pages::projects(ui, &mut self.model, &self.samples);
+                let picked = pages::projects(ui, &mut self.model, &self.actions);
                 self.pick(picked);
             }
             Section::Overview => {
                 let mut go_to = None;
                 let mut open_run = None;
-                pages::overview(ui, &self.model, &mut go_to, &mut open_run);
+                let mut open_form = None;
+                pages::overview(
+                    ui,
+                    &self.model,
+                    &self.forms,
+                    &mut go_to,
+                    &mut open_run,
+                    &mut open_form,
+                );
+                if let Some(tool) = open_form {
+                    if let Some(form) = self.forms.form(&tool) {
+                        self.open_form = Some(crate::forms::Open::new(form.clone()));
+                    }
+                }
                 if let Some(id) = open_run {
                     // A chip on the Compute card: the panel opens on it.
                     self.running_open = true;
@@ -610,6 +974,7 @@ impl Shell {
                     entered: std::mem::take(&mut self.entered),
                     ..Default::default()
                 };
+                let forms = self.forms.for_page(section);
                 pages::section(
                     ui,
                     &self.model,
@@ -618,7 +983,13 @@ impl Shell {
                     &mut show,
                     &mut explore,
                     &mut nav,
+                    (&forms, &self.actions),
                 );
+                if let Some(tool) = nav.form.take() {
+                    if let Some(form) = self.forms.form(&tool) {
+                        self.open_form = Some(crate::forms::Open::new(form.clone()));
+                    }
+                }
                 if let Some(stamp) = show {
                     self.show(&stamp);
                 }
@@ -656,7 +1027,14 @@ impl Shell {
     /// the jobs, the events, the presenter's answer) — on every page,
     /// the Simulator included, not only where a page is drawn.
     pub fn tick(&mut self, ctx: &egui::Context) {
-        self.reap_sample();
+        self.reap_action();
+        if self.connect_open {
+            self.connect
+                .poll(&crate::model::os_home().unwrap_or_default());
+        }
+        self.follow_sample();
+        self.follow_engine();
+        self.forms.poll();
         if self.switch_to.is_none() {
             // On the Welcome page: the first project the agent makes or
             // opens is the one to show.
@@ -674,12 +1052,70 @@ impl Shell {
         ctx.request_repaint_after(crate::model::RELOAD_EVERY);
     }
 
+    /// The Connect your agent panel, this frame: the command agents run is
+    /// made once the engine is there; a button adds it to one client.
+    fn connect_panel(&mut self, ctx: &egui::Context) {
+        if self.connect_command.is_none() && crate::spawn::engine_ready() {
+            self.connect_command = agent_command().ok();
+            let home = crate::model::os_home().unwrap_or_default();
+            let program = self.connect_command.as_ref().map(|c| c.program.clone());
+            self.connect.refresh(&home, program.as_deref());
+        }
+        let home = crate::model::os_home().unwrap_or_default();
+        match crate::connect::panel(
+            ctx,
+            &self.connect,
+            self.connect_command.as_ref(),
+            &self.engine,
+        ) {
+            crate::connect::Ask::Open => {}
+            crate::connect::Ask::Close => self.connect_open = false,
+            crate::connect::Ask::SetUpEngine => self.engine.start(),
+            crate::connect::Ask::Add(client) => {
+                if let Some(command) = self.connect_command.clone() {
+                    self.connect.start(client, home, command, false);
+                }
+            }
+            crate::connect::Ask::Update(client) => {
+                if let Some(command) = self.connect_command.clone() {
+                    self.connect.start(client, home, command, true);
+                }
+            }
+        }
+    }
+
+    /// Open the Connect your agent panel (the status bar's button).
+    pub fn open_connect(&mut self) {
+        if crate::spawn::engine_ready() {
+            self.connect_command = agent_command().ok();
+        }
+        let program = self.connect_command.as_ref().map(|c| c.program.clone());
+        self.connect.refresh(
+            &crate::model::os_home().unwrap_or_default(),
+            program.as_deref(),
+        );
+        self.connect_open = true;
+    }
+
+    /// An agent's launcher left by an earlier Connect points at the engine
+    /// this Studio runs: rewritten once the engine is ready, so an update
+    /// never leaves an agent on the old runtime (review, 2026-10-11).
+    fn refresh_launcher(&mut self) {
+        let written = crate::engine::engine_home()
+            .is_some_and(|e| e.join("bin").join(crate::connect::SERVER_NAME).is_file());
+        if written && !cfg!(windows) {
+            self.connect_command = agent_command().ok();
+        }
+    }
+
     /// A click on the Welcome or Projects page: a project to switch to,
     /// or a sample to open.
     fn pick(&mut self, picked: Option<Pick>) {
         match picked {
             Some(Pick::Project(root)) => self.switch_to = Some(root),
             Some(Pick::Sample(name)) => self.open_sample(name),
+            Some(Pick::NewProject) => self.new_project_name = Some(String::new()),
+            Some(Pick::ConnectAgent) => self.open_connect(),
             None => {}
         }
     }
@@ -689,6 +1125,46 @@ impl Shell {
     /// viewer) has been drawn; the failure banner is a panel and goes
     /// before the page (`presenter_failure`).
     pub fn overlays(&mut self, ctx: &egui::Context) {
+        if let Some(name) = self.new_project_name.as_mut() {
+            match crate::onboarding::new_project_dialog(ctx, name) {
+                crate::onboarding::Dialog::Open => {}
+                crate::onboarding::Dialog::Cancel => self.new_project_name = None,
+                crate::onboarding::Dialog::Create(name) => {
+                    self.new_project_name = None;
+                    self.create_project(&name);
+                }
+            }
+            // The dialog has the keys: no palette, no page moves under it.
+            return;
+        }
+        if self.connect_open {
+            self.connect_panel(ctx);
+            return;
+        }
+        if let Some(open) = self.open_form.as_mut() {
+            let artifacts = |kind: &str| -> Vec<String> {
+                self.model
+                    .index()
+                    .map(|index| {
+                        index
+                            .by_kind(kind)
+                            .iter()
+                            .map(|a| a.stamp.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            match crate::forms::dialog(ctx, open, &artifacts) {
+                crate::forms::Answer::Open => {}
+                crate::forms::Answer::Cancel => self.open_form = None,
+                crate::forms::Answer::Submit(arguments) => {
+                    let tool = open.form.tool.clone();
+                    self.open_form = None;
+                    self.run_form(&tool, &arguments);
+                }
+            }
+            return;
+        }
         self.keys(ctx);
         if let Some(palette) = self.palette.as_mut() {
             let (chosen, close) = crate::palette::show(ctx, palette, self.model.index());
@@ -726,7 +1202,7 @@ impl Shell {
                 i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft);
                 i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight);
             }
-            i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)
+            i.consume_shortcut(&crate::palette::SHORTCUT)
         });
         if palette_key {
             self.palette = Some(crate::palette::Palette::open(None));
@@ -779,18 +1255,18 @@ impl Shell {
                 ui.painter().rect_filled(
                     ui.max_rect().expand(8.0),
                     0.0,
-                    ui.visuals().warn_fg_color.linear_multiply(0.12),
+                    crate::theme::palette(ui).warn.linear_multiply(0.12),
                 );
                 ui.horizontal_wrapped(|ui| {
-                    ui.small_icon(&icons::WARNING, Some(ui.visuals().warn_fg_color));
+                    ui.small_icon(&icons::WARNING, Some(crate::theme::palette(ui).warn));
                     ui.label(
                         egui::RichText::new(format!(
                             "The viewer could not show {}: {error}",
                             crate::model::split_stamp(&stamp).0
                         ))
-                        .color(ui.visuals().warn_fg_color),
+                        .color(crate::theme::palette(ui).warn),
                     );
-                    if ui.small_button("dismiss").clicked() {
+                    if ui.small_button("Dismiss").clicked() {
                         self.dismissed_failure = Some((stamp.clone(), error.clone()));
                     }
                 });
@@ -841,7 +1317,7 @@ impl Shell {
                     ui.label(
                         egui::RichText::new(note)
                             .small()
-                            .color(ui.visuals().warn_fg_color),
+                            .color(crate::theme::palette(ui).warn),
                     );
                 }
                 if rows.is_empty() {
@@ -1011,5 +1487,187 @@ impl Shell {
 impl Drop for Shell {
     fn drop(&mut self) {
         self.kill_presenter();
+    }
+}
+
+/// What a button's `trainnr` command came to, from its exit code and what
+/// it printed: the project folder to switch to (`sample open` prints the
+/// path; `call` prints the tool's JSON, whose `root` names it); a refusal
+/// with its reason; or `Err(None)`, a failure whose reason is in the log.
+fn action_outcome(code: Option<i32>, printed: &str) -> Result<std::path::PathBuf, Option<String>> {
+    let reply: Option<serde_json::Value> = serde_json::from_str(printed).ok();
+    if code == Some(REFUSED_EXIT) {
+        return Err(Some(refusal_reason(reply.as_ref())));
+    }
+    if code != Some(0) {
+        return Err(None);
+    }
+    let root = match reply.as_ref().and_then(|r| r.get("root")) {
+        Some(root) => root.as_str().map(std::path::PathBuf::from),
+        None => Some(std::path::PathBuf::from(printed.trim())),
+    };
+    root.filter(|r| r.join(crate::model::MANIFEST_FILE).is_file())
+        .ok_or_else(|| Some("it finished without naming a project".to_owned()))
+}
+
+/// The command agents run (`connect::server_command`): the launcher on
+/// macOS and Linux, rewritten here to point at the engine in use.
+fn agent_command() -> Result<crate::connect::ServerCommand, String> {
+    let engine = crate::engine::engine_home().ok_or_else(|| "no home folder".to_owned())?;
+    crate::connect::server_command(
+        &crate::spawn::repo_root(),
+        &engine,
+        &crate::engine::uv_program(),
+    )
+}
+
+/// What a form's `trainnr call` came to: the job it started (its
+/// `job_id`), or `None` for a tool that finished in place; a refusal
+/// with its reason; or `Err(None)`, a failure whose reason is in the log.
+fn stay_outcome(code: Option<i32>, printed: &str) -> Result<Option<String>, Option<String>> {
+    let reply: Option<serde_json::Value> = serde_json::from_str(printed).ok();
+    if code == Some(REFUSED_EXIT) {
+        return Err(Some(refusal_reason(reply.as_ref())));
+    }
+    if code != Some(0) {
+        return Err(None);
+    }
+    Ok(reply
+        .as_ref()
+        .and_then(|r| r.get("job_id"))
+        .and_then(|j| j.as_str())
+        .map(str::to_owned))
+}
+
+/// A refusal's reason, from the tool's reply.
+fn refusal_reason(reply: Option<&serde_json::Value>) -> String {
+    reply
+        .and_then(|r| r.get("reason"))
+        .and_then(|r| r.as_str())
+        .map_or_else(|| "the tool refused".to_owned(), str::to_owned)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A shell on a machine with no checkout and no engine, its projects
+    /// home under `TRAINNR_TEST_FRESH_HOME` (an empty folder).
+    fn fresh_shell() -> Shell {
+        let home = std::path::PathBuf::from(
+            std::env::var("TRAINNR_TEST_FRESH_HOME").expect("an empty home"),
+        );
+        std::env::set_var("TRAINNR_HOME", &home);
+        std::env::remove_var("TRAINNR_PROJECTS");
+        std::env::remove_var(crate::spawn::REPO_ENV);
+        crate::spawn::hide_checkout();
+        let projects = home.join("projects");
+        std::fs::create_dir_all(&projects).unwrap();
+        let shell = Shell::new(Model::at(projects.clone(), vec![projects]));
+        assert!(shell.model.welcome);
+        assert!(
+            !crate::spawn::engine_ready(),
+            "a fresh machine has no engine"
+        );
+        shell
+    }
+
+    /// Frames until the running button is done, its steps printed.
+    fn run_frames(shell: &mut Shell) {
+        let ctx = egui::Context::default();
+        let started = std::time::Instant::now();
+        let mut said = String::new();
+        while started.elapsed() < std::time::Duration::from_secs(900) {
+            shell.tick(&ctx);
+            if let Some(step) = shell.actions.progress.clone() {
+                if step != said {
+                    eprintln!("{:>6.1}s  {step}", started.elapsed().as_secs_f32());
+                    said = step;
+                }
+            }
+            if shell.actions.running.is_none() {
+                shell.tick(&ctx); // the switch lands on the next frame
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        eprintln!("{:>6.1}s  done", started.elapsed().as_secs_f32());
+    }
+
+    /// Open sample on a machine with nothing: the Studio downloads, checks
+    /// and opens it, and no engine is set up. By hand, alone (network):
+    /// `TRAINNR_TEST_FRESH_HOME=<empty dir> cargo test --release --
+    /// --ignored a_sample_opens --nocapture`.
+    #[test]
+    #[ignore = "downloads the sample; run by hand"]
+    fn a_sample_opens_with_no_engine() {
+        let mut shell = fresh_shell();
+        shell.open_sample("go2-walk");
+        run_frames(&mut shell);
+        assert_eq!(shell.actions.failed, None);
+        assert!(shell.model.project_root.ends_with("go2-walk-sample"));
+        assert!(shell.model.index().is_some_and(|i| !i.artifacts.is_empty()));
+        assert!(!crate::spawn::engine_ready(), "no engine was needed");
+    }
+
+    /// The first tool on a machine with nothing: New project sets the engine
+    /// up (its steps shown on the button), then creates the project. By
+    /// hand, alone: `TRAINNR_TEST_FRESH_HOME=<empty dir>
+    /// TRAINNR_RUNTIME_URL=<archive> cargo test --release -- --ignored
+    /// a_first_tool --nocapture`.
+    #[test]
+    #[ignore = "sets an engine up; run by hand"]
+    fn a_first_tool_sets_the_engine_up_then_runs() {
+        let mut shell = fresh_shell();
+        shell.create_project("lab-arm");
+        run_frames(&mut shell);
+        assert_eq!(shell.actions.failed, None);
+        assert!(crate::spawn::engine_ready());
+        assert!(shell.model.project_root.ends_with("lab-arm"));
+    }
+
+    #[test]
+    fn a_forms_command_opens_its_job_or_says_it_is_done() {
+        let started = serde_json::json!({ "job_id": "j1", "status": "started" }).to_string();
+        assert_eq!(stay_outcome(Some(0), &started), Ok(Some("j1".to_owned())));
+        let done = serde_json::json!({ "status": "done" }).to_string();
+        assert_eq!(stay_outcome(Some(0), &done), Ok(None));
+        let refused = serde_json::json!({ "status": "refused", "reason": "no robot" });
+        assert_eq!(
+            stay_outcome(Some(REFUSED_EXIT), &refused.to_string()),
+            Err(Some("no robot".to_owned()))
+        );
+        assert_eq!(stay_outcome(Some(1), ""), Err(None));
+    }
+
+    #[test]
+    fn a_buttons_command_switches_only_to_a_project_it_names() {
+        let dir = std::env::temp_dir().join(format!("studio-action-{}", std::process::id()));
+        let project = dir.join("mine");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(project.join(crate::model::MANIFEST_FILE), "{}").unwrap();
+        // Built by serde, so a Windows path's backslashes are escaped.
+        let called = serde_json::json!({ "status": "done", "root": project }).to_string();
+        assert_eq!(
+            action_outcome(Some(0), &called),
+            Ok(project.clone()),
+            "call's JSON"
+        );
+        let printed = format!("{}\n", project.display());
+        assert_eq!(
+            action_outcome(Some(0), &printed),
+            Ok(project.clone()),
+            "a path"
+        );
+        let refused = r#"{"status": "refused", "reason": "name taken"}"#;
+        assert_eq!(
+            action_outcome(Some(REFUSED_EXIT), refused),
+            Err(Some("name taken".to_owned()))
+        );
+        assert_eq!(action_outcome(Some(1), ""), Err(None), "the log says why");
+        assert_eq!(action_outcome(None, ""), Err(None), "killed");
+        let elsewhere = r#"{"status": "done", "root": "/nowhere/at/all"}"#;
+        assert!(matches!(action_outcome(Some(0), elsewhere), Err(Some(_))));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -5,7 +5,7 @@
 <h1 align="center">trainnr</h1>
 
 <p align="center">
-  <b>The physical AI platform for robot learning, run from your coding agent.</b><br>
+  <b>The physical AI platform for robot learning: a desktop app to work in, that your coding agent can drive.</b><br>
   Simulation, reinforcement learning, deployment, and a data flywheel from<br>
   the robot's telemetry back into training.
 </p>
@@ -50,10 +50,11 @@ checked for drift against the fitted model, re-identified, and fed **back
 into training**. That cycle is the **data flywheel**, and every turn of it
 is on the record.
 
-Every step is a tool of one **MCP server**, so your coding agent runs the
-loop by conversation. Every result is a **record** the next step cites,
-stamped `name@hash` (its name and a hash of its content). The **Studio**, a
-desktop app, shows each stage as it lands.
+Every step is a tool you run from the **Studio**, the desktop app, or your
+coding agent runs it by conversation over **MCP**: the same tools, the
+same checks, the same records. Every result is a **record** the next step
+cites, stamped `name@hash` (its name and a hash of its content), and the
+Studio shows each stage as it lands, whoever ran it.
 
 ## Status
 
@@ -94,6 +95,55 @@ desktop app, shows each stage as it lands.
 | **Agents and tools** | One MCP server with 77 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
 
 ## Quickstart
+
+### The app
+
+Download the app. The current build is the release candidate
+0.2.0-rc.1, a pre-release:
+
+| System | Download | Then |
+|---|---|---|
+| Windows 10 or 11 (x64) | [trainnr-v0.2.0-rc.1-windows-x64-setup.exe](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-windows-x64-setup.exe) | run it: it installs for you alone, with no administrator prompt, and adds trainnr to the Start menu |
+| macOS (Apple Silicon) | [trainnr-v0.2.0-rc.1-macos-arm64.dmg](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-macos-arm64.dmg) | drag trainnr onto Applications |
+| Linux (x86_64) | [trainnr-v0.2.0-rc.1-x86_64.AppImage](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage) | make it executable and run it |
+
+On Linux, or in WSL on Windows, from a terminal:
+
+```bash
+curl -LO https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage
+chmod +x trainnr-v0.2.0-rc.1-x86_64.AppImage
+./trainnr-v0.2.0-rc.1-x86_64.AppImage
+# no FUSE (common in WSL and containers): run it unpacked instead
+APPIMAGE_EXTRACT_AND_RUN=1 ./trainnr-v0.2.0-rc.1-x86_64.AppImage
+```
+
+Windows also has the app without an installer: [the zip](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip),
+whose `trainnr-studio.exe` runs where it is unpacked.
+Each file has its SHA-256 beside it (`<file>.sha256`), and every
+release is on the [releases page](https://github.com/Trainnr-AI/trainnr/releases).
+The builds are not signed yet: the first time, macOS asks you to open
+the app from System Settings, Privacy & Security, and Windows shows
+SmartScreen's warning (More info, then Run anyway).
+
+The app opens on a Welcome page:
+
+- **Open the Go2 walk**: a finished project, a 13 MB download, nothing
+  else installed. Every page has something on it.
+- **New project**: the first action that runs a tool sets up the engine
+  once (uv, Python and the core tools, about 750 MB on disk, 25 s on a
+  fast connection), then the pages' buttons run each step: add a robot,
+  add a recording or a public log, identify, define and check an
+  environment, train, evaluate, export, gate, check for drift.
+- **Connect your coding agent**: one button each for Claude Code, Codex
+  and Cursor, and the line to paste into any other MCP client. Your agent
+  then runs the same tools, and its work appears in the open window.
+
+Each larger piece downloads the first time it is needed, never before:
+the viewer stream (about 250 MB) when a project first opens, the trainer
+(1.8 GB on a Mac, 6 GB on Linux with CUDA) at the first local training
+run.
+
+### With your coding agent
 
 **Prerequisites.**
 
@@ -224,8 +274,10 @@ gate) are in the [glossary](docs/GLOSSARY.md).
 ### The Studio
 
 The Studio is the desktop app: the embedded Rerun viewer, the MuJoCo
-simulator, and a page for every record in the project. `launch_studio`
-opens it on the current project.
+simulator, a page for every record in the project, and on each page the
+buttons that run its step. Opened on its own it sets up its engine the
+first time a button needs it ([The app](#the-app)); `launch_studio`
+opens it from your agent on the current project.
 
 **Prebuilt.** Each release builds the Studio for Linux (x86_64), macOS
 (Apple Silicon) and Windows (x86_64), about 72 MB, with its SHA-256 and a
@@ -265,6 +317,8 @@ it at your binary with `TRAINNR_STUDIO`.
 | `TRAINNR_UNITREE_REFERENCE` | The `unitree_rl_mjlab` checkout the DDS gate runs Unitree's simulator from, instead of `~/.cache/trainnr/unitree_rl_mjlab` |
 | `TRAINNR_X11` | WSL only: `1` makes the Studio use X11 instead of Wayland |
 | `TRAINNR_VSYNC` | WSL only: `1` turns the Studio's vsync back on |
+| `TRAINNR_RUNTIME_URL` | The engine's runtime archive to set up from (a URL or a file), instead of the release's |
+| `TRAINNR_UV` | The uv the jobs run; the Studio names its engine's own |
 
 </details>
 

@@ -337,8 +337,7 @@ def create_project(
     manifest_path = root / MANIFEST_FILE
     if manifest_path.exists():
         raise FileExistsError(f"a project already exists at {root}")
-    if not name or "/" in name or name.startswith("."):
-        raise ValueError(f"project names are plain words, got {name!r}")
+    plain_name(name, "project name")
     root.mkdir(parents=True, exist_ok=True)
     for folder in FOLDERS:
         (root / folder).mkdir(exist_ok=True)
@@ -383,9 +382,13 @@ def list_projects(root: Path | None = None) -> list[Project]:
 # when there is no other.
 SAMPLE_PROJECT = "sample"
 # A name becomes a folder on every OS: no separators (`/`, `\`), no
-# version mark (`@`), no drive mark (`:`; `D:evil` escapes on Windows), and
-# not one of Windows' reserved device names (security review, 2026-10-04).
-NAME_FORBIDDEN = "/\\@:"
+# version mark (`@`), no drive mark (`:`; `D:evil` escapes on Windows), no
+# character Windows refuses in a file name (`<>"|?*`), and not one of
+# Windows' reserved device names (security review, 2026-10-04). Project
+# names joined the rule on 2026-10-11, when the Studio's New project made
+# them typed into a text box: a name of two spaces made a folder of two
+# spaces, and `a?` would have failed only on Windows, with an OS error.
+NAME_FORBIDDEN = '/\\@:<>"|?*'
 WINDOWS_DEVICE_NAMES = frozenset(
     {"con", "prn", "aux", "nul"}
     | {f"com{i}" for i in range(1, 10)}
@@ -402,7 +405,8 @@ def plain_name(name: str, what: str = "name") -> str:
         or any(c in name for c in NAME_FORBIDDEN)
         or any(not c.isprintable() for c in name)
         or name in (".", "..")
-        or name.startswith(".")
+        or name.startswith((".", "~"))  # `~x` is a home folder to expanduser
+        or name.endswith(".")  # Windows drops a trailing dot
         or name.split(".", 1)[0].lower() in WINDOWS_DEVICE_NAMES
     ):
         raise ValueError(f"{what}: one plain word, no separators; got {name!r}")

@@ -93,7 +93,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
     }
     if !detail.version.is_empty() && detail.version != expected {
         ui.warning_label(format!(
-            "detail was written for version {} — re-index to refresh",
+            "Written for version {}. Re-index to refresh.",
             detail.version
         ));
     }
@@ -171,8 +171,15 @@ fn key_values(ui: &mut egui::Ui, section: &Section, idx: usize) {
                             .italics()
                             .color(ui.visuals().weak_text_color()),
                     );
-                } else if value.len() > LONG_VALUE_CHARS || value.contains('\n') {
-                    ui.add(egui::Label::new(egui::RichText::new(value).monospace().small()).wrap());
+                } else if value.contains('\n') {
+                    // A block (a command line, a listing): monospace, at
+                    // the body's size.
+                    ui.add(egui::Label::new(egui::RichText::new(value).monospace()).wrap());
+                } else if value.len() > LONG_VALUE_CHARS {
+                    // A long sentence or list wraps as text: it was small
+                    // monospace, unreadable in a drift record's rule and
+                    // its joint lists (design review, 2026-10-12).
+                    ui.add(egui::Label::new(value).wrap());
                 } else if is_version(&value) {
                     ui.monospace(value);
                 } else {

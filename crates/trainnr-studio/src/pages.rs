@@ -19,8 +19,8 @@
 use re_ui::{icons, DesignTokens, UiExt as _};
 
 use crate::control::{
-    Event, BY_AGENT, BY_USER, EVENT_DESELECT, EVENT_OPEN, EVENT_SELECT, EVENT_SHOW, EVENT_TABLE,
-    EVENT_TIME,
+    Event, BY_AGENT, BY_USER, EVENT_DESELECT, EVENT_KEY, EVENT_OPEN, EVENT_SELECT, EVENT_SHOW,
+    EVENT_TABLE, EVENT_TIME,
 };
 use crate::model::{
     ago, ago_iso, day_label, elapsed, now_epoch, render_value, short_time, split_stamp,
@@ -112,7 +112,9 @@ pub const KINDS: &[Kind] = &[
     Kind {
         name: kind::CERTIFICATE,
         section: Section::Certificates,
-        icon: &icons::SUCCESS,
+        // A histogram, not a check: an evaluation is a measurement, and a
+        // check on a 0 of 40 read as a pass (design review, 2026-10-12).
+        icon: &icons::VIEW_HISTOGRAM,
         word: "evaluation",
     },
     Kind {
@@ -156,13 +158,12 @@ const STAGE_MIN_WIDTH: f32 = 116.0;
 /// add to the label's width when measuring it before placement.
 const STAGE_CHIP_MARGIN: f32 = 20.0;
 const STAGE_CHIP_EXTRA: f32 = STAGE_CHIP_MARGIN + 16.0 + 8.0 + 4.0;
+/// The "›" between two stage chips with its spacing, measured.
+const STAGE_SEPARATOR_WIDTH: f32 = 20.0;
 /// How many activity rows the Overview shows.
 const ACTIVITY_ROWS: usize = 8;
 /// Icon sizes: the rail and cards; Rerun's own are 16 and 22.
 pub const RAIL_ICON: f32 = 18.0;
-const KPI_ICON: f32 = 28.0;
-/// One height for the four KPI cards, so the row aligns.
-const KPI_CARD_HEIGHT: f32 = 118.0;
 /// The description block under a picture card.
 const CARD_DESCRIPTION_HEIGHT: f32 = 78.0;
 /// The detail drawer's picture width.
@@ -269,10 +270,10 @@ impl Section {
             Self::Datasets => &icons::DATASET,
             Self::Experiments => &icons::VIEW_TIMESERIES,
             Self::Policies => &icons::COMPONENT_STATIC,
-            Self::Certificates => &icons::SUCCESS,
+            Self::Certificates => &icons::VIEW_HISTOGRAM,
             Self::Deployments => &icons::EXTERNAL_LINK,
             Self::Monitoring => &icons::LOOP,
-            Self::Findings => &icons::INFO,
+            Self::Findings => &icons::VIEW_TEXT,
             Self::Live => &icons::PLAY,
         }
     }
@@ -299,6 +300,57 @@ pub fn stage_label(name: &str) -> &str {
         "drift monitored" => "Monitoring",
         other => other,
     }
+}
+
+/// A drawer action with its own fill and edge: the light theme gives an
+/// inactive button no frame, so these read as text beside the filled
+/// "Show in viewer" (design review, 2026-10-12).
+fn framed_button<'a>(ui: &egui::Ui, label: &'a str) -> egui::Button<'a> {
+    let palette = crate::theme::palette(ui);
+    egui::Button::new(label)
+        .fill(palette.canvas)
+        .stroke(egui::Stroke::new(1.0, palette.edge))
+        .frame_when_inactive(true)
+}
+
+/// The drift verdict that asks for a new fit (`fleet/drift.py`,
+/// `DRIFTED_WORD`), and the button and tool its recommendation names.
+const DRIFTED: &str = "drifted";
+const DRIFT_REMEDY: (&str, &str) = ("Re-identify dynamics", "identify_system");
+
+/// The action an artifact's own verdict recommends, as a button's label
+/// and the tool its form runs.
+fn remedy(artifact: &Artifact) -> Option<(&'static str, &'static str)> {
+    let drifted = artifact.kind == kind::DRIFT
+        && artifact.summary.get("verdict").and_then(|v| v.as_str()) == Some(DRIFTED);
+    drifted.then_some(DRIFT_REMEDY)
+}
+
+/// The index's next move as a person reads it: the tool names it carries
+/// for an agent ("(onboard_robot)") left out.
+fn without_tool_names(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open) = rest.find(" (") {
+        let after = &rest[open + 2..];
+        match after.find(')') {
+            Some(close)
+                if after[..close].contains('_')
+                    && after[..close]
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c == '_') =>
+            {
+                out.push_str(&rest[..open]);
+                rest = &after[close + 1..];
+            }
+            _ => {
+                out.push_str(&rest[..open + 2]);
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn section_of(kind: &str) -> Option<Section> {
@@ -376,12 +428,12 @@ pub fn subheading(ui: &mut egui::Ui, title: &str) {
     ui.add_space(8.0);
 }
 
-fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) {
+fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     ui.label(
         egui::RichText::new(text.into())
             .text_style(DesignTokens::welcome_screen_body())
             .color(ui.visuals().weak_text_color()),
-    );
+    )
 }
 
 /// What a picture card says under its picture.
@@ -404,6 +456,8 @@ pub struct Nav {
     /// own move, logged as such rather than as the human's click
     /// (the feed said "you selected go2-walk" for it until 2026-09-28).
     pub auto_selected: bool,
+    /// A form button was clicked: the tool whose form to open.
+    pub form: Option<String>,
 }
 
 struct CardText<'a> {
@@ -537,7 +591,7 @@ pub fn problem_page(ui: &mut egui::Ui, problem: &str) {
 pub fn projects(
     ui: &mut egui::Ui,
     model: &mut Model,
-    samples: &crate::onboarding::SampleState,
+    samples: &crate::onboarding::ActionState,
 ) -> Option<crate::onboarding::Pick> {
     // The page is visited, not polled: a walk when it opens (throttled
     // inside), then the cached list.
@@ -549,11 +603,28 @@ pub fn projects(
             heading(ui, "Projects");
             ui.add_space(8.0);
             tag(ui, &list.len().to_string());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if samples.is_running(crate::onboarding::NEW_PROJECT) {
+                    ui.label(samples.busy_word("Creating…"));
+                    ui.spinner();
+                } else {
+                    let busy = samples.running.is_some();
+                    if crate::onboarding::primary_button(ui, "New project", !busy).clicked() {
+                        picked = Some(crate::onboarding::Pick::NewProject);
+                    }
+                }
+            });
         });
+        crate::onboarding::failure_line(
+            ui,
+            samples,
+            crate::onboarding::NEW_PROJECT,
+            "It was not created",
+        );
         ui.add_space(4.0);
         weak_body(
             ui,
-            "One project per robot effort. Ask your agent to create one, or open one below.",
+            "One project per robot effort. Make one here or ask your agent to, or open one below.",
         );
         ui.add_space(20.0);
         if list.is_empty() {
@@ -648,8 +719,10 @@ pub fn project_grid(
 pub fn overview(
     ui: &mut egui::Ui,
     model: &Model,
+    forms: &crate::forms::Catalog,
     go_to: &mut Option<(Section, Option<String>)>,
     open_run: &mut Option<String>,
+    open_form: &mut Option<String>,
 ) {
     let Some(index) = model.index() else {
         return;
@@ -667,16 +740,19 @@ pub fn overview(
         });
         ui.add_space(24.0);
 
+        // Nothing yet: what to do first, above the stages it will light
+        // (the empty pipeline led the page until 2026-10-12).
+        if index.artifacts.is_empty() {
+            *open_form = crate::onboarding::start_here(ui, forms, &|k| index.count(k));
+            ui.add_space(24.0);
+        }
         pipeline_strip(ui, index);
         ui.add_space(24.0);
 
-        // Nothing yet: what to do first, not a row of zeros.
-        if index.artifacts.is_empty() {
-            crate::onboarding::start_here(ui);
-            ui.add_space(24.0);
-        } else {
-            kpi_row(ui, index, go_to);
-            ui.add_space(24.0);
+        // The best policy per condition leads a project with results. The
+        // four count tiles above it repeated the rail's counts and were
+        // dropped in the 2026-10-12 design review.
+        if !index.artifacts.is_empty() {
             best_by_condition(ui, model, index, go_to);
         }
 
@@ -692,9 +768,19 @@ pub fn overview(
         if !index.refused.is_empty() {
             ui.add_space(20.0);
             for r in &index.refused {
-                ui.warning_label(format!("{} — {}", r.path, r.reason));
+                ui.warning_label(format!("{}: {}", r.path, r.reason));
             }
         }
+    });
+}
+
+/// Work still being written (the index's `in_progress`): a spinner, the
+/// folder and its stage. An hourglass emoji led this line until the
+/// 2026-10-12 design review.
+fn in_progress_row(ui: &mut egui::Ui, p: &crate::model::InProgress) {
+    ui.horizontal(|ui| {
+        ui.add(egui::Spinner::new().size(12.0));
+        weak_body(ui, format!("{} · {}", p.path, p.stage));
     });
 }
 
@@ -792,8 +878,11 @@ fn best_by_condition(
             ui.add_space(8.0);
             if ui
                 .add(egui::Link::new(
-                    egui::RichText::new(format!("{} conditions · open the matrix", best.len()))
-                        .color(crate::theme::palette(ui).link),
+                    egui::RichText::new(format!(
+                        "{} · open the matrix",
+                        crate::widgets::count_word(best.len(), "condition")
+                    ))
+                    .color(crate::theme::palette(ui).link),
                 ))
                 .clicked()
             {
@@ -885,10 +974,13 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         tokens.strong_fg_color,
                     )
                 } else if is_next {
+                    // The edge in the highlight, the words in the accent
+                    // as text: the highlight is a background token and
+                    // read 1.4:1 as text (design review, 2026-10-12).
                     (
                         egui::Color32::TRANSPARENT,
                         tokens.highlight_color,
-                        tokens.highlight_color,
+                        crate::theme::palette(ui).accent_text,
                     )
                 } else {
                     (
@@ -915,9 +1007,15 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 let chip_w = (text_w + STAGE_CHIP_EXTRA).max(STAGE_MIN_WIDTH + STAGE_CHIP_MARGIN);
                 // In a wrapped row `available_width` is the whole row; what
                 // remains is the distance from the cursor to the right edge.
+                // The "›" goes before a chip on the same row, never at the
+                // end of one: it was left dangling where the row broke
+                // (design review, 2026-10-12).
                 let remaining = ui.max_rect().right() - ui.cursor().min.x;
-                if remaining < chip_w {
+                let separator_w = if i > 0 { STAGE_SEPARATOR_WIDTH } else { 0.0 };
+                if remaining < chip_w + separator_w {
                     ui.end_row();
+                } else if i > 0 {
+                    ui.label(egui::RichText::new("›").color(ui.visuals().weak_text_color()));
                 }
                 let response = egui::Frame::new()
                     .fill(fill)
@@ -960,9 +1058,6 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                     hover.push_str(&state.proved_by.join("\n"));
                 }
                 response.on_hover_text(hover);
-                if i + 1 < index.states.len() {
-                    ui.label(egui::RichText::new("›").color(ui.visuals().weak_text_color()));
-                }
             }
         });
         ui.add_space(10.0);
@@ -976,10 +1071,11 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                         egui::RichText::new("Next")
                             .text_style(DesignTokens::welcome_screen_body())
                             .strong()
-                            .color(tokens.highlight_color),
+                            .color(crate::theme::palette(ui).accent_text),
                     );
                     ui.label(
-                        egui::RichText::new(next).text_style(DesignTokens::welcome_screen_body()),
+                        egui::RichText::new(without_tool_names(next))
+                            .text_style(DesignTokens::welcome_screen_body()),
                     );
                 });
             }
@@ -992,102 +1088,6 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
     });
 }
 
-/// Four KPI cards: what a platform leads with. Each is a button into
-/// its section, with a large icon.
-fn kpi_row(ui: &mut egui::Ui, index: &Index, go_to: &mut Option<(Section, Option<String>)>) {
-    let episodes: u64 = index
-        .by_kind(kind::BATCH)
-        .iter()
-        .filter_map(|a| a.summary.get("episodes").and_then(|v| v.as_u64()))
-        .sum();
-    let count_of = |section: Section| section.kinds().map(|k| index.count(k)).sum::<usize>();
-    let cards: [(Section, String, String); 4] = [
-        (
-            Section::Robots,
-            count_of(Section::Robots).to_string(),
-            first_name(index, kind::ROBOT).unwrap_or_else(|| "no asset".into()),
-        ),
-        (
-            Section::Datasets,
-            count_of(Section::Datasets).to_string(),
-            format!("{episodes} episodes"),
-        ),
-        (
-            Section::Experiments,
-            count_of(Section::Experiments).to_string(),
-            first_name(index, kind::RUN).unwrap_or_else(|| "no experiment".into()),
-        ),
-        (
-            Section::Certificates,
-            count_of(Section::Certificates).to_string(),
-            first_name(index, kind::CERTIFICATE).unwrap_or_else(|| "none yet".into()),
-        ),
-    ];
-    let gap = GRID_GAP;
-    let width = (ui.available_width() - gap * 3.0) / 4.0;
-    let inner = width - 2.0 * f32::from(CARD_INNER_MARGIN);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
-        for (section, value, caption) in cards {
-            let response = card(ui, None)
-                .show(ui, |ui| {
-                    ui.set_min_width(inner);
-                    ui.set_max_width(inner);
-                    ui.set_min_height(KPI_CARD_HEIGHT);
-                    ui.set_max_height(KPI_CARD_HEIGHT);
-                    ui.horizontal_top(|ui| {
-                        ui.vertical(|ui| {
-                            weak_body(ui, section.title());
-                            ui.label(
-                                egui::RichText::new(value)
-                                    .text_style(DesignTokens::welcome_screen_h1())
-                                    .strong(),
-                            );
-                            // One line, cut with an ellipsis: an evaluation's
-                            // generated name wrapped the card until 2026-09-28.
-                            ui.add(
-                                egui::Label::new(
-                                    egui::RichText::new(&caption)
-                                        .text_style(DesignTokens::welcome_screen_tag())
-                                        .color(ui.visuals().weak_text_color()),
-                                )
-                                .truncate(),
-                            )
-                            .on_hover_text(&caption);
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                            let tint = ui.tokens().label_button_icon_color;
-                            icon_at(ui, section.icon(), KPI_ICON, tint);
-                        });
-                    });
-                })
-                .response
-                .interact(egui::Sense::click());
-            if response.clicked() {
-                *go_to = Some((section, None));
-            }
-            if response.hovered() {
-                ui.painter().rect_stroke(
-                    response.rect,
-                    CARD_RADIUS,
-                    egui::Stroke::new(1.0, ui.tokens().highlight_color),
-                    egui::StrokeKind::Inside,
-                );
-            }
-        }
-    });
-}
-
-/// The newest artifact of a kind, by name: what a KPI card shows under
-/// its count (it showed the oldest until 2026-09-28).
-fn first_name(index: &Index, kind: &str) -> Option<String> {
-    index
-        .by_kind(kind)
-        .into_iter()
-        .max_by(|a, b| a.updated.cmp(&b.updated))
-        .map(|a| split_stamp(&a.stamp).0.to_owned())
-}
-
 /// What happened in this project, newest first: the agent's tools (the
 /// job table) and what the human and the agent did in the window (the
 /// event log), in one feed.
@@ -1095,20 +1095,28 @@ fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
     subheading(ui, "Recent activity");
     card(ui, None).show(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        if jobs.is_empty() && events.is_empty() {
-            weak_body(
-                ui,
-                "Nothing yet. Every tool your agent runs, and every move in this window, appears here.",
-            );
-            return;
-        }
         let now = now_epoch();
         let mut lines: Vec<(f64, ActivityLine)> = jobs
             .iter()
             .map(|j| (j.started, ActivityLine::Job(j)))
-            .chain(events.iter().map(|e| (e.epoch_seconds(), ActivityLine::Event(e))))
+            .chain(
+                events
+                    .iter()
+                    .filter(|e| worth_a_line(e))
+                    .map(|e| (e.epoch_seconds(), ActivityLine::Event(e))),
+            )
             .collect();
+        if lines.is_empty() {
+            weak_body(
+                ui,
+                "Nothing yet. Every tool your agent runs, and what it does in this window, appears here.",
+            );
+            return;
+        }
         lines.sort_by(|a, b| b.0.total_cmp(&a.0));
+        // A run of page opens is one move: the newest stands for it (an
+        // agent walking the pages filled every row, 2026-10-12).
+        lines.dedup_by(|older, newer| is_page_open(&older.1) && is_page_open(&newer.1));
         for (at, line) in lines.iter().take(ACTIVITY_ROWS) {
             ui.horizontal(|ui| {
                 ui.label(
@@ -1163,6 +1171,26 @@ fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
     });
 }
 
+/// Whether an event belongs in Recent activity: what the agent did in the
+/// window, and the person's own moves that change something (a project
+/// opened, a recording shown). The person's page opens, selections,
+/// closed drawers and time scrubs filled the feed with what they had
+/// just done themselves (design review, 2026-10-12).
+fn worth_a_line(event: &Event) -> bool {
+    match event.kind.as_str() {
+        EVENT_DESELECT | EVENT_TIME | EVENT_KEY => false,
+        EVENT_TABLE if event.table.is_none() => false,
+        EVENT_OPEN if event.project.is_some() => true,
+        EVENT_OPEN | EVENT_SELECT | EVENT_TABLE => event.by == BY_AGENT,
+        _ => true,
+    }
+}
+
+/// Whether a feed line is a page being opened (not a project).
+fn is_page_open(line: &ActivityLine) -> bool {
+    matches!(line, ActivityLine::Event(e) if e.kind == EVENT_OPEN && e.project.is_none())
+}
+
 enum ActivityLine<'a> {
     Job(&'a Job),
     Event(&'a Event),
@@ -1205,8 +1233,12 @@ fn event_words(event: &Event) -> String {
 /// The cloud line of the Compute card. It named a TRAINNR_ENDPOINT that
 /// no tool reads (fresh-install audit, 2026-10-08); jobs run on this
 /// machine, and a full training run rents a GPU through the cloud tool.
-fn cloud_line() -> String {
-    format!("Jobs run on this machine. A full training run can rent a GPU: {CLOUD_TOOL}.")
+fn cloud_line(ui: &mut egui::Ui) {
+    weak_body(
+        ui,
+        "Jobs run on this machine. For a full training run, your agent can rent a cloud GPU.",
+    )
+    .on_hover_text(format!("With {CLOUD_TOOL}"));
 }
 
 /// The tool that rents a GPU for a full training run (README, Platforms).
@@ -1226,7 +1258,7 @@ fn compute(ui: &mut egui::Ui, model: &Model, open_run: &mut Option<String>) {
                 16.0,
                 ui.tokens().label_button_icon_color,
             );
-            ui.label(egui::RichText::new("local").strong());
+            ui.label(egui::RichText::new("This machine").strong());
             tag(ui, std::env::consts::ARCH);
             tag(ui, std::env::consts::OS);
         });
@@ -1237,7 +1269,7 @@ fn compute(ui: &mut egui::Ui, model: &Model, open_run: &mut Option<String>) {
         let now = crate::model::now_epoch();
         let rows = crate::running::panel_rows(&model.jobs, now, crate::running::FINISHED_KEPT);
         if running == 0 && rows.is_empty() {
-            weak_body(ui, "idle · no jobs running");
+            weak_body(ui, "Nothing running");
         }
         if !rows.is_empty() {
             match crate::running::chip_strip(ui, &rows, now, None, false) {
@@ -1253,11 +1285,11 @@ fn compute(ui: &mut egui::Ui, model: &Model, open_run: &mut Option<String>) {
         // record lands and it becomes a card.
         if let Some(index) = model.index() {
             for p in &index.in_progress {
-                weak_body(ui, format!("⏳ {} — {}", p.path, p.stage));
+                in_progress_row(ui, p);
             }
         }
         ui.add_space(6.0);
-        weak_body(ui, cloud_line());
+        cloud_line(ui);
     });
 }
 
@@ -1296,6 +1328,7 @@ fn sort_newest(rows: &mut [&Artifact]) {
     });
 }
 
+#[allow(clippy::too_many_arguments)] // one page, one argument per thing it reads or asks
 pub fn section(
     ui: &mut egui::Ui,
     model: &Model,
@@ -1304,7 +1337,9 @@ pub fn section(
     show: &mut Option<String>,
     explore: &mut Option<crate::detail::Section>,
     nav: &mut Nav,
+    actions: (&[&crate::forms::Form], &crate::onboarding::ActionState),
 ) {
+    let (forms, state) = actions;
     let Some(index) = model.index() else {
         return;
     };
@@ -1322,7 +1357,7 @@ pub fn section(
                 heading(ui, section.title());
                 ui.add_space(8.0);
                 tag(ui, &rows.len().to_string());
-                if rows.is_empty() {
+                let view = if rows.is_empty() {
                     crate::listing::View::Cards
                 } else {
                     crate::listing::view_switch(
@@ -1330,9 +1365,43 @@ pub fn section(
                         section,
                         crate::listing::matrix_available(&rows),
                     )
-                }
+                };
+                // The page's own actions, the agent's tools as buttons.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Drawn right to left in reverse, so they read left to
+                    // right in the registry's order, the first one filled:
+                    // Export, Run gate, Pre-flight is the workflow's order
+                    // (it read backwards until 2026-10-12).
+                    for (i, form) in forms.iter().enumerate().rev() {
+                        if state.is_running(&form.tool) {
+                            ui.label(state.busy_word("Running…"));
+                            ui.spinner();
+                            continue;
+                        }
+                        let missing = crate::forms::missing_input(form, &|k| index.count(k));
+                        let free = state.running.is_none() && missing.is_none();
+                        let button = if i == 0 {
+                            crate::onboarding::primary_button(ui, &form.label, free)
+                        } else {
+                            crate::onboarding::secondary_button(ui, &form.label, free)
+                        };
+                        let hover = missing.unwrap_or_else(|| form.summary.clone());
+                        if button
+                            .on_hover_text(&hover)
+                            .on_disabled_hover_text(&hover)
+                            .clicked()
+                        {
+                            nav.form = Some(form.tool.clone());
+                        }
+                    }
+                });
+                view
             })
             .inner;
+        for form in forms {
+            crate::onboarding::failure_line(ui, state, &form.tool, &form.label);
+            crate::onboarding::done_line(ui, state, &form.tool);
+        }
         // Work this page's kinds are still becoming (a capture listening, a
         // scene being captured), from the index's `in_progress`.
         for p in index
@@ -1340,7 +1409,7 @@ pub fn section(
             .iter()
             .filter(|p| section.kinds().any(|k| k == p.kind))
         {
-            weak_body(ui, format!("⏳ {} — {}", p.path, p.stage));
+            in_progress_row(ui, p);
         }
         ui.add_space(16.0);
         if rows.is_empty() {
@@ -1467,6 +1536,14 @@ fn card_rows(
                         let (name, hash) = split_stamp(&artifact.stamp);
                         let facts = summary_line(&artifact.summary)
                             .unwrap_or_else(|| artifact.path.clone());
+                        // An evaluation is told apart by its condition: the
+                        // policy repeats on every card (design review,
+                        // 2026-10-12), so the condition is the title.
+                        let (title, facts) = if artifact.kind == kind::CERTIFICATE {
+                            (facts, name.to_owned())
+                        } else {
+                            (name.to_owned(), facts)
+                        };
                         let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
                         let response = picture_card_with_id(
                             ui,
@@ -1476,7 +1553,7 @@ fn card_rows(
                                 .as_deref(),
                             Section::icon_for(&artifact.kind),
                             CardText {
-                                title: name,
+                                title: &title,
                                 facts: &facts,
                                 footer: Some(card_footer(artifact, hash)),
                             },
@@ -1554,6 +1631,8 @@ fn detail(
                 ui.horizontal(|ui| {
                     ui.set_width(ui.available_width());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // The drawer's actions at one height, padded alike.
+                        ui.spacing_mut().button_padding = egui::vec2(10.0, 5.0);
                         let mut buttons = |ui: &mut egui::Ui| {
                             // The artifact as itself: a robot in 3D, a recording as
                             // plots, a run's curves, a certificate's funnel — in the
@@ -1570,17 +1649,23 @@ fn detail(
                             let scenes = crate::model::viewport_scenes(artifact);
                             if let Some(((_, live), replays)) = scenes.split_first() {
                                 if !replays.is_empty() {
-                                    ui.menu_button("Replay in simulator", |ui| {
-                                        for (label, scene) in replays {
-                                            if ui.button(label).clicked() {
-                                                nav.scene = Some(scene.clone());
-                                                ui.close();
+                                    // Framed like a button, as Show is: the
+                                    // drawer's actions read as one set.
+                                    let replay = framed_button(ui, "Replay in simulator");
+                                    egui::containers::menu::MenuButton::from_button(replay).ui(
+                                        ui,
+                                        |ui| {
+                                            for (label, scene) in replays {
+                                                if ui.button(label).clicked() {
+                                                    nav.scene = Some(scene.clone());
+                                                    ui.close();
+                                                }
                                             }
-                                        }
-                                    });
+                                        },
+                                    );
                                 }
                                 if ui
-                                    .button("Play in simulator")
+                                    .add(framed_button(ui, "Play in simulator"))
                                     .on_hover_text(
                                         "The exported policy live in the Simulator's MuJoCo \
                                      viewport: drive it with WASD",
@@ -1588,6 +1673,18 @@ fn detail(
                                     .clicked()
                                 {
                                     nav.scene = Some(live.clone());
+                                }
+                            }
+                            // What a finding asks for, one click away: a
+                            // drift check's recommendation named a tool in
+                            // prose only (design review, 2026-10-12).
+                            if let Some((label, tool)) = remedy(artifact) {
+                                if ui
+                                    .add(framed_button(ui, label))
+                                    .on_hover_text("Opens the form that runs it")
+                                    .clicked()
+                                {
+                                    nav.form = Some(tool.to_owned());
                                 }
                             }
                         };
@@ -1693,7 +1790,7 @@ fn lineage_grid(
 /// warning colour.
 fn stamp_link(ui: &mut egui::Ui, model: &Model, stamp: &str, short: bool, nav: &mut Nav) {
     if stamp == UNRECORDED {
-        ui.label(egui::RichText::new(stamp).color(ui.visuals().warn_fg_color));
+        ui.label(egui::RichText::new(stamp).color(crate::theme::palette(ui).warn));
     } else if model.artifact(stamp).is_some() {
         let (name, hash) = split_stamp(stamp);
         let text = if short { name } else { stamp };
@@ -1728,14 +1825,9 @@ fn used_by(ui: &mut egui::Ui, model: &Model, artifact: &Artifact, nav: &mut Nav)
     // One wrapped row per kind (a grid cannot size a wrapped cell, and
     // rows would overlap): the count and the kind, then the links.
     for (kind, members) in &groups {
-        let word = Section::for_kind(kind)
-            .map(|s| s.title().to_lowercase())
-            .unwrap_or_else(|| kind.clone());
+        let count = crate::widgets::count_word(members.len(), kind_word(kind));
         ui.horizontal_wrapped(|ui| {
-            ui.label(
-                egui::RichText::new(format!("{} {word}", members.len()))
-                    .color(ui.visuals().weak_text_color()),
-            );
+            ui.label(egui::RichText::new(count).color(ui.visuals().weak_text_color()));
             ui.add_space(8.0);
             for a in members.iter().take(USED_BY_SHOWN) {
                 stamp_link(ui, model, &a.stamp, true, nav);
@@ -1772,6 +1864,18 @@ fn fact_grid(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_next_move_reads_without_tool_names() {
+        let next = "bring in the robot's model (onboard_robot), or its telemetry \
+                    (ingest_recording) or a public log of it (ingest_public_log)";
+        assert_eq!(
+            without_tool_names(next),
+            "bring in the robot's model, or its telemetry or a public log of it"
+        );
+        let plain = "an ONNX export (with its manifest) and the gate";
+        assert_eq!(without_tool_names(plain), plain, "prose in brackets stays");
+    }
 
     #[test]
     fn pages_parse_from_their_names_and_kinds_find_their_page() {

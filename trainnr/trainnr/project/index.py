@@ -506,7 +506,10 @@ def _headline(kind: Kind, s: dict[str, Any]) -> str:  # noqa: PLR0911 - one line
     if kind is Kind.DEPLOY:
         preflight = s.get(PREFLIGHT_SUMMARY_KEY)
         return _join(
-            f"evaluated {s[EVALUATED_KEY]}" if s.get(EVALUATED_KEY) else None,
+            # the rate first and short ("95% success · gate passed"): a
+            # leading "evaluated" pushed the gate's verdict off the card
+            # (design review, 2026-10-12)
+            s.get(EVALUATED_KEY),
             f"gate {s['gate']}" if s.get("gate") else None,
             f"pre-flight {preflight}" if preflight else None,
             f"on {s['scene']}" if s.get("scene") else None,

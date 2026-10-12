@@ -30,8 +30,7 @@ DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
 PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 RUNNING_RS = (SHELL_SRC / "running.rs").read_text(encoding="utf-8")
 ONBOARDING_RS = (SHELL_SRC / "onboarding.rs").read_text(encoding="utf-8")
-AGENT_RS = (SHELL_SRC / "agent.rs").read_text(encoding="utf-8")
-README = (REPO / "README.md").read_text(encoding="utf-8")
+SHELL_RS = (SHELL_SRC / "shell.rs").read_text(encoding="utf-8")
 
 
 # The kinds the index writes that no Studio page lists by kind.
@@ -244,6 +243,8 @@ class TheWelcomePage(unittest.TestCase):
                 value = getattr(sample, field)
                 self.assertIn(f'{field}: "{value}",', ONBOARDING_RS, field)
             self.assertIn(f"bytes: {sample.bytes:_},", ONBOARDING_RS)
+            self.assertIn(f'sha256: "{sample.sha256}",', ONBOARDING_RS)
+            self.assertIn(f'url: "{sample.url}",', ONBOARDING_RS)
 
     def test_the_loops_stages_agree(self) -> None:
         from trainnr.project.index import STATES  # noqa: PLC0415
@@ -257,6 +258,35 @@ class TheWelcomePage(unittest.TestCase):
         named = re.findall(r'\("([^"]+)", Section::', block.group(2))
         self.assertEqual(named, [name for name, _ in STATES])
         self.assertEqual(int(block.group(1)), len(STATES))
+
+
+class TheButtonsCommands(unittest.TestCase):
+    """The Studio's buttons run `trainnr call` and read its reply: the
+    refusal's exit code, the made project's `root`, a refusal's `reason`
+    (the desktop app, 2026-10-11)."""
+
+    def test_the_refused_exit_code_agrees(self) -> None:
+        from trainnr import cli  # noqa: PLC0415
+
+        rust = constant(SHELL_RS, r"^const REFUSED_EXIT: i32 = (\d+);")
+        self.assertEqual(int(rust), cli.REFUSED_EXIT)
+
+    def test_the_reply_keys_the_studio_reads_are_written(self) -> None:
+        import tempfile  # noqa: PLC0415
+        from unittest import mock  # noqa: PLC0415
+
+        from trainnr.mcp_jobs import refusal  # noqa: PLC0415
+        from trainnr.mcp_server import create_project_dir  # noqa: PLC0415
+
+        for key in ("root", "reason"):
+            self.assertIn(f'r.get("{key}")', SHELL_RS.replace(" ", ""), key)
+        self.assertIn("reason", refusal("why"))
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict("os.environ", {"TRAINNR_PROJECTS": tmp}),
+            mock.patch("trainnr.project.remember_project"),  # no session change
+        ):
+            self.assertIn("root", create_project_dir("mirror"))
 
 
 if __name__ == "__main__":
@@ -526,15 +556,3 @@ class AgentLinkFile(unittest.TestCase):
         self.assertEqual(
             constant(MODEL_RS, r'const HOME_ENV: &str = "([^"]+)";'), paths.HOME_ENV
         )
-
-    def test_the_connect_commands_are_the_readme_s(self) -> None:
-        """The Studio tells a user with no agent how to get one. A window
-        that teaches an install the project no longer documents is worse
-        than one that says nothing (review, 2026-10-11)."""
-        for name in ("PLUGIN_MARKETPLACE", "PLUGIN_INSTALL"):
-            shown = constant(AGENT_RS, rf'pub const {name}: &str = "([^"]+)";')
-            self.assertIn(
-                shown,
-                README,
-                f"{name} is not a command the README gives",
-            )

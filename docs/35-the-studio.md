@@ -194,28 +194,217 @@ The Projects page lists the samples under its projects, the open one
 marked as open. The Studio's copies of the sample list and the loop's
 stages are pinned to the Python originals by `tests/test_studio_mirrors.py`.
 
-### 5.4 Whether an agent is connected (2026-10-10)
+### 5.4 Buttons that run the agent's tools (2026-10-11)
 
-The Welcome page says trainnr is "run from your coding agent", and an
-empty project's Overview says each stage "lights up as its result lands".
-Neither said whether an agent was there. A user whose MCP configuration
-had not taken — the wrong session root, a client not restarted — saw
-exactly the window a correctly wired user saw, and the only way to tell
-them apart was to call a tool and watch for a change. A first-run report
-on a clean Mac (2026-10-10) spent most of its setup time there.
+The app is becoming one people use on their own (docs/85). Its buttons
+run the same tools the agent calls, through `trainnr call <tool> --args
+'<json>'` (`spawn::trainnr_command`): one runner in the shell
+(`run_action`), one button at a time, its errors in the projects home's
+`.index/studio-action.log` and what it prints in `studio-action.out`: a
+file, never a pipe, because a pipe read only after the exit fills at
+about 64 KB and the command then waits forever. A finished command names the project to open:
+`sample open` prints its folder, `call` prints the tool's JSON, whose
+`root` names it; a refusal (exit 3) shows its reason under the button.
+**New project** is the first: a dialog asks for the name, sent alone
+(never as a path), and `create_project` checks it with the shared name
+rule (`plain_name`) and refuses by name. The review of 2026-10-11 found
+`~root` typed as a name expanded to /root; a leading `~` is now refused,
+with the characters Windows cannot hold and a trailing dot. Gotcha: a dialog that
+asks for focus every frame takes it back the frame Enter releases it, so
+Enter never submitted; it now takes focus once and reads Enter itself
+(a headless test draws it).
 
-The **status bar** carries a dot and one word on every page, at every
-stage of a project: an agent can drop at any time, and the two screens
-that spell it out are only shown while a project is empty. Its hover
-gives the call count and the last tool, or the commands to run.
+### 5.5 Forms over the tools (2026-10-11)
 
-Those two screens — the Welcome page and an empty project's **Start
-here** card — carry the fuller line: a dot and **Agent connected**, with
-the last tool it called, or **No agent connected** followed by the
-README's plugin install and a chip that copies each command. They are
-where the promise is made, so they are where the fix is spelled out. The
-block keeps the tallest height it has drawn, so the cards beneath do not
-jump when the state flips. None of this is a chat panel and none of it
+A page's header carries its actions: Robots has Add robot and Identify
+dynamics, Recordings Add recording, Environments Check environment,
+Experiments Train, Evaluations Evaluate, Deployments Export, Monitoring
+Check for drift. The first is filled and rightmost; the others are plain.
+Which tool sits on which page, and what an argument is beyond its type,
+is `trainnr/forms.py`: an artifact of the open project to pick (`kind`),
+a file or folder to choose (`files`, `folder`; `*` is any file, because
+a recording's reader is picked by what the file holds and plugins add
+readers), or one of a few words (`choices`). Everything else comes from
+the tool's own input schema, through `trainnr forms`, which the Studio
+runs once per session (`forms::Catalog`); the hints stay out of the
+schema an agent reads, which every session pays for in tokens.
+
+A submitted form runs `trainnr call <tool>` with `TRAINNR_PROJECT` set to
+the window's project: the tools otherwise act on the projects home's
+`.current`, which switching project in the window does not move. A tool
+that starts a job opens Running now on it; one that finishes in place
+says Done under the header; a refusal says its reason there. File
+dialogs (`rfd`, the version and backend Rerun already builds) run on
+their own thread, so the window keeps drawing. When `trainnr forms`
+cannot run, the status bar says "buttons unavailable" with the reason;
+the agent can still run every tool.
+
+### 5.6 The engine, and the sample with none (2026-10-11)
+
+A Studio downloaded from a release has no checkout beside it. `spawn.rs`
+roots every process in a checkout when there is one, else in the
+engine's runtime under `<trainnr home>/engine/` once it is set up
+(`engine.rs`), else nowhere: then the first action that runs a tool sets
+the engine up on its own thread, the button shows each step (uv, the
+runtime, the core), and the action runs when it is ready. The presenter
+and the simulator wait the same way; until the engine can list them, the
+pages show the forms built into this build (`forms.json`, pinned by
+`tests/test_forms.py`). The uv the engine runs is named to every child
+(`TRAINNR_UV`) and so to every job.
+
+Open sample needs none of it: `sample.rs` downloads the archive over
+HTTPS, checks its size and SHA-256, unpacks it (plain files and folders,
+nothing out of the folder, nothing kept of a refused archive), writes
+the index's `root` (the archive carries its index with the root empty)
+and the projects home's `.current`, and opens it. Gotchas: a test binary
+runs from the checkout, so the tests that play a fresh machine hide it
+(`spawn::hide_checkout`, test builds only); and the `tar` crate refuses
+to write a `..` path, so the test of a hostile archive writes the name's
+bytes into the header itself.
+
+### 5.7 Connect your agent (2026-10-11)
+
+The Welcome page's "Connect your coding agent" and the status bar's
+"Connect agent" open one panel (`connect.rs`): Claude Code, Codex and
+Cursor, each with whether it is on this machine, whether it already has
+trainnr, and an Add button; then the command line for any other client,
+to copy. The agent's entry runs `<trainnr home>/engine/bin/trainnr mcp`,
+a launcher the Studio rewrites to point at the current engine (or the
+checkout's environment), with the engine's uv named; Windows names the
+environment's Python instead. Each client is looked up when the panel
+opens and after an add, never per frame: a PATH search crosses the
+Windows folders under WSL, and the panel's test took 19 s a run until
+the lookups moved out of the frame. Before the engine exists the panel
+offers to set it up.
+
+### 5.8 The review of the desktop app (2026-10-11)
+
+A review of the whole branch found, and this branch fixed:
+- an app opened from Finder or the Dock has a PATH with neither
+  ~/.local/bin nor Homebrew, so Connect looked for `claude` and `codex`
+  only there and failed for most Macs: `connect::find_cli` also looks
+  where their installers put them, and on Windows runs an npm `.cmd` by
+  its path;
+- an agent's entry from an older engine kept running it: the launcher is
+  rewritten whenever the engine is ready, older runtimes are removed, and
+  an entry that runs another program (Windows names the versioned
+  Python) shows Update, which removes and adds it;
+- a scene asked for before the engine started anyway after Stop or on
+  another project: it now waits on its own project, and a failed setup
+  says why;
+- `uv sync` re-resolved from PyPI when a lock was stale: the engine syncs
+  and runs `--locked` (checked: uv 0.13.0 honours the lock 0.5.24 wrote);
+- the setup and the runs could pick different uvs, and a retry
+  downloaded uv again: one order for both;
+- a relative `TRAINNR_HOME` meant another folder in the children: they
+  get the absolute one;
+- two windows truncated each other's command output: each window's files
+  carry its process id and are removed once read;
+- the update check looked once a day on its own, against the rule that
+  no network call runs unasked: it is now a click on the version.
+
+### 5.9 The design review (2026-10-12)
+
+A design review of the branch (the impeccable plugin's critique: a
+design director's reading of 58 screens, and an independent measured
+audit of contrast, type, spacing and buttons) scored the Studio 23 of 40.
+Fixed here:
+- **Faint text.** `theme::align_visuals` stopped when the page was
+  already white, and Rerun's light page is white, so the light theme's
+  muted grey and link blue were never applied; it now checks those
+  colours. Dark muted text takes Rerun's own subdued text, `Gray.550`
+  (`DARK_MUTED`; `Gray.500`, the first pick, read 4.4:1 on a card),
+  dark tags Rerun's `text_default`, and the highlight token (a
+  background) is no longer used as text: the palette's `accent_text` is the
+  link blue in light and Rerun's `info_text_color` in dark. The light
+  link blue went one notch darker (0, 96, 196) to clear 4.5:1 on every
+  surface. Measured after: secondary text 6.1:1 on the page and 5.7:1
+  on a card (dark) and 6.1 to
+  6.4:1 (light), "Next" 9.8 and 5.5, rail labels 6.1 and 17.9, step
+  numbers 5.1 and 16.0. A test holds the light palette to 4.5:1 on its
+  surfaces.
+- **Evaluation cards** are titled by their condition, with the policy
+  below, and wear a histogram, not a check mark: a check beside 0 of 40
+  read as a pass.
+- **The view switch** is a segmented control beside the count; the
+  page's buttons had covered it.
+- **The first step without an agent.** Start here leads an empty
+  project, above the pipeline, and each step has its buttons (Add robot;
+  Add recording, Add public log; Identify dynamics), with the prompt as
+  the other way in. An action whose required input the project does not
+  hold is off and says what to add (`forms::missing_input`). The "Next"
+  line leaves out the tool names it carries for agents.
+- **Order and weight.** The page buttons read left to right in the
+  workflow's order (Export, Run gate, Pre-flight), the first filled; the
+  deployment card leads with "95% success · gate passed"; the drawer's
+  actions share one framed style; a form shows each field's description
+  under its label ("smoke (minutes, saves nothing) or full").
+- The project switcher shows a dropdown arrow, not a download one;
+  Findings an outlined icon.
+
+The second round, the same day:
+- **The Overview** of a project with results leads with the best policy
+  per condition; the four count tiles repeated the rail's counts.
+- **Forms** show a problem under its own field, in the warning colour
+  (the palette's `warn`: Rerun's orange in dark, a deeper one in light, where
+  Rerun's measured 2.6:1), a bad number as it is typed and an empty
+  required field only after Run. A click outside no longer discards a
+  half-filled form or the New project dialog (`widgets::escape_closes`:
+  Escape or Cancel only). The buttons sit on the right, Cancel then the
+  main action, as egui's own dialogs lay them out; the footer says "Your
+  agent can run this too", the tool name on hover.
+- **Downloads** show a bar, the megabytes and a Cancel: the sample, uv,
+  the runtime (`engine::Transfer`, counted as `download_with` reads), and
+  the `uv sync` step, which has no size, a spinner and the same Cancel,
+  which stops uv (`output_unless_cancelled`). A cancelled setup goes back
+  to not started and its waiting button comes back.
+- **Screen readers** reach the painted widgets: a prompt or command chip
+  is a "Copy …" button, a step number says "Step n", a simulator world
+  dot is a radio button (`Response::widget_info`).
+- **The palette has a door**: Search on the title bar, with the key as
+  the platform writes it (⌘K on a Mac, Ctrl+K elsewhere, egui's
+  `format_shortcut`).
+- **Copy.** Sentence case on every button and state ("Stop", "Dismiss",
+  "Idle", "Connect agent", "Checking…"); "Previews stopped" in place of
+  "presenter stopped"; "1 deployment", "2 policies" (`count_word` knows
+  the "-ies" plural); a task's detail says where it is defined, not
+  "declared as: declared"; no emoji or em dash in on-screen strings (an
+  in-progress line is a spinner); the Compute card's cloud line names no
+  script. Recent activity leaves out the person's own page opens,
+  selections and time scrubs, and folds a run of page opens into one.
+- **Layout.** The pipeline's "›" goes before a chip on the same row,
+  never dangling where the row breaks; the Welcome page's numbered
+  stages sit on one line (each a block of fixed height); the status
+  bar's buttons are 24 points tall; the simulator's selects are framed
+  with a visible arrow in light.
+- **Pictures.** A still's pure-black rows are trimmed before it fills a
+  card (`previews._trim_black_bands`): a deployment's card had a black
+  band across its top. The sample's packed pictures keep theirs until
+  the sample archive is made again.
+- **Doors where a page had none.** The Simulator of a project with a
+  deployment leads with Play buttons for it; a drifted drift record's
+  drawer has Re-identify dynamics, which opens that form; long detail
+  values (a drift record's rule, its joint lists) wrap at body size, not
+  small monospace.
+
+### 5.10 Whether an agent is connected (2026-10-10, #32)
+
+A first-run report on a clean Mac (2026-10-10, from the contributor who
+then built this) spent most of its setup time on one question: had the
+MCP configuration taken? A user whose agent was not wired up saw exactly
+the window a wired user saw.
+
+**Where it shows.** Since the merge into the app (2026-10-12), where
+connecting lives: the status bar's Connect agent button says "● Connect
+agent", "● Agent connected" or "● 2 agent sessions", with the call count
+and the last tool on hover, and opens the Connect panel (§5.7); the
+panel and the Welcome page (beside its Connect button) carry the fuller
+line, "Agent connected · last call list_robots". No agent is an ordinary
+state for an app used on its own, so it is said in the muted colour,
+never as a warning; the first cut, written for the agent-first window,
+put "no agent" in orange on every page and the plugin's install commands
+on the Welcome page and Start here, and held their height when an agent
+connected, which left a gap. None of this is a chat panel and none of it
 wants to become one (§8, §10.2).
 
 **How it is known, without the Studio speaking MCP.** An MCP server over
@@ -269,16 +458,18 @@ is connected to the machine, not to a project — the Welcome page is shown
 before any project exists, and that is exactly where the answer is needed.
 They join the index and the job table as the third thing in the contract
 between the halves; the folder, the schema and both thresholds are pinned
-to the writer's by `tests/test_studio_mirrors.py`, which also pins the
-commands the window shows to the README's own.
+to the writer's by `tests/test_studio_mirrors.py`.
 
 **Not done here:** naming the client (Claude Code, Cursor) would mean
 reading the MCP handshake's `clientInfo`, and detecting a client that is
 installed but not running would mean reading other tools' configuration
 files. Neither is needed to answer "is my agent there", and the second has
-a privacy cost; both are left until someone asks. On macOS `pid_alive`
-still starts a `kill -0` process, once a second per live file; a
-`libc::kill` would avoid it.
+a privacy cost; both are left until someone asks. `pid_alive` asks the
+kernel in-process (`kill(pid, 0)` through rustix, no unsafe code): on
+macOS it started a `kill -0` process, once a second per live file, until
+the merge. The connection files are written and removed through
+`safe_write`, checked up to the user home, so a linked `agents` folder
+is refused rather than followed.
 
 ## 6. Performance lessons, all measured
 

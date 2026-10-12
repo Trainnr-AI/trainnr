@@ -634,7 +634,8 @@ impl ViewportFeed {
         }
     }
 
-    fn errored(message: String) -> Self {
+    /// A feed that is not running, saying why (or what it waits on).
+    pub fn errored(message: String) -> Self {
         let mut feed = Self::idle();
         feed.spawn_error = Some(message);
         feed

@@ -24,8 +24,11 @@
 
 mod agent;
 mod chrome;
+mod connect;
 mod control;
 mod detail;
+mod engine;
+mod forms;
 mod keys;
 mod listing;
 mod model;
@@ -34,10 +37,12 @@ mod pages;
 mod palette;
 mod pictures;
 mod running;
+mod sample;
 mod shell;
 mod simulator;
 mod spawn;
 mod theme;
+mod update;
 mod viewport;
 mod widgets;
 
@@ -227,7 +232,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cc.egui_ctx.set_theme(chosen);
 
             let viewport = ViewportFeed::idle();
-            let mut shell = Shell::new(Model::open(repo_root()));
+            let mut shell = Shell::new(Model::open(&repo_root()));
             shell.open_project();
             let mut control = control::Control::new(shell.model.project_root.clone());
             control.watch(cc.egui_ctx.clone());
@@ -244,6 +249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 viewport_full: false,
                 closing: false,
                 theme_preference: chosen,
+                pending_scene: None,
                 frames: FrameClock::default(),
             }))
         }),
@@ -252,6 +258,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 struct StudioShell {
+    /// A scene asked for before the engine was set up, and the project it
+    /// was asked on: it starts the moment the engine is ready
+    /// (`engine.rs`), unless Stop or another project came first.
+    pending_scene: Option<(String, std::path::PathBuf)>,
     /// The theme preference as of this frame (system, dark or light),
     /// persisted by `save`.
     theme_preference: egui::ThemePreference,
@@ -311,6 +321,19 @@ impl eframe::App for StudioShell {
         self.fullscreen_keys(ui.ctx());
         self.leave_fullscreen_before_close(ui.ctx());
         self.shell.tick(ui.ctx());
+        if let Some((task, root)) = self.pending_scene.clone() {
+            if root != self.shell.model.project_root {
+                self.pending_scene = None; // the scene was for the last project
+            } else if let Some(why) = self.shell.engine_failure() {
+                self.pending_scene = None;
+                self.viewport = ViewportFeed::errored(format!(
+                    "The {task} scene did not start: the engine did not set up ({why})."
+                ));
+            } else if spawn::engine_ready() {
+                self.pending_scene = None;
+                self.viewport = ViewportFeed::spawn(ui.ctx(), &task, &root);
+            }
+        }
         self.answer_screenshot(ui);
         self.apply_commands(ui);
         self.before = (
@@ -452,9 +475,16 @@ impl eframe::App for StudioShell {
                         );
                         ui.add_space(12.0);
                         let deployments = self.shell.model.deploy_scenes();
+                        // A project with a deployment leads with it: the
+                        // finished sample showed a picker and nothing of
+                        // its own (design review, 2026-10-12).
+                        let mut chosen = simulator::play_deployments(ui, &deployments);
                         if let Some(simulator::Action::Spawn(task)) =
                             simulator::transport(ui, &mut self.viewport, &deployments)
                         {
+                            chosen = Some(task);
+                        }
+                        if let Some(task) = chosen {
                             self.viewport = ViewportFeed::spawn(
                                 ui.ctx(),
                                 &task,
@@ -576,8 +606,17 @@ impl StudioShell {
     fn spawn_or_stop(&mut self, ui: &egui::Ui, action: Option<simulator::Action>) {
         match action {
             Some(simulator::Action::Spawn(task)) => {
-                self.viewport =
-                    ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+                if self.shell.ensure_engine() {
+                    self.viewport =
+                        ViewportFeed::spawn(ui.ctx(), &task, &self.shell.model.project_root);
+                } else {
+                    // The first scene sets the engine up, then starts.
+                    self.viewport = ViewportFeed::errored(format!(
+                        "Setting up the engine for the {task} scene (once); it starts \
+                         when the engine is ready."
+                    ));
+                    self.pending_scene = Some((task, self.shell.model.project_root.clone()));
+                }
             }
             Some(simulator::Action::Stop) => self.stop_scene(),
             Some(simulator::Action::ToggleFullscreen) => {
@@ -620,6 +659,7 @@ impl StudioShell {
     }
 
     fn stop_scene(&mut self) {
+        self.pending_scene = None; // a scene still waiting on the engine stops too
         self.viewport = ViewportFeed::idle();
         self.viewport_full = false;
     }
@@ -1434,7 +1474,7 @@ impl StudioShell {
         }
         self.frames.tick();
         self.theme_preference = ui.ctx().options(|o| o.theme_preference);
-        theme::align_light_visuals(ui.ctx());
+        theme::align_visuals(ui.ctx());
         let state = control::StudioState {
             schema: control::STATE_SCHEMA,
             pid: std::process::id(),

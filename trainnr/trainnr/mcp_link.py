@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any
 
 from trainnr.paths import user_home
-from trainnr.safe_write import write_text
+from trainnr.safe_write import remove, write_text
 
 SCHEMA = "trainnr-agent-link/1"
 #: The folder under `user_home()` holding one file per serving process.
@@ -106,7 +106,11 @@ class AgentLink:
         """Best effort: a server that cannot write this still serves. A
         read-only or missing home must never take the tools down."""
         with contextlib.suppress(OSError):
-            write_text(self.path, json.dumps(self._state(), indent=1) + "\n")
+            write_text(
+                self.path,
+                json.dumps(self._state(), indent=1) + "\n",
+                root=self.path.parent.parent,
+            )
 
     def touch(self, tool: str | None = None) -> None:
         """Note a tool call. The counters move in memory and the heartbeat
@@ -143,7 +147,7 @@ class AgentLink:
             self._beat.join(timeout=HEARTBEAT_EVERY_S * 2)
             self._beat = None
         with contextlib.suppress(OSError):
-            self.path.unlink()
+            remove(self.path, root=self.path.parent.parent)
 
     def __enter__(self) -> AgentLink:
         return self.open()
@@ -172,7 +176,9 @@ def sweep(folder: Path | None = None) -> int:
         except (OSError, ValueError, KeyError, TypeError):
             continue
         if time.time() - stamp > SWEEP_AFTER_S:
+            # Never through a link (`safe_write`, checked up to the user
+            # home): a linked `agents` folder would sweep files elsewhere.
             with contextlib.suppress(OSError):
-                path.unlink()
+                remove(path, root=folder.parent)
                 gone += 1
     return gone

@@ -303,6 +303,33 @@ fn set_drawer(ctx: &egui::Context, open: bool, tab: Tab) {
 
 // -- the transport bar ---------------------------------------------------------
 
+/// The project's deployments as buttons, the first one filled: each plays
+/// its exported policy live. The scene it names, when one was clicked.
+pub fn play_deployments(ui: &mut egui::Ui, deployments: &[(String, String)]) -> Option<String> {
+    if deployments.is_empty() {
+        return None;
+    }
+    let mut chosen = None;
+    ui.horizontal_wrapped(|ui| {
+        for (i, (name, scene)) in deployments.iter().enumerate() {
+            let label = format!("Play {name}");
+            let button = if i == 0 {
+                crate::onboarding::primary_button(ui, &label, true)
+            } else {
+                crate::onboarding::secondary_button(ui, &label, true)
+            };
+            if button
+                .on_hover_text("The exported policy, live: drive it with WASD")
+                .clicked()
+            {
+                chosen = Some(scene.clone());
+            }
+        }
+    });
+    ui.add_space(10.0);
+    chosen
+}
+
 /// Under the picture. Returns what the page should do with the viewport.
 /// `deployments`: (name, live scene) for every deployment the project
 /// holds, offered beside the previews.
@@ -327,7 +354,7 @@ pub fn transport(
             }
             if ui
                 .button(WALK_TASK)
-                .on_hover_text("the newest trained walk policy, live")
+                .on_hover_text("The newest trained walk policy, live")
                 .clicked()
             {
                 action = Some(Action::Spawn(WALK_TASK.to_owned()));
@@ -338,7 +365,7 @@ pub fn transport(
                 for (name, scene) in deployments {
                     if ui
                         .button(format!("deploy · {name}"))
-                        .on_hover_text("the exported policy, live: drive it with WASD")
+                        .on_hover_text("The exported policy, live: drive it with WASD")
                         .clicked()
                     {
                         action = Some(Action::Spawn(scene.clone()));
@@ -504,13 +531,27 @@ fn toggle(ui: &mut egui::Ui, on: bool, text: &str, hint: &str) -> bool {
     response.clicked()
 }
 
+/// A scene or follow select's height: a hit target, not a text line.
+const SELECT_HEIGHT: f32 = 28.0;
+
 /// A menu whose arrow is an icon, not a glyph the font may lack.
 fn menu<R>(
     ui: &mut egui::Ui,
     text: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<Option<R>> {
-    ui.menu_image_text_button(re_ui::icons::DROPDOWN_ARROW.as_image(), text, add)
+    // A select's look: framed, its arrow trailing and tinted with the
+    // text. The untinted arrow vanished on the light page (design review,
+    // 2026-10-12).
+    let palette = crate::theme::palette(ui);
+    let button = egui::Button::new(text)
+        .right_text(re_ui::icons::DROPDOWN_ARROW.as_image().tint(palette.text))
+        .fill(palette.canvas)
+        .stroke(egui::Stroke::new(1.0, palette.edge))
+        .frame_when_inactive(true)
+        .min_size(egui::vec2(0.0, SELECT_HEIGHT));
+    let (response, inner) = egui::containers::menu::MenuButton::from_button(button).ui(ui, add);
+    egui::InnerResponse::new(inner.map(|i| i.inner), response)
 }
 
 /// Many worlds: a dot per world (green running, red fallen, the followed
@@ -548,6 +589,14 @@ fn worlds_row(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus
         } else {
             ui.tokens().alert_success.icon
         };
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::RadioButton,
+                true,
+                i as i64 == followed,
+                format!("Follow world {i}"),
+            )
+        });
         ui.painter().circle_filled(rect.center(), 4.0, color);
         if i as i64 == followed {
             ui.painter().circle_stroke(
@@ -568,7 +617,7 @@ fn worlds_row(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus
     ui.spacing_mut().item_spacing.x = 8.0;
     let n = status.worlds.len();
     ui.label(
-        egui::RichText::new(format!("{n} worlds"))
+        egui::RichText::new(crate::widgets::count_word(n, "world"))
             .small()
             .color(ui.visuals().weak_text_color()),
     );
@@ -749,7 +798,7 @@ fn mode_line(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus)
             }
         } else {
             ui.label(
-                egui::RichText::new("The scene runs itself — values shown, not editable.")
+                egui::RichText::new("The scene runs itself. Values are shown, not editable.")
                     .color(ui.visuals().weak_text_color()),
             );
             if ui

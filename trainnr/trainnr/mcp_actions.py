@@ -39,7 +39,7 @@ from trainnr.mcp_jobs import (
     JobStatus,
     Refusal,
 )
-from trainnr.paths import checkout, train_python, wsl_env_file
+from trainnr.paths import checkout, train_python, uv_program, wsl_env_file
 
 # The checkout the tools run from: `$TRAINNR_REPO`, else the ancestor that
 # carries the package (`paths.checkout`). Not the robot library's parent:
@@ -88,7 +88,7 @@ TRAINER_EXTRAS = ("viz",)
 
 
 def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
-    argv = ["uv", "run", UV_NO_SYNC, "--project", str(project)]
+    argv = [uv_program(), "run", UV_NO_SYNC, "--project", str(project)]
     if env_file is not None:
         argv += ["--env-file", str(env_file)]
     for extra in extras:
@@ -251,7 +251,7 @@ class Actions:
         if self.env_file is None:
             return argv
         return [
-            "uv",
+            uv_program(),
             "run",
             "--no-project",
             "--env-file",

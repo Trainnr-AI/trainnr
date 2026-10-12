@@ -1,0 +1,455 @@
+{
+ "schema": "trainnr-forms/1",
+ "forms": [
+  {
+   "tool": "onboard_robot",
+   "page": "robots",
+   "label": "Add robot",
+   "summary": "Add a robot from its MJCF file (meshes and includes come along) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
+   "fields": [
+    {
+     "name": "model_path",
+     "label": "Model file",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "an MJCF, URDF or USD file",
+     "kind": null,
+     "files": [
+      "xml",
+      "mjcf",
+      "urdf",
+      "usd",
+      "usda",
+      "usdc",
+      "usdz"
+     ],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "name",
+     "label": "Name",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "identify_system",
+   "page": "robots",
+   "label": "Identify dynamics",
+   "summary": "System identification: fit a robot's dynamics from a recording (both by version); writes the fit record with intervals and verdicts.",
+   "fields": [
+    {
+     "name": "robot",
+     "label": "Robot",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "robot",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "recording",
+     "label": "Recording",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "recording",
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "ingest_recording",
+   "page": "recordings",
+   "label": "Add recording",
+   "summary": "Ingest robot telemetry (.wire, LeRobot dataset, ROS 2 .mcap or rosbag2 .db3) into the project as a stamped recording with channels, units, measured rates, census.",
+   "fields": [
+    {
+     "name": "source",
+     "label": "Telemetry",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [
+      "*"
+     ],
+     "folder": true,
+     "choices": []
+    },
+    {
+     "name": "name",
+     "label": "Name",
+     "type": "string",
+     "required": false,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "ingest_public_log",
+   "page": "recordings",
+   "label": "Add public log",
+   "summary": "Fetch a registered public log (size and digest checked) and ingest it with its provenance, as a job; the telemetry stage reads 'public log'.",
+   "fields": [
+    {
+     "name": "log",
+     "label": "Public log",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": [
+      "dfki-go2-field201",
+      "go2-leg-odometry",
+      "iit-go2-chirp"
+     ]
+    },
+    {
+     "name": "name",
+     "label": "Name",
+     "type": "string",
+     "required": false,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "accept_unlicensed",
+     "label": "Accept unlicensed",
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "create_task",
+   "page": "environments",
+   "label": "Define environment",
+   "summary": "Declare an environment: a family plus the spec fields you change, built for real and stamped by content.",
+   "fields": [
+    {
+     "name": "family",
+     "label": "Task family",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": [
+      "trainnr/go1-walk",
+      "trainnr/go2-walk",
+      "trainnr/gripper-pick",
+      "trainnr/kitting",
+      "trainnr/lift-study",
+      "trainnr/microduck-walk"
+     ]
+    },
+    {
+     "name": "name",
+     "label": "Name",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "check_task",
+   "page": "environments",
+   "label": "Check environment",
+   "summary": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk: two training iterations run).",
+   "fields": [
+    {
+     "name": "task",
+     "label": "Environment",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "task",
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "train_walk",
+   "page": "experiments",
+   "label": "Train",
+   "summary": "Train a walk policy (a declared task, or robot go1/go2/microduck).",
+   "fields": [
+    {
+     "name": "task",
+     "label": "Environment",
+     "type": "string",
+     "required": false,
+     "default": null,
+     "description": "a walk declared in the project",
+     "kind": "task",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "recipe",
+     "label": "Recipe",
+     "type": "string",
+     "required": false,
+     "default": "smoke",
+     "description": "smoke (minutes, saves nothing) or full",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": [
+      "smoke",
+      "full"
+     ]
+    },
+    {
+     "name": "iterations",
+     "label": "Iterations",
+     "type": "integer",
+     "required": false,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "evaluate_walk",
+   "page": "evaluations",
+   "label": "Evaluate",
+   "summary": "Evaluate a walk policy: paired episodes, exact confidence intervals, versions on every row; robot names the walk, else the project's one declared walk.",
+   "fields": [
+    {
+     "name": "checkpoint",
+     "label": "Experiment",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "an experiment (its newest checkpoint) or <experiment>/model_N",
+     "kind": "run",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "trials",
+     "label": "Trials",
+     "type": "integer",
+     "required": false,
+     "default": 40,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "export_deployment",
+   "page": "deployments",
+   "label": "Export",
+   "summary": "Export a trained walk policy: ONNX with normalization folded in, a manifest of joint orders, gains, observations and control rate, and the scene as MJCF.",
+   "fields": [
+    {
+     "name": "experiment",
+     "label": "Experiment",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "an experiment in the project",
+     "kind": "run",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "checkpoint",
+     "label": "Checkpoint",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "model_N (with or without .pt)",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "name",
+     "label": "Name",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "the new deployment's name",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "gate_deployment",
+   "page": "deployments",
+   "label": "Run gate",
+   "summary": "The sim-to-sim gate: drive the exported policy through its manifest alone by a registered runtime (plain MuJoCo, or Unitree's simulator over DDS), judge it the evaluation's way, pass within a stated tolerance of the cited evaluation.",
+   "fields": [
+    {
+     "name": "deployment",
+     "label": "Deployment",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "deploy",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "runtime",
+     "label": "Runtime",
+     "type": "string",
+     "required": false,
+     "default": "mujoco",
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": [
+      "mujoco",
+      "dds"
+     ]
+    },
+    {
+     "name": "trials",
+     "label": "Trials",
+     "type": "integer",
+     "required": false,
+     "default": 20,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "preflight_deployment",
+   "page": "deployments",
+   "label": "Pre-flight",
+   "summary": "Check a deployment before the first tick on a robot: joint order, gains, a dry run's targets and torques against limits, compute per tick, the robot's state, then the ramp-in and stops measured.",
+   "fields": [
+    {
+     "name": "deployment",
+     "label": "Deployment",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "deploy",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "runtime",
+     "label": "Runtime",
+     "type": "string",
+     "required": false,
+     "default": "mujoco",
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": [
+      "mujoco",
+      "dds"
+     ]
+    }
+   ]
+  },
+  {
+   "tool": "check_drift",
+   "page": "monitoring",
+   "label": "Check for drift",
+   "summary": "Drift monitoring: identify fresh telemetry (a recording, by version) without writing a fit record and judge every parameter against the robot's identified intervals; writes a drift record naming what left and recommending re-identification.",
+   "fields": [
+    {
+     "name": "robot",
+     "label": "Robot",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "robot",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "recording",
+     "label": "Recording",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "recording",
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  }
+ ]
+}

@@ -3269,7 +3269,12 @@ def create_project_dir(
     from trainnr.project import create_project, remember_project  # noqa: PLC0415
     from trainnr.project.locate import projects_home  # noqa: PLC0415
 
-    target = Path(path if path is not None else name).expanduser()
+    # Only a path someone gave is expanded: a name is a folder in the home,
+    # and `~root` typed as a name expanded to /root (review, 2026-10-11).
+    try:
+        target = Path(path).expanduser() if path is not None else Path(name)
+    except RuntimeError as why:  # `~nosuchuser`
+        return refusal(f"path {path!r}: {why}")
     home = projects_home().resolve()
     root = target if target.is_absolute() else home / target
     if not target.is_absolute() and not root.resolve().is_relative_to(home):
@@ -3892,6 +3897,43 @@ def forbid_unknown_arguments(registered: Any) -> None:
     model.model_config["extra"] = "forbid"
     model.model_rebuild(force=True)
     registered.parameters = model.model_json_schema(by_alias=True)
+
+
+class ToolCallError(RuntimeError):
+    """A tool call by name that did not run or did not succeed; the
+    message is what an agent would have read."""
+
+
+def call_tool(
+    name: str, arguments: dict[str, Any] | None = None, server: Any = None
+) -> Any:
+    """Call one tool by name, as an agent would: the same registry, the
+    same argument checks, the same refusals, the plugins' tools included.
+    What the Studio's buttons and `trainnr call` run, so a person working
+    in the app and an agent over MCP share one tool surface (the desktop
+    app plan, docs/85, 2026-10-11). Returns the tool's structured result
+    (a refusal comes back as the dict the tool returned); raises
+    ToolCallError for an unknown tool, bad arguments or a failed call,
+    which the SDK reports as ToolError."""
+    import asyncio  # noqa: PLC0415
+
+    from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
+    server = server or build_server()
+    try:
+        result = asyncio.run(server.call_tool(name, arguments or {}))
+    except ToolError as why:
+        if str(why).startswith("Unknown tool"):
+            raise ToolCallError(
+                f"no tool {name!r}; `trainnr call --list` lists them"
+            ) from why
+        raise ToolCallError(str(why)) from why
+    content = result.structured_content
+    if content is None:  # a tool that answers in text alone
+        return " ".join(
+            getattr(part, "text", "") for part in result.content or []
+        ).strip()
+    return content.get("result", content)
 
 
 def tool_api(server: Any) -> list[dict[str, Any]]:
