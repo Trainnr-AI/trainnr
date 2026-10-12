@@ -56,7 +56,7 @@ rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] 
 # checked by its SHA-256 and unpacked from a tar.gz. ureq, sha2 and flate2
 # are the versions Rerun already builds; tar is the one new crate.
 ureq = "3.4"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 flate2 = "1"
 tar = "0.4"
 # PNG encoding for the agent's screenshots (control.rs); already in the
