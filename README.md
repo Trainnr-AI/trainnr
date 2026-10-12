@@ -98,13 +98,30 @@ Studio shows each stage as it lands, whoever ran it.
 
 ### The app
 
-From the next release (0.2.0), download the app from the
-[latest release](https://github.com/Trainnr-AI/trainnr/releases/latest):
-`trainnr-*-macos-arm64.dmg` (drag trainnr onto Applications),
-`trainnr-*-x86_64.AppImage` on Linux, or on Windows the Studio's zip
-(run `trainnr-studio.exe` where you unpack it). The builds are not signed
-yet: the first time, macOS asks you to open the app from System Settings,
-Privacy & Security, and Windows from SmartScreen's "More info".
+Download the app. The current build is the release candidate
+0.2.0-rc.1, a pre-release:
+
+| System | Download | Then |
+|---|---|---|
+| Windows (x64) | [trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip) | unzip it and run `trainnr-studio.exe` |
+| macOS (Apple Silicon) | [trainnr-v0.2.0-rc.1-macos-arm64.dmg](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-macos-arm64.dmg) | drag trainnr onto Applications |
+| Linux (x86_64) | [trainnr-v0.2.0-rc.1-x86_64.AppImage](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage) | make it executable and run it |
+
+On Linux, or in WSL on Windows, from a terminal:
+
+```bash
+curl -LO https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage
+chmod +x trainnr-v0.2.0-rc.1-x86_64.AppImage
+./trainnr-v0.2.0-rc.1-x86_64.AppImage
+# no FUSE (common in WSL and containers): run it unpacked instead
+APPIMAGE_EXTRACT_AND_RUN=1 ./trainnr-v0.2.0-rc.1-x86_64.AppImage
+```
+
+Each file has its SHA-256 beside it (`<file>.sha256`), and every
+release is on the [releases page](https://github.com/Trainnr-AI/trainnr/releases).
+The builds are not signed yet: the first time, macOS asks you to open
+the app from System Settings, Privacy & Security, and Windows shows
+SmartScreen's warning (More info, then Run anyway).
 
 The app opens on a Welcome page:
 
