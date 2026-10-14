@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Trainnr AI's plugins for coding agents.",
-    "version": "0.2.0-rc.1"
+    "version": "0.2.0-rc.2"
   },
   "plugins": [
     {
       "name": "trainnr",
       "source": "./",
       "description": "The physical AI platform for robot learning, run from your coding agent: data collection and telemetry, real-to-sim system identification, simulation, synthetic data, reinforcement and imitation learning, evaluation, sim-to-real deployment, and the data flywheel back into training. One MCP server, the Studio (downloaded on first use), seven agents and two skills.",
-      "version": "0.2.0-rc.1",
+      "version": "0.2.0-rc.2",
       "author": {
         "name": "Trainnr AI"
       },

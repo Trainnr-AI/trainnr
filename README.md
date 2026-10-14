@@ -99,25 +99,25 @@ Studio shows each stage as it lands, whoever ran it.
 ### The app
 
 Download the app. The current build is the release candidate
-0.2.0-rc.1, a pre-release:
+0.2.0-rc.2, a pre-release:
 
 | System | Download | Then |
 |---|---|---|
-| Windows 10 or 11 (x64) | [trainnr-v0.2.0-rc.1-windows-x64-setup.exe](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-windows-x64-setup.exe) | run it: it installs for you alone, with no administrator prompt, and adds trainnr to the Start menu |
-| macOS (Apple Silicon) | [trainnr-v0.2.0-rc.1-macos-arm64.dmg](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-macos-arm64.dmg) | drag trainnr onto Applications |
-| Linux (x86_64) | [trainnr-v0.2.0-rc.1-x86_64.AppImage](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage) | make it executable and run it |
+| Windows 10 or 11 (x64) | [trainnr-v0.2.0-rc.2-windows-x64-setup.exe](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.2/trainnr-v0.2.0-rc.2-windows-x64-setup.exe) | run it: it installs for you alone, with no administrator prompt, and adds trainnr to the Start menu |
+| macOS (Apple Silicon) | [trainnr-v0.2.0-rc.2-macos-arm64.dmg](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.2/trainnr-v0.2.0-rc.2-macos-arm64.dmg) | drag trainnr onto Applications |
+| Linux (x86_64) | [trainnr-v0.2.0-rc.2-x86_64.AppImage](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.2/trainnr-v0.2.0-rc.2-x86_64.AppImage) | make it executable and run it |
 
 On Linux, or in WSL on Windows, from a terminal:
 
 ```bash
-curl -LO https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-v0.2.0-rc.1-x86_64.AppImage
-chmod +x trainnr-v0.2.0-rc.1-x86_64.AppImage
-./trainnr-v0.2.0-rc.1-x86_64.AppImage
+curl -LO https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.2/trainnr-v0.2.0-rc.2-x86_64.AppImage
+chmod +x trainnr-v0.2.0-rc.2-x86_64.AppImage
+./trainnr-v0.2.0-rc.2-x86_64.AppImage
 # no FUSE (common in WSL and containers): run it unpacked instead
-APPIMAGE_EXTRACT_AND_RUN=1 ./trainnr-v0.2.0-rc.1-x86_64.AppImage
+APPIMAGE_EXTRACT_AND_RUN=1 ./trainnr-v0.2.0-rc.2-x86_64.AppImage
 ```
 
-Windows also has the app without an installer: [the zip](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.1/trainnr-studio-v0.2.0-rc.1-x86_64-pc-windows-msvc.zip),
+Windows also has the app without an installer: [the zip](https://github.com/Trainnr-AI/trainnr/releases/download/v0.2.0-rc.2/trainnr-studio-v0.2.0-rc.2-x86_64-pc-windows-msvc.zip),
 whose `trainnr-studio.exe` runs where it is unpacked.
 Each file has its SHA-256 beside it (`<file>.sha256`), and every
 release is on the [releases page](https://github.com/Trainnr-AI/trainnr/releases).
