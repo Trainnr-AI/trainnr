@@ -432,7 +432,7 @@ fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     ui.label(
         egui::RichText::new(text.into())
             .text_style(DesignTokens::welcome_screen_body())
-            .color(ui.visuals().weak_text_color()),
+            .weak(),
     )
 }
 
@@ -546,7 +546,7 @@ fn picture_card_with_id(
         egui::Label::new(
             egui::RichText::new(text.facts)
                 .text_style(DesignTokens::welcome_screen_body())
-                .color(ui.visuals().weak_text_color()),
+                .weak(),
         )
         .truncate(),
     );
@@ -555,7 +555,7 @@ fn picture_card_with_id(
             egui::Label::new(
                 egui::RichText::new(footer)
                     .text_style(DesignTokens::welcome_screen_tag())
-                    .color(ui.visuals().weak_text_color()),
+                    .weak(),
             )
             .truncate(),
         );
@@ -1015,7 +1015,7 @@ fn pipeline_strip(ui: &mut egui::Ui, index: &Index) {
                 if remaining < chip_w + separator_w {
                     ui.end_row();
                 } else if i > 0 {
-                    ui.label(egui::RichText::new("›").color(ui.visuals().weak_text_color()));
+                    ui.weak("›");
                 }
                 let response = egui::Frame::new()
                     .fill(fill)
@@ -1122,7 +1122,7 @@ fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
                 ui.label(
                     egui::RichText::new(ago(*at))
                         .small()
-                        .color(ui.visuals().weak_text_color()),
+                        .weak(),
                 );
                 match line {
                     ActivityLine::Job(job) => {
@@ -1150,7 +1150,7 @@ fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
                         ui.label(
                             egui::RichText::new(status)
                                 .text_style(DesignTokens::welcome_screen_tag())
-                                .color(ui.visuals().weak_text_color()),
+                                .weak(),
                         );
                     }
                     ActivityLine::Event(event) => {
@@ -1160,10 +1160,7 @@ fn activity(ui: &mut egui::Ui, jobs: &[Job], events: &[Event]) {
                             _ => "studio",
                         };
                         ui.label(egui::RichText::new(who).strong());
-                        ui.label(
-                            egui::RichText::new(event_words(event))
-                                .color(ui.visuals().weak_text_color()),
-                        );
+                        ui.weak(event_words(event));
                     }
                 }
             });
@@ -1520,7 +1517,7 @@ fn card_rows(
         ui.label(
             egui::RichText::new(day)
                 .text_style(DesignTokens::welcome_screen_tag())
-                .color(ui.visuals().weak_text_color()),
+                .weak(),
         );
         ui.add_space(6.0);
         for row in members.chunks(columns) {
@@ -1712,11 +1709,7 @@ fn detail(
                 });
                 ui.horizontal(|ui| {
                     weak_body(ui, "version");
-                    ui.label(
-                        egui::RichText::new(hash)
-                            .monospace()
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.label(egui::RichText::new(hash).monospace().weak());
                 });
                 weak_body(ui, &artifact.path);
                 ui.horizontal(|ui| {
@@ -1774,10 +1767,7 @@ fn lineage_grid(
         .spacing([16.0, 4.0])
         .show(ui, |ui| {
             for (key, value) in map {
-                ui.label(
-                    egui::RichText::new(crate::detail::field_word(key))
-                        .color(ui.visuals().weak_text_color()),
-                );
+                ui.weak(crate::detail::field_word(key));
                 let text = value.as_str().unwrap_or_default();
                 stamp_link(ui, model, text, false, nav);
                 ui.end_row();
@@ -1827,7 +1817,7 @@ fn used_by(ui: &mut egui::Ui, model: &Model, artifact: &Artifact, nav: &mut Nav)
     for (kind, members) in &groups {
         let count = crate::widgets::count_word(members.len(), kind_word(kind));
         ui.horizontal_wrapped(|ui| {
-            ui.label(egui::RichText::new(count).color(ui.visuals().weak_text_color()));
+            ui.weak(count);
             ui.add_space(8.0);
             for a in members.iter().take(USED_BY_SHOWN) {
                 stamp_link(ui, model, &a.stamp, true, nav);
@@ -1854,7 +1844,7 @@ fn fact_grid(
         .spacing([16.0, 4.0])
         .show(ui, |ui| {
             for (key, value) in map {
-                ui.label(egui::RichText::new(key).color(ui.visuals().weak_text_color()));
+                ui.weak(key);
                 ui.label(render_value(value));
                 ui.end_row();
             }

@@ -110,10 +110,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
                         .strong(),
                 );
                 if is_table && !section.rows.is_empty() {
-                    ui.label(
-                        egui::RichText::new(crate::widgets::count_word(section.rows.len(), "row"))
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.weak(crate::widgets::count_word(section.rows.len(), "row"));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui
                             .small_icon_button(&re_ui::icons::EXPAND, "Explore the whole table")
@@ -128,9 +125,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
             match section.kind.as_str() {
                 "table" if section.rows.is_empty() => {
                     // No header over nothing: the fact is the emptiness.
-                    ui.label(
-                        egui::RichText::new(EMPTY_TABLE).color(ui.visuals().weak_text_color()),
-                    );
+                    ui.weak(EMPTY_TABLE);
                 }
                 "table" => {
                     if table_preview(ui, section, i) {
@@ -145,7 +140,7 @@ pub fn show(ui: &mut egui::Ui, detail: &Detail, expected: &str) -> Option<Sectio
                 ui.label(
                     egui::RichText::new(note)
                         .text_style(DesignTokens::welcome_screen_tag())
-                        .color(ui.visuals().weak_text_color()),
+                        .weak(),
                 );
             }
         });
@@ -164,13 +159,9 @@ fn key_values(ui: &mut egui::Ui, section: &Section, idx: usize) {
             for row in &section.rows {
                 let key = row.first().and_then(|v| v.as_str()).unwrap_or("");
                 let value = row.get(1).map(render_value).unwrap_or_default();
-                ui.label(egui::RichText::new(key).color(ui.visuals().weak_text_color()));
+                ui.weak(key);
                 if value.is_empty() {
-                    ui.label(
-                        egui::RichText::new(UNRECORDED)
-                            .italics()
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.label(egui::RichText::new(UNRECORDED).italics().weak());
                 } else if value.contains('\n') {
                     // A block (a command line, a listing): monospace, at
                     // the body's size.
@@ -196,11 +187,7 @@ fn markdown(ui: &mut egui::Ui, section: &Section) {
     match section.text.as_deref().filter(|t| !t.trim().is_empty()) {
         Some(text) => ui.markdown_ui(text),
         None => {
-            ui.label(
-                egui::RichText::new(UNRECORDED)
-                    .italics()
-                    .color(ui.visuals().weak_text_color()),
-            );
+            ui.label(egui::RichText::new(UNRECORDED).italics().weak());
         }
     }
 }
@@ -348,7 +335,7 @@ pub fn sortable_header(ui: &mut egui::Ui, sort: SortState, col: usize, name: &st
 fn cell(ui: &mut egui::Ui, value: Option<&serde_json::Value>) {
     let text = value.map(render_inline).unwrap_or_default();
     if text.is_empty() {
-        ui.label(egui::RichText::new("–").color(ui.visuals().weak_text_color()));
+        ui.weak("–");
         return;
     }
     let rich = egui::RichText::new(&text);
@@ -437,14 +424,11 @@ pub fn table_modal(ctx: &egui::Context, view: &mut TableView) -> bool {
                     .text_style(DesignTokens::welcome_screen_h2())
                     .strong(),
             );
-            ui.label(
-                egui::RichText::new(if view.filter.trim().is_empty() {
-                    crate::widgets::count_word(total, "row")
-                } else {
-                    format!("{matching} of {}", crate::widgets::count_word(total, "row"))
-                })
-                .color(ui.visuals().weak_text_color()),
-            );
+            ui.weak(if view.filter.trim().is_empty() {
+                crate::widgets::count_word(total, "row")
+            } else {
+                format!("{matching} of {}", crate::widgets::count_word(total, "row"))
+            });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_icon_button(&re_ui::icons::CLOSE, "Close")
@@ -463,7 +447,7 @@ pub fn table_modal(ctx: &egui::Context, view: &mut TableView) -> bool {
             ui.label(
                 egui::RichText::new(note)
                     .text_style(DesignTokens::welcome_screen_tag())
-                    .color(ui.visuals().weak_text_color()),
+                    .weak(),
             );
         }
         ui.add_space(8.0);

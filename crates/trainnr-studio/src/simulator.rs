@@ -382,11 +382,11 @@ pub fn transport(
             }
         });
         if let Some(caption) = model.as_ref().and_then(|m| m.caption.as_deref()) {
-            ui.label(egui::RichText::new(caption).color(ui.visuals().weak_text_color()));
+            ui.weak(caption);
         }
         let Some(status) = status else {
             if viewport.is_active() {
-                ui.label(egui::RichText::new("starting…").color(ui.visuals().weak_text_color()));
+                ui.weak("starting…");
             }
             return;
         };
@@ -438,7 +438,7 @@ pub fn transport(
         }
         ui.separator();
         // Speed: a compact slider and its value, fixed width.
-        ui.label(egui::RichText::new("speed").color(ui.visuals().weak_text_color()));
+        ui.weak("speed");
         let mut speed = status.speed as f32;
         ui.spacing_mut().slider_width = 90.0;
         let response = ui.add(
@@ -619,17 +619,13 @@ fn worlds_row(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus
     ui.label(
         egui::RichText::new(crate::widgets::count_word(n, "world"))
             .small()
-            .color(ui.visuals().weak_text_color()),
+            .weak(),
     );
     let _ = viewport;
 }
 
 fn chip(ui: &mut egui::Ui, key: &str, value: String) {
-    ui.label(
-        egui::RichText::new(key)
-            .small()
-            .color(ui.visuals().weak_text_color()),
-    );
+    ui.label(egui::RichText::new(key).small().weak());
     mono(ui, value, CHIP_WIDTH - 24.0);
 }
 
@@ -797,10 +793,7 @@ fn mode_line(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus)
                 viewport.send_manual(false);
             }
         } else {
-            ui.label(
-                egui::RichText::new("The scene runs itself. Values are shown, not editable.")
-                    .color(ui.visuals().weak_text_color()),
-            );
+            ui.weak("The scene runs itself. Values are shown, not editable.");
             if ui
                 .small("drive")
                 .on_hover_text("take the controls from here")
@@ -966,18 +959,15 @@ fn commands(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, 
                 viewport.send_twist(-1, [0.0; 3]);
             }
         } else {
-            ui.label(
-                egui::RichText::new(format!(
-                    "The task commands. A slider commands w{world} (the followed world)."
-                ))
-                .color(ui.visuals().weak_text_color()),
-            );
+            ui.weak(format!(
+                "The task commands. A slider commands w{world} (the followed world)."
+            ));
         }
     });
     ui.label(
         egui::RichText::new("metres per second forward and left, radians per second turn")
             .small()
-            .color(ui.visuals().weak_text_color()),
+            .weak(),
     );
     let values = held.map_or([0.0; 3], |(_, v)| v);
     let mut twist = values;
@@ -1031,7 +1021,7 @@ fn visuals(ui: &mut egui::Ui, viewport: &mut ViewportFeed, status: &SimStatus, m
         .show(ui, |ui| {
             ui.label("");
             for g in 0..model.ngroup {
-                ui.label(egui::RichText::new(g.to_string()).weak());
+                ui.weak(g.to_string());
             }
             ui.end_row();
             for (kind_index, kind) in model.groups.iter().enumerate() {
@@ -1119,7 +1109,7 @@ fn physics(ui: &mut egui::Ui, model: &SimModel) {
                     },
                 ),
             ] {
-                ui.label(egui::RichText::new(key).color(ui.visuals().weak_text_color()));
+                ui.weak(key);
                 ui.monospace(value);
                 ui.end_row();
             }
