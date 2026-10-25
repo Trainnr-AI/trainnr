@@ -481,7 +481,7 @@ fn picture_card(
 }
 
 /// A card whose egui id comes from `salt`, not its title: two versions
-/// of one artifact in a row share a title, and a grid's cells share a Ui.
+/// of one artifact in a row share a title, and a row's cards share a Ui.
 #[allow(clippy::too_many_arguments)]
 fn picture_card_with_id(
     ui: &mut egui::Ui,
@@ -664,50 +664,52 @@ pub fn project_grid(
 ) -> Option<std::path::PathBuf> {
     let mut switch_to = None;
     let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
-    egui::Grid::new("projects_grid")
-        .spacing(egui::vec2(GRID_GAP, GRID_GAP))
-        .min_col_width(width)
-        .max_col_width(width)
-        .show(ui, |ui| {
-            for (i, project) in list.iter().enumerate() {
-                let current = project.root == open;
-                let facts = if project.stages > 0 {
-                    format!(
-                        "{} of {} stages · {} artifacts",
-                        project.stages_proved, project.stages, project.artifacts
-                    )
-                } else {
-                    "not indexed yet".to_owned()
-                };
-                let footer = (!project.indexed.is_empty())
-                    .then(|| format!("updated {}", short_time(&project.indexed)));
-                let response = picture_card(
-                    ui,
-                    width,
-                    if ui.visuals().dark_mode {
-                        project.preview.as_deref()
+    // Rows of one-size cards, not an egui::Grid (see `card_rows`).
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = GRID_GAP;
+        for row in list.chunks(columns) {
+            ui.horizontal(|ui| {
+                for (i, project) in row.iter().enumerate() {
+                    if i > 0 {
+                        ui.add_space(GRID_GAP - ui.spacing().item_spacing.x);
+                    }
+                    let current = project.root == open;
+                    let facts = if project.stages > 0 {
+                        format!(
+                            "{} of {} stages · {} artifacts",
+                            project.stages_proved, project.stages, project.artifacts
+                        )
                     } else {
-                        project
-                            .preview_light
-                            .as_deref()
-                            .or(project.preview.as_deref())
-                    },
-                    Section::Projects.icon(),
-                    CardText {
-                        title: &project.name,
-                        facts: &facts,
-                        footer,
-                    },
-                    current,
-                );
-                if response.clicked() && !current {
-                    switch_to = Some(project.root.clone());
+                        "not indexed yet".to_owned()
+                    };
+                    let footer = (!project.indexed.is_empty())
+                        .then(|| format!("updated {}", short_time(&project.indexed)));
+                    let response = picture_card(
+                        ui,
+                        width,
+                        if ui.visuals().dark_mode {
+                            project.preview.as_deref()
+                        } else {
+                            project
+                                .preview_light
+                                .as_deref()
+                                .or(project.preview.as_deref())
+                        },
+                        Section::Projects.icon(),
+                        CardText {
+                            title: &project.name,
+                            facts: &facts,
+                            footer,
+                        },
+                        current,
+                    );
+                    if response.clicked() && !current {
+                        switch_to = Some(project.root.clone());
+                    }
                 }
-                if (i + 1) % columns == 0 {
-                    ui.end_row();
-                }
-            }
-        });
+            });
+        }
+    });
     switch_to
 }
 
@@ -1527,45 +1529,46 @@ fn card_rows(
             if row_index > 0 {
                 ui.add_space(GRID_GAP);
             }
-            egui::Grid::new(("section_grid", row_index))
-                .spacing(egui::vec2(GRID_GAP, GRID_GAP))
-                .min_col_width(width)
-                .max_col_width(width)
-                .show(ui, |ui| {
-                    for artifact in row {
-                        let (name, hash) = split_stamp(&artifact.stamp);
-                        let facts = summary_line(&artifact.summary)
-                            .unwrap_or_else(|| artifact.path.clone());
-                        // An evaluation is told apart by its condition: the
-                        // policy repeats on every card (design review,
-                        // 2026-10-12), so the condition is the title.
-                        let (title, facts) = if artifact.kind == kind::CERTIFICATE {
-                            (facts, name.to_owned())
-                        } else {
-                            (name.to_owned(), facts)
-                        };
-                        let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
-                        let response = picture_card_with_id(
-                            ui,
-                            width,
-                            model
-                                .preview_path(artifact, !ui.visuals().dark_mode)
-                                .as_deref(),
-                            Section::icon_for(&artifact.kind),
-                            CardText {
-                                title: &title,
-                                facts: &facts,
-                                footer: Some(card_footer(artifact, hash)),
-                            },
-                            is_selected,
-                            &artifact.stamp,
-                        );
-                        if response.clicked() {
-                            clicked = Some(artifact.stamp.clone());
-                        }
+            // A row, not an egui::Grid: the cards are all one size, and a
+            // new Grid discards its first frame (egui grid.rs, request_discard),
+            // so a page drew twice on every first visit.
+            ui.horizontal(|ui| {
+                for (i, artifact) in row.iter().enumerate() {
+                    if i > 0 {
+                        ui.add_space(GRID_GAP - ui.spacing().item_spacing.x);
                     }
-                    ui.end_row();
-                });
+                    let (name, hash) = split_stamp(&artifact.stamp);
+                    let facts =
+                        summary_line(&artifact.summary).unwrap_or_else(|| artifact.path.clone());
+                    // An evaluation is told apart by its condition: the
+                    // policy repeats on every card (design review,
+                    // 2026-10-12), so the condition is the title.
+                    let (title, facts) = if artifact.kind == kind::CERTIFICATE {
+                        (facts, name.to_owned())
+                    } else {
+                        (name.to_owned(), facts)
+                    };
+                    let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
+                    let response = picture_card_with_id(
+                        ui,
+                        width,
+                        model
+                            .preview_path(artifact, !ui.visuals().dark_mode)
+                            .as_deref(),
+                        Section::icon_for(&artifact.kind),
+                        CardText {
+                            title: &title,
+                            facts: &facts,
+                            footer: Some(card_footer(artifact, hash)),
+                        },
+                        is_selected,
+                        &artifact.stamp,
+                    );
+                    if response.clicked() {
+                        clicked = Some(artifact.stamp.clone());
+                    }
+                }
+            });
             row_index += 1;
             // A click on this row settles the selection before the drawer
             // is placed, so the drawer opens under the card in the same frame.
