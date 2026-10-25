@@ -172,36 +172,25 @@ pub fn thumbnail(ui: &mut egui::Ui, path: &std::path::Path, rect: egui::Rect) {
         sw: 0,
         se: 0,
     };
-    // The picture is decoded and shrunk to the card's own pixel size off
-    // the UI thread (pictures.rs); until it arrives the card shows its
-    // ground, and the frame never waits.
+    // The picture is decoded to the card's own pixel size, cropped to its
+    // shape, off the UI thread (pictures.rs); until it arrives the card
+    // shows its ground, and the frame never waits. The rect lands on whole
+    // pixels so each texel is one pixel.
     let ppp = ui.ctx().pixels_per_point();
-    let max = [
-        (rect.width() * ppp).ceil() as u32,
-        (rect.height() * ppp).ceil() as u32,
+    let rect = egui::emath::GuiRounding::round_to_pixels(rect, ppp);
+    let size = [
+        (rect.width() * ppp).round() as u32,
+        (rect.height() * ppp).round() as u32,
     ];
     let texture = crate::pictures::shared(ui.ctx())
         .lock()
         .ok()
-        .and_then(|mut pictures| pictures.get(ui.ctx(), &uri, path, max));
-    let Some(texture) = texture else {
-        return;
-    };
-    let [w, h] = texture.size();
-    let (w, h) = (w as f32, h as f32);
-    let display = rect.width() / rect.height();
-    let source = w / h;
-    let uv = if source > display {
-        let a = (w / h * rect.height() - rect.width()) / 2.0 / w;
-        egui::Rect::from_min_max(egui::pos2(a, 0.0), egui::pos2(1.0 - a, 1.0))
-    } else {
-        let a = (h / w * rect.width() - rect.height()) / 2.0 / h;
-        egui::Rect::from_min_max(egui::pos2(0.0, a), egui::pos2(1.0, 1.0 - a))
-    };
-    egui::Image::from_texture(&texture)
-        .uv(uv)
-        .corner_radius(cr)
-        .paint_at(ui, rect);
+        .and_then(|mut pictures| pictures.get(ui.ctx(), &uri, path, size));
+    if let Some(texture) = texture {
+        egui::Image::from_texture(&texture)
+            .corner_radius(cr)
+            .paint_at(ui, rect);
+    }
 }
 
 /// The placeholder where a picture would go and none exists yet: the
