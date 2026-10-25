@@ -308,6 +308,7 @@ impl eframe::App for StudioShell {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.frames.tick(frame.info().cpu_usage);
         if chrome::custom_chrome() {
             // The window is transparent under our own chrome (rounded
             // corners need it); paint the app's ground under everything
@@ -1472,9 +1473,9 @@ impl StudioShell {
         if let Some(rested) = self.control.watch_live(&live) {
             self.control.event(Event::time(BY_USER).at(&rested));
         }
-        self.frames.tick();
         self.theme_preference = ui.ctx().options(|o| o.theme_preference);
         theme::align_visuals(ui.ctx());
+        let cost = self.frames.cost_ms();
         let state = control::StudioState {
             schema: control::STATE_SCHEMA,
             pid: std::process::id(),
@@ -1490,6 +1491,8 @@ impl StudioShell {
             jobs_running: self.shell.model.running_jobs(),
             theme: theme_name(ui.ctx().theme()).to_owned(),
             frame_ms: self.frames.mean_ms(),
+            frame_cost_ms: cost.map(|(mean, _)| mean),
+            frame_cost_max_ms: cost.map(|(_, max)| max),
             frames_per_s: self.frames.per_second(),
             repaint_causes: ui
                 .ctx()
@@ -1593,34 +1596,45 @@ fn theme_preference(name: &str) -> egui::ThemePreference {
     }
 }
 
-/// The last second of frames: when each began. Mean frame time and
-/// frames per second come from it; both are None until two frames exist.
+/// The last second of frames: when each began, and what the one before
+/// it cost to draw (eframe's `cpu_usage`). Mean frame time and frames per
+/// second are None until two frames exist, the cost until eframe gives one.
 #[derive(Default)]
 struct FrameClock {
-    starts: std::collections::VecDeque<std::time::Instant>,
+    frames: std::collections::VecDeque<(std::time::Instant, Option<f32>)>,
 }
 
 impl FrameClock {
-    fn tick(&mut self) {
+    fn tick(&mut self, cost_s: Option<f32>) {
         let now = std::time::Instant::now();
-        self.starts.push_back(now);
+        self.frames.push_back((now, cost_s));
         while self
-            .starts
+            .frames
             .front()
-            .is_some_and(|t| now.duration_since(*t) > std::time::Duration::from_secs(1))
+            .is_some_and(|(t, _)| now.duration_since(*t) > std::time::Duration::from_secs(1))
         {
-            self.starts.pop_front();
+            self.frames.pop_front();
         }
     }
 
     fn mean_ms(&self) -> Option<f32> {
-        let (first, last) = (self.starts.front()?, self.starts.back()?);
-        let n = self.starts.len();
-        (n > 1).then(|| last.duration_since(*first).as_secs_f32() * 1000.0 / (n - 1) as f32)
+        let (first, last) = (self.frames.front()?.0, self.frames.back()?.0);
+        let n = self.frames.len();
+        (n > 1).then(|| last.duration_since(first).as_secs_f32() * 1000.0 / (n - 1) as f32)
+    }
+
+    /// The mean and the largest cost, in milliseconds.
+    fn cost_ms(&self) -> Option<(f32, f32)> {
+        let costs: Vec<f32> = self.frames.iter().filter_map(|(_, c)| *c).collect();
+        let max = costs.iter().copied().reduce(f32::max)?;
+        Some((
+            costs.iter().sum::<f32>() * 1000.0 / costs.len() as f32,
+            max * 1000.0,
+        ))
     }
 
     fn per_second(&self) -> Option<f32> {
-        let n = self.starts.len();
+        let n = self.frames.len();
         (n > 1).then_some(n as f32)
     }
 }

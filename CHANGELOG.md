@@ -8,6 +8,7 @@ All notable changes to trainnr. The format follows
 
 ### Added
 
+- `describe_studio` says what a frame costs to draw: `frame_cost_ms` and `frame_cost_max_ms`, the mean and the worst over the last second, counting the pages and the rendering but not the wait for vsync (eframe's `cpu_usage`). `frame_ms` stays the time from one frame to the next.
 - `trainnr call <tool> --args '<json>'` runs one tool by name, as an agent would: the same registry, argument checks, refusals and plugin tools. It prints the result as JSON and exits 3 on a refusal. The Studio's buttons run it.
 - After a design review: secondary text reads at 4.5:1 or better in both themes (the light theme's muted grey was never applied); evaluation cards are titled by their condition and no longer show a check mark; the view switch is no longer covered by the page's buttons; an empty project's Start here has a button for each step; actions stay off until their input exists and say what is missing; deployment steps read in the workflow's order.
 - After the design review's second round: a project's Overview leads with the best policy per condition; form problems show under their field and a click outside no longer discards a form; downloads show progress and can be cancelled; the command palette has a Search button; painted chips and step numbers are labelled for screen readers; plurals, sentence case and the activity feed are cleaned up; a deployment's card no longer has a black band; the Simulator offers the project's deployments to play.
