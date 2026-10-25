@@ -503,6 +503,13 @@ fn picture_card_with_id(
         ui.id().with(salt).with(width as u32),
         egui::Sense::click(),
     );
+    // A card scrolled out of view takes its place and nothing else: no
+    // painting, no text layout, and its picture is not asked for until
+    // it scrolls in.
+    if !ui.is_rect_visible(rect) {
+        ui.advance_cursor_after_rect(rect);
+        return response;
+    }
     let palette = crate::theme::palette(ui);
     ui.painter().rect_filled(rect, CARD_RADIUS, palette.surface);
     let thumb_rect = egui::Rect::from_min_size(rect.min, egui::vec2(width, thumb_h));
