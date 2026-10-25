@@ -27,6 +27,15 @@ ignore = [
   # Unmaintained, not vulnerable: both reach the Studio through Rerun.
   { id = "RUSTSEC-2025-0141", reason = "bincode, unmaintained, via Rerun; no advisory against its code" },
   { id = "RUSTSEC-2024-0436", reason = "paste, unmaintained, via Rerun; a build-time macro" },
+  # Unmaintained, not vulnerable: zvariant, zvariant_derive and zbus_names
+  # were merged into zbus 6.0 (its `wire` module) and are no longer released
+  # on their own. They reach the Studio through egui's Linux accessibility
+  # bridge (accesskit_unix 0.21 and atspi 0.29, on zbus 5), which eframe
+  # 0.36, pinned by re_ui 0.36, requires. They clear when AccessKit moves
+  # to zbus 6 and egui takes it. 2026-10-26.
+  { id = "RUSTSEC-2026-0370", reason = "zvariant, merged into zbus 6; via accesskit_unix 0.21 (zbus 5) under eframe 0.36" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names, merged into zbus 6; via accesskit_unix 0.21 (zbus 5) under eframe 0.36" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive, merged into zbus 6; via accesskit_unix 0.21 (zbus 5) under eframe 0.36" },
 ]
 # Known to OSV but not to RustSec, so cargo-deny cannot name them and
 # Scorecard's vulnerability check counts them (2026-10-07): rmcp 1.8.0
