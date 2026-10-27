@@ -77,14 +77,20 @@ def project_with(*walks: str) -> Iterator[tuple[Project, _Spawned]]:
         # The doors build their own JobManager over the project root;
         # the fake spawner rides in through the manager's constructor.
         real_manager = JobManager.__init__
+        managers: list[JobManager] = []
 
         def fake_init(self: JobManager, runs_root: Path, **_: Any) -> None:
             real_manager(self, runs_root, spawner=spawned)
+            managers.append(self)
 
         JobManager.__init__ = fake_init  # type: ignore[method-assign]
         try:
             yield project, spawned
         finally:
+            # A watcher still writing its exit raced the tempdir's removal
+            # ("Directory not empty", macOS CI, 2026-10-27).
+            for manager in managers:
+                manager.join(5)
             JobManager.__init__ = real_manager  # type: ignore[method-assign]
             server._jobs_root = original
             os.environ.pop(PROJECT_ENV, None)
