@@ -28,6 +28,7 @@ All notable changes to trainnr. The format follows
 
 ### Changed
 
+- The Studio's card and drawer pictures are sharp: each is decoded to the exact pixel size it is drawn at with a sharp filter, instead of shrunk to fit with a fast one and stretched to fill the card; the drawer no longer enlarges the card's smaller copy.
 - The Studio's empty pages say what each page holds and what to ask the agent, in prompts that copy on a click; an empty project's Overview shows a Start here card with the first three steps instead of a row of zeros; the Overview's next step for an empty project is one short line.
 - The README says what a Mac trains: the smoke recipe and `check_task` run on the CPU; a full run needs a GPU. Its disk figures are the ones measured on a fresh install (the server's environment about 1 GB, the Studio about 200 MB unpacked, the trainer's environment 1.8 GB on a Mac and 6 GB on Linux with CUDA, built by the first `check_task`), and a new section says how to uninstall or reset and what stays. The Studio's Compute card no longer names `TRAINNR_ENDPOINT`, which no tool reads.
 - The first session after the install says what to say first (the plugin's session hook, once); `describe_studio` before any project answers with the next step instead of failing; `create_project`'s reply names `launch_studio` as the next step; `onboard_robot` refusing a missing file inside Unitree's repository gives the `git clone` that fetches it.
