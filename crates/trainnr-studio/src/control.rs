@@ -257,10 +257,14 @@ pub struct StudioState {
     /// drew to the screen in the last second (the on-screen rate).
     pub viewport_task: Option<String>,
     pub viewport_fps: Option<f32>,
-    /// The mean wall time of the last frames, in milliseconds, and how
-    /// many frames the window drew in the last second: the cost of one
-    /// repaint on this machine, readable by a door (2026-10-02, "laggy").
+    /// Over the last second, in milliseconds: the mean time from one
+    /// frame's start to the next's (`frame_ms`, what a person waits), and
+    /// the CPU time a frame took (eframe's `cpu_usage`: laying out the
+    /// pages, tessellating and uploading; not submit, present or the GPU's
+    /// own time), on average and at worst; and how many frames it drew.
     pub frame_ms: Option<f32>,
+    pub frame_cost_ms: Option<f32>,
+    pub frame_cost_max_ms: Option<f32>,
     pub frames_per_s: Option<f32>,
     /// Who asked for the last repaint (egui's repaint causes, as
     /// `file:line`), so a window that never rests names its reason.
@@ -1127,6 +1131,8 @@ mod tests {
             jobs_running: 0,
             repaint_causes: Vec::new(),
             frame_ms: None,
+            frame_cost_ms: None,
+            frame_cost_max_ms: None,
             frames_per_s: None,
             theme: "dark".to_owned(),
             viewport_task: None,
