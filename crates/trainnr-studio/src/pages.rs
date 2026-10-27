@@ -564,6 +564,37 @@ fn picture_card_with_id(
     response
 }
 
+/// One row of one-size cards, `GRID_GAP` apart. Rows, not an
+/// egui::Grid: a new Grid hides its first frame and discards it (egui
+/// grid.rs, `request_discard`), so a page drew twice on every first
+/// visit. The gap tops up `item_spacing.x`, which the cards' own title
+/// rows inherit and must keep.
+fn card_row<T>(ui: &mut egui::Ui, row: &[T], mut card: impl FnMut(&mut egui::Ui, &T)) {
+    ui.horizontal(|ui| {
+        for (i, item) in row.iter().enumerate() {
+            if i > 0 {
+                ui.add_space((GRID_GAP - ui.spacing().item_spacing.x).max(0.0));
+            }
+            card(ui, item);
+        }
+    });
+}
+
+/// `items` in rows of `columns` cards, `GRID_GAP` apart both ways.
+fn card_grid<T>(
+    ui: &mut egui::Ui,
+    items: &[T],
+    columns: usize,
+    mut card: impl FnMut(&mut egui::Ui, &T),
+) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = GRID_GAP;
+        for row in items.chunks(columns.max(1)) {
+            card_row(ui, row, &mut card);
+        }
+    });
+}
+
 // ---------------------------------------------------------------------
 // The problem page (no project / no index)
 
@@ -664,50 +695,39 @@ pub fn project_grid(
 ) -> Option<std::path::PathBuf> {
     let mut switch_to = None;
     let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
-    // Rows of one-size cards, not an egui::Grid (see `card_rows`).
-    ui.scope(|ui| {
-        ui.spacing_mut().item_spacing.y = GRID_GAP;
-        for row in list.chunks(columns) {
-            ui.horizontal(|ui| {
-                for (i, project) in row.iter().enumerate() {
-                    if i > 0 {
-                        ui.add_space(GRID_GAP - ui.spacing().item_spacing.x);
-                    }
-                    let current = project.root == open;
-                    let facts = if project.stages > 0 {
-                        format!(
-                            "{} of {} stages · {} artifacts",
-                            project.stages_proved, project.stages, project.artifacts
-                        )
-                    } else {
-                        "not indexed yet".to_owned()
-                    };
-                    let footer = (!project.indexed.is_empty())
-                        .then(|| format!("updated {}", short_time(&project.indexed)));
-                    let response = picture_card(
-                        ui,
-                        width,
-                        if ui.visuals().dark_mode {
-                            project.preview.as_deref()
-                        } else {
-                            project
-                                .preview_light
-                                .as_deref()
-                                .or(project.preview.as_deref())
-                        },
-                        Section::Projects.icon(),
-                        CardText {
-                            title: &project.name,
-                            facts: &facts,
-                            footer,
-                        },
-                        current,
-                    );
-                    if response.clicked() && !current {
-                        switch_to = Some(project.root.clone());
-                    }
-                }
-            });
+    card_grid(ui, list, columns, |ui, project| {
+        let current = project.root == open;
+        let facts = if project.stages > 0 {
+            format!(
+                "{} of {} stages · {} artifacts",
+                project.stages_proved, project.stages, project.artifacts
+            )
+        } else {
+            "not indexed yet".to_owned()
+        };
+        let footer = (!project.indexed.is_empty())
+            .then(|| format!("updated {}", short_time(&project.indexed)));
+        let response = picture_card(
+            ui,
+            width,
+            if ui.visuals().dark_mode {
+                project.preview.as_deref()
+            } else {
+                project
+                    .preview_light
+                    .as_deref()
+                    .or(project.preview.as_deref())
+            },
+            Section::Projects.icon(),
+            CardText {
+                title: &project.name,
+                facts: &facts,
+                footer,
+            },
+            current,
+        );
+        if response.clicked() && !current {
+            switch_to = Some(project.root.clone());
         }
     });
     switch_to
@@ -804,35 +824,30 @@ fn latest_pictures(
     with_pictures.sort_by(|a, b| b.updated_epoch().total_cmp(&a.updated_epoch()));
     subheading(ui, "Latest");
     let (columns, width) = grid_columns(ui.available_width(), GRID_GAP);
-    egui::Grid::new("latest_grid")
-        .spacing(egui::vec2(GRID_GAP, GRID_GAP))
-        .min_col_width(width)
-        .max_col_width(width)
-        .show(ui, |ui| {
-            for artifact in with_pictures.iter().take(columns) {
-                let (name, hash) = split_stamp(&artifact.stamp);
-                let facts = summary_line(&artifact.summary)
-                    .unwrap_or_else(|| kind_word(&artifact.kind).to_owned());
-                let response = picture_card_with_id(
-                    ui,
-                    width,
-                    model
-                        .preview_path(artifact, !ui.visuals().dark_mode)
-                        .as_deref(),
-                    Section::icon_for(&artifact.kind),
-                    CardText {
-                        title: name,
-                        facts: &facts,
-                        footer: Some(card_footer(artifact, hash)),
-                    },
-                    false,
-                    &artifact.stamp,
-                );
-                if response.clicked() {
-                    *go_to = section_of(&artifact.kind).map(|s| (s, Some(artifact.stamp.clone())));
-                }
-            }
-        });
+    let latest = &with_pictures[..with_pictures.len().min(columns)];
+    card_row(ui, latest, |ui, artifact| {
+        let (name, hash) = split_stamp(&artifact.stamp);
+        let facts =
+            summary_line(&artifact.summary).unwrap_or_else(|| kind_word(&artifact.kind).to_owned());
+        let response = picture_card_with_id(
+            ui,
+            width,
+            model
+                .preview_path(artifact, !ui.visuals().dark_mode)
+                .as_deref(),
+            Section::icon_for(&artifact.kind),
+            CardText {
+                title: name,
+                facts: &facts,
+                footer: Some(card_footer(artifact, hash)),
+            },
+            false,
+            &artifact.stamp,
+        );
+        if response.clicked() {
+            *go_to = section_of(&artifact.kind).map(|s| (s, Some(artifact.stamp.clone())));
+        }
+    });
     ui.add_space(24.0);
 }
 
@@ -898,37 +913,28 @@ fn best_by_condition(
         }
     });
     best.truncate(columns);
-    egui::Grid::new("best_by_condition")
-        .spacing(egui::vec2(GRID_GAP, GRID_GAP))
-        .min_col_width(width)
-        .max_col_width(width)
-        .show(ui, |ui| {
-            for (i, (condition, artifact, rate)) in best.iter().enumerate() {
-                let policy = crate::listing::policy_of(artifact);
-                let facts = format!("{policy} · {:.0}% success", rate * 100.0);
-                let response = picture_card_with_id(
-                    ui,
-                    width,
-                    model
-                        .preview_path(artifact, !ui.visuals().dark_mode)
-                        .as_deref(),
-                    Section::icon_for(&artifact.kind),
-                    CardText {
-                        title: condition,
-                        facts: &facts,
-                        footer: Some(split_stamp(&artifact.stamp).0.to_owned()),
-                    },
-                    false,
-                    &artifact.stamp,
-                );
-                if response.clicked() {
-                    *go_to = Some((Section::Certificates, Some(artifact.stamp.clone())));
-                }
-                if (i + 1) % columns == 0 {
-                    ui.end_row();
-                }
-            }
-        });
+    card_grid(ui, &best, columns, |ui, (condition, artifact, rate)| {
+        let policy = crate::listing::policy_of(artifact);
+        let facts = format!("{policy} · {:.0}% success", rate * 100.0);
+        let response = picture_card_with_id(
+            ui,
+            width,
+            model
+                .preview_path(artifact, !ui.visuals().dark_mode)
+                .as_deref(),
+            Section::icon_for(&artifact.kind),
+            CardText {
+                title: condition,
+                facts: &facts,
+                footer: Some(split_stamp(&artifact.stamp).0.to_owned()),
+            },
+            false,
+            &artifact.stamp,
+        );
+        if response.clicked() {
+            *go_to = Some((Section::Certificates, Some(artifact.stamp.clone())));
+        }
+    });
     ui.add_space(24.0);
 }
 
@@ -1488,7 +1494,7 @@ fn scroll_here(ui: &mut egui::Ui) {
     );
 }
 
-/// The cards, grouped by the day they last changed, one grid per row so
+/// The cards, grouped by the day they last changed, one row at a time so
 /// the drawer can sit right under the row that holds the selected card —
 /// never below hundreds of cards.
 fn card_rows(
@@ -1529,44 +1535,36 @@ fn card_rows(
             if row_index > 0 {
                 ui.add_space(GRID_GAP);
             }
-            // A row, not an egui::Grid: the cards are all one size, and a
-            // new Grid discards its first frame (egui grid.rs, request_discard),
-            // so a page drew twice on every first visit.
-            ui.horizontal(|ui| {
-                for (i, artifact) in row.iter().enumerate() {
-                    if i > 0 {
-                        ui.add_space(GRID_GAP - ui.spacing().item_spacing.x);
-                    }
-                    let (name, hash) = split_stamp(&artifact.stamp);
-                    let facts =
-                        summary_line(&artifact.summary).unwrap_or_else(|| artifact.path.clone());
-                    // An evaluation is told apart by its condition: the
-                    // policy repeats on every card (design review,
-                    // 2026-10-12), so the condition is the title.
-                    let (title, facts) = if artifact.kind == kind::CERTIFICATE {
-                        (facts, name.to_owned())
-                    } else {
-                        (name.to_owned(), facts)
-                    };
-                    let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
-                    let response = picture_card_with_id(
-                        ui,
-                        width,
-                        model
-                            .preview_path(artifact, !ui.visuals().dark_mode)
-                            .as_deref(),
-                        Section::icon_for(&artifact.kind),
-                        CardText {
-                            title: &title,
-                            facts: &facts,
-                            footer: Some(card_footer(artifact, hash)),
-                        },
-                        is_selected,
-                        &artifact.stamp,
-                    );
-                    if response.clicked() {
-                        clicked = Some(artifact.stamp.clone());
-                    }
+            card_row(ui, row, |ui, artifact| {
+                let (name, hash) = split_stamp(&artifact.stamp);
+                let facts =
+                    summary_line(&artifact.summary).unwrap_or_else(|| artifact.path.clone());
+                // An evaluation is told apart by its condition: the
+                // policy repeats on every card (design review,
+                // 2026-10-12), so the condition is the title.
+                let (title, facts) = if artifact.kind == kind::CERTIFICATE {
+                    (facts, name.to_owned())
+                } else {
+                    (name.to_owned(), facts)
+                };
+                let is_selected = selected.as_deref() == Some(artifact.stamp.as_str());
+                let response = picture_card_with_id(
+                    ui,
+                    width,
+                    model
+                        .preview_path(artifact, !ui.visuals().dark_mode)
+                        .as_deref(),
+                    Section::icon_for(&artifact.kind),
+                    CardText {
+                        title: &title,
+                        facts: &facts,
+                        footer: Some(card_footer(artifact, hash)),
+                    },
+                    is_selected,
+                    &artifact.stamp,
+                );
+                if response.clicked() {
+                    clicked = Some(artifact.stamp.clone());
                 }
             });
             row_index += 1;
