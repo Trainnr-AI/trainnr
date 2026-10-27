@@ -540,9 +540,10 @@ impl Control {
             if let Some(mut last) = self.last_state.take() {
                 last.moved_to = Some(root.display().to_string());
                 last.heartbeat = now_epoch();
-                if let Err(e) = write_atomic(
+                if let Err(e) = write_atomic_bytes(
                     &self.root.join(STATE_RELATIVE),
-                    &serde_json::to_string(&last).unwrap_or_default(),
+                    serde_json::to_string(&last).unwrap_or_default().as_bytes(),
+                    false,
                 ) {
                     eprintln!("studio: cannot leave a pointer in {STATE_RELATIVE}: {e}");
                 }
@@ -647,7 +648,7 @@ impl Control {
             into.extend(extra);
         }
         let path = dir.join(format!("{id}.ack.json"));
-        if let Err(e) = write_atomic(&path, &body.to_string()) {
+        if let Err(e) = write_atomic_bytes(&path, body.to_string().as_bytes(), false) {
             eprintln!("studio: cannot answer command {id}: {e}");
         }
     }
@@ -685,7 +686,7 @@ impl Control {
         scaled
             .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .map_err(|e| e.to_string())?;
-        write_atomic_bytes(&path, &png).map_err(|e| e.to_string())?;
+        write_atomic_bytes(&path, &png, false).map_err(|e| e.to_string())?;
         Ok((path, width, height))
     }
 
@@ -703,9 +704,10 @@ impl Control {
             return;
         }
         state.heartbeat = now_epoch();
-        if let Err(e) = write_atomic(
+        if let Err(e) = write_atomic_bytes(
             &self.root.join(STATE_RELATIVE),
-            &serde_json::to_string(&state).unwrap_or_default(),
+            serde_json::to_string(&state).unwrap_or_default().as_bytes(),
+            false,
         ) {
             eprintln!("studio: cannot write {STATE_RELATIVE}: {e}");
         }
@@ -872,7 +874,7 @@ pub fn entry_name(name: &str) -> String {
 }
 
 pub fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
-    write_atomic_bytes(path, body.as_bytes())
+    write_atomic_bytes(path, body.as_bytes(), true)
 }
 
 /// Write `body` to `path` through a fresh temporary file and a rename,
@@ -881,7 +883,13 @@ pub fn write_atomic(path: &Path, body: &str) -> std::io::Result<()> {
 /// project's `.index` down must be a real folder. A shared project once
 /// carried `<name>.tmp` as a link to the user's shell profile, and the
 /// Studio's next write landed there (2026-10-04 security review).
-pub fn write_atomic_bytes(path: &Path, body: &[u8]) -> std::io::Result<()> {
+///
+/// `durable` waits for the disk before the rename, for a file a person
+/// keeps (an agent's config). The control files skip it: the state is
+/// rewritten every second, and an ack or a screenshot is read at once,
+/// so a reader needs only the rename's atomicity, and the UI thread
+/// stalled about 4 ms on each fsync under WSL (2026-10-26).
+pub fn write_atomic_bytes(path: &Path, body: &[u8], durable: bool) -> std::io::Result<()> {
     use std::io::Write as _;
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -900,7 +908,9 @@ pub fn write_atomic_bytes(path: &Path, body: &[u8]) -> std::io::Result<()> {
         .write(true)
         .create_new(true)
         .open(&tmp)?;
-    let written = file.write_all(body).and_then(|()| file.sync_all());
+    let written = file
+        .write_all(body)
+        .and_then(|()| if durable { file.sync_all() } else { Ok(()) });
     drop(file);
     if let Err(e) = written.and_then(|()| std::fs::rename(&tmp, path)) {
         let _ = std::fs::remove_file(&tmp);
