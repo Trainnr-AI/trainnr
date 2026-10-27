@@ -41,6 +41,10 @@ All notable changes to trainnr. The format follows
 - The `describe_job` hints wait 60 s, not 300: Claude Code moves a call past 120 s to the background.
 - The environment stage is proved by an accepted task, not a declared one: after `create_task` the Studio and the index say "declared, not yet accepted" and name the `check_task` call, until it accepts. `list_robots` says each robot's `scope` (`project` or `library`), and `list_projects` counts the stages the project's loop passes through, as the Studio does.
 
+### Security
+
+- The Studio's lock takes rustls 0.23.46, rustls-webpki 0.103.16, webpki-roots 1.0.11, tokio 1.53.3 (now also its floor in Cargo.toml), zstd-sys 2.1.2 and clipboard-win 5.4.3 (RUSTSEC-2026-0346, -0347, -0348, -0349, -0381, -0382, -0386, -0410; the yanked clipboard-win 5.4.1). No other crate or dependency edge moves. Dated exceptions in deny.toml: zvariant, zvariant_derive and zbus_names, unmaintained since they merged into zbus 6, until AccessKit moves to zbus 6; and zstd 0.13 and zstd-safe 7 (RUSTSEC-2026-0391, -0398, -0403), pinned through Rerun 0.36's arrow, parquet and mcap, until the Rerun update that takes zstd 0.14.
+
 ## [0.1.0] - 2026-10-06
 
 Not yet released; the repository is being prepared for its first public release. trainnr is licensed under the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2, `LICENSE`): any use other than a competing product or service; each version is also licensed under Apache-2.0 two years after it is made available.

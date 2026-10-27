@@ -27,6 +27,25 @@ ignore = [
   # Unmaintained, not vulnerable: both reach the Studio through Rerun.
   { id = "RUSTSEC-2025-0141", reason = "bincode, unmaintained, via Rerun; no advisory against its code" },
   { id = "RUSTSEC-2024-0436", reason = "paste, unmaintained, via Rerun; a build-time macro" },
+  # Unmaintained, not vulnerable: zvariant, zvariant_derive and zbus_names
+  # were merged into zbus 6.0 (its `wire` module) and are no longer released
+  # on their own. They reach the Studio through egui's Linux accessibility
+  # bridge (accesskit_unix 0.21 and atspi 0.29, on zbus 5): re_ui 0.36 turns
+  # on eframe's `accesskit` feature. They clear when AccessKit moves to
+  # zbus 6 and egui and Rerun take it. 2026-10-26.
+  { id = "RUSTSEC-2026-0370", reason = "zvariant, merged into zbus 6; via accesskit_unix 0.21 (zbus 5), eframe's accesskit feature, on through re_ui 0.36" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names, merged into zbus 6; via accesskit_unix 0.21 (zbus 5), eframe's accesskit feature, on through re_ui 0.36" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive, merged into zbus 6; via accesskit_unix 0.21 (zbus 5), eframe's accesskit feature, on through re_ui 0.36" },
+  # zstd 0.13 and zstd-safe 7 reach the Studio through arrow-ipc 58,
+  # parquet 58 and mcap 0.25, which Rerun 0.36 pins. The fixes are zstd 0.14
+  # and zstd-safe 8; arrow-ipc and parquet 60 and mcap 0.26 take them
+  # (crates.io, 2026-10-27), so these clear with the Rerun update that takes
+  # those. -0398 needs zstd-safe's `seekable` feature, which is off. Exposure
+  # of the other two: a crafted compressed file the user opens (an .rrd,
+  # Parquet or MCAP file). 2026-10-27.
+  { id = "RUSTSEC-2026-0391", reason = "zstd 0.13 via arrow-ipc 58, parquet 58 and mcap 0.25, pinned by Rerun 0.36; fixed in zstd 0.14" },
+  { id = "RUSTSEC-2026-0398", reason = "zstd-safe 7 via zstd 0.13; needs the seekable feature, which is off" },
+  { id = "RUSTSEC-2026-0403", reason = "zstd-safe 7 via zstd 0.13 under Rerun 0.36's arrow, parquet and mcap; fixed in zstd-safe 8" },
 ]
 # Known to OSV but not to RustSec, so cargo-deny cannot name them and
 # Scorecard's vulnerability check counts them (2026-10-07): rmcp 1.8.0
