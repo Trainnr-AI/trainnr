@@ -13,6 +13,21 @@ pub const CARD_INNER_MARGIN: i8 = 14;
 /// Rerun's example-card thumbnail aspect (337 × 250).
 pub const THUMBNAIL_ASPECT: f32 = 337.0 / 250.0;
 
+/// A paragraph in Rerun's welcome-screen body style, in `color`.
+pub fn body(ui: &mut egui::Ui, text: impl Into<String>, color: egui::Color32) -> egui::Response {
+    ui.label(
+        egui::RichText::new(text)
+            .text_style(DesignTokens::welcome_screen_body())
+            .color(color),
+    )
+}
+
+/// Body text in egui's weak colour (the palette's muted, both themes).
+pub fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
+    let color = ui.visuals().weak_text_color();
+    body(ui, text, color)
+}
+
 /// "1 row", "13 rows", "2 policies": a count with its noun, never
 /// "1 rows" (the drawer's "Used by" said "1 deployments" until the
 /// 2026-10-12 design review).

@@ -115,10 +115,7 @@ pub fn show(
         }
         ui.add_space(6.0);
         if found.is_empty() {
-            ui.label(
-                egui::RichText::new("nothing by that name in this project")
-                    .color(ui.visuals().weak_text_color()),
-            );
+            ui.weak("nothing by that name in this project");
         }
         for (i, hit) in found.iter().enumerate() {
             let response = ui
@@ -143,17 +140,10 @@ pub fn show(
                     };
                     ui.small_icon(icon, Some(ui.tokens().label_button_icon_color));
                     ui.add(egui::Label::new(egui::RichText::new(title).strong()).truncate());
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(detail).color(ui.visuals().weak_text_color()),
-                        )
-                        .truncate(),
-                    );
+                    ui.add(egui::Label::new(egui::RichText::new(detail).weak()).truncate());
                     if i == 0 {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new("↩").color(ui.visuals().weak_text_color()),
-                            );
+                            ui.weak("↩");
                         });
                     }
                 })

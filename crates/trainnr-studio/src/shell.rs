@@ -688,7 +688,7 @@ impl Shell {
                             ui.label(
                                 egui::RichText::new(format!("{ms:.0} ms"))
                                     .small()
-                                    .color(ui.visuals().weak_text_color()),
+                                    .weak(),
                             )
                             .on_hover_text("One frame, drawn to shown, on this machine");
                             ui.add_space(6.0);
@@ -804,11 +804,7 @@ impl Shell {
             .show(ui, |ui| {
                 ui.set_min_width(RAIL_WIDTH - 36.0);
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("Project")
-                            .small()
-                            .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.label(egui::RichText::new("Project").small().weak());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.small_icon(
                             &icons::DROPDOWN_ARROW,
@@ -1307,7 +1303,7 @@ impl Shell {
                             FINISHED_KEPT.as_secs() / 60
                         ))
                         .small()
-                        .color(ui.visuals().weak_text_color()),
+                        .weak(),
                     );
                     if ui.small_button("close").clicked() {
                         self.running_open = false;
@@ -1321,12 +1317,7 @@ impl Shell {
                     );
                 }
                 if rows.is_empty() {
-                    ui.label(
-                        egui::RichText::new(
-                            "Nothing is running, and nothing ended in the last few minutes.",
-                        )
-                        .color(ui.visuals().weak_text_color()),
-                    );
+                    ui.weak("Nothing is running, and nothing ended in the last few minutes.");
                 }
                 ui.add_space(4.0);
                 strip_click = chip_strip(

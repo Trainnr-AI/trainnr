@@ -471,7 +471,7 @@ impl eframe::App for StudioShell {
                                  it starts.",
                             )
                             .text_style(re_ui::DesignTokens::welcome_screen_body())
-                            .color(ui.visuals().weak_text_color()),
+                            .weak(),
                         );
                         ui.add_space(12.0);
                         let deployments = self.shell.model.deploy_scenes();
@@ -523,12 +523,9 @@ impl eframe::App for StudioShell {
                 // arrives.
                 egui::CentralPanel::default().show(ui, |ui| {
                     ui.add_space(12.0);
-                    ui.label(
-                        egui::RichText::new(
-                            "The viewer appears here the moment a run, an evaluation or \
-                             this scene's twin streams.",
-                        )
-                        .color(ui.visuals().weak_text_color()),
+                    ui.weak(
+                        "The viewer appears here the moment a run, an evaluation or \
+                         this scene's twin streams.",
                     );
                 });
             }

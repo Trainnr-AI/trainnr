@@ -654,11 +654,7 @@ pub fn summary(ui: &mut egui::Ui, job: &Job, now: f64) {
     } else {
         format!("{} · {}", status.stage, facts.join(" · "))
     };
-    ui.label(
-        egui::RichText::new(line)
-            .small()
-            .color(ui.visuals().weak_text_color()),
-    );
+    ui.label(egui::RichText::new(line).small().weak());
 }
 
 /// What a click in the chip strip asks for.

@@ -141,11 +141,7 @@ pub fn status_line(ui: &mut egui::Ui, link: &AgentLink) {
                 .color(palette.text),
         );
         if let Some(tool) = link.last_tool.as_deref() {
-            ui.label(
-                egui::RichText::new(format!("· last call {tool}"))
-                    .text_style(DesignTokens::welcome_screen_body())
-                    .color(palette.muted),
-            );
+            crate::widgets::weak_body(ui, format!("· last call {tool}"));
         }
     })
     .response

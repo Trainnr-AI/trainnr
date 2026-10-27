@@ -235,7 +235,7 @@ pub fn table(
                     crate::widgets::count_word(rows.len(), "row")
                 )
             })
-            .color(ui.visuals().weak_text_color()),
+            .weak(),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add(
@@ -386,7 +386,7 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
             crate::widgets::count_word(policies.len(), "policy"),
             crate::widgets::count_word(conditions.len(), "condition")
         ))
-        .color(ui.visuals().weak_text_color()),
+        .weak(),
     );
     ui.add_space(6.0);
     let tokens = ui.tokens();
@@ -442,10 +442,7 @@ pub fn matrix(ui: &mut egui::Ui, rows: &[&Artifact], selected: Option<&str>) -> 
                             r.col(|ui| {
                                 let Some(a) = cells.get(&(policy.clone(), condition.clone()))
                                 else {
-                                    ui.label(
-                                        egui::RichText::new("·")
-                                            .color(ui.visuals().weak_text_color()),
-                                    );
+                                    ui.weak("·");
                                     return;
                                 };
                                 let rect = ui.available_rect_before_wrap();

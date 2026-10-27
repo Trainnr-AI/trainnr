@@ -662,10 +662,7 @@ impl ViewportFeed {
     pub fn show(&mut self, ui: &mut egui::Ui) -> Option<egui::Rect> {
         if !self.is_active() {
             ui.centered_and_justified(|ui| {
-                ui.label(
-                    egui::RichText::new("No scene is running; pick one from the Scene menu below.")
-                        .color(ui.visuals().weak_text_color()),
-                );
+                ui.weak("No scene is running; pick one from the Scene menu below.");
             });
             return None;
         }

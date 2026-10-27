@@ -139,11 +139,7 @@ pub fn empty_state(ui: &mut egui::Ui, icon: &Icon, guide: &Guide) {
             );
             ui.add_space(6.0);
             ui.set_max_width(PROMPT_MAX_WIDTH);
-            ui.label(
-                egui::RichText::new(guide.body)
-                    .text_style(DesignTokens::welcome_screen_body())
-                    .color(palette.text),
-            );
+            crate::widgets::body(ui, guide.body, palette.text);
             if !guide.prompts.is_empty() {
                 ui.add_space(18.0);
                 ask_your_agent(ui, guide.prompts);
@@ -155,12 +151,7 @@ pub fn empty_state(ui: &mut egui::Ui, icon: &Icon, guide: &Guide) {
 
 /// "Ask your agent:" and a chip per prompt.
 pub fn ask_your_agent(ui: &mut egui::Ui, prompts: &[&str]) {
-    let palette = crate::theme::palette(ui);
-    ui.label(
-        egui::RichText::new("Ask your agent:")
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.muted),
-    );
+    crate::widgets::weak_body(ui, "Ask your agent:");
     ui.add_space(6.0);
     for prompt in prompts {
         prompt_chip(ui, prompt);
@@ -334,13 +325,11 @@ pub fn start_here(
                 .color(ui.visuals().strong_text_color()),
         );
         ui.add_space(4.0);
-        ui.label(
-            egui::RichText::new(
-                "Each step is a button here, or say it to your coding agent in your own \
-                 words. The stages below light up as each result lands.",
-            )
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.text),
+        crate::widgets::body(
+            ui,
+            "Each step is a button here, or say it to your coding agent in your own \
+             words. The stages below light up as each result lands.",
+            palette.text,
         );
         ui.add_space(16.0);
         for (number, step) in FIRST_STEPS.iter().enumerate() {
@@ -354,11 +343,7 @@ pub fn start_here(
                             .strong()
                             .color(palette.text),
                     );
-                    ui.label(
-                        egui::RichText::new(step.body)
-                            .text_style(DesignTokens::welcome_screen_body())
-                            .color(palette.text),
-                    );
+                    crate::widgets::body(ui, step.body, palette.text);
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         for (i, (label, tool)) in step.actions.iter().enumerate() {
@@ -384,24 +369,18 @@ pub fn start_here(
                     });
                     ui.add_space(6.0);
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(
-                            egui::RichText::new("or ask your agent:")
-                                .text_style(DesignTokens::welcome_screen_body())
-                                .color(palette.muted),
-                        );
+                        crate::widgets::weak_body(ui, "or ask your agent:");
                         prompt_chip(ui, step.prompt);
                     });
                 });
             });
             ui.add_space(16.0);
         }
-        ui.label(
-            egui::RichText::new(
-                "Then define an environment, train, evaluate and deploy: each page has its \
-                 buttons, and your agent knows every step.",
-            )
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.text),
+        crate::widgets::body(
+            ui,
+            "Then define an environment, train, evaluate and deploy: each page has its \
+             buttons, and your agent knows every step.",
+            palette.text,
         );
     });
     asked
@@ -723,13 +702,11 @@ pub fn welcome(
                 .color(ui.visuals().strong_text_color()),
         );
         ui.add_space(6.0);
-        ui.label(
-            egui::RichText::new(
-                "The robotics platform on your desktop: real-to-sim, train, \
-                 sim-to-real, and back. Work here, or let your coding agent drive it.",
-            )
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.text),
+        crate::widgets::body(
+            ui,
+            "The robotics platform on your desktop: real-to-sim, train, \
+             sim-to-real, and back. Work here, or let your coding agent drive it.",
+            palette.text,
         );
         ui.add_space(12.0);
         ui.horizontal(|ui| {
@@ -789,13 +766,11 @@ fn the_loop(ui: &mut egui::Ui) {
         ui.set_min_width(ui.available_width());
         crate::pages::subheading(ui, "What a project goes through");
         ui.add_space(2.0);
-        ui.label(
-            egui::RichText::new(
-                "Each stage lights up on the project's Overview as its result lands. \
-                 A walk trained by reinforcement needs no dataset.",
-            )
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.text),
+        crate::widgets::body(
+            ui,
+            "Each stage lights up on the project's Overview as its result lands. \
+             A walk trained by reinforcement needs no dataset.",
+            palette.text,
         );
         ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
@@ -806,11 +781,7 @@ fn the_loop(ui: &mut egui::Ui) {
             ui.set_row_height(STEP_DISC);
             for (number, (state, section)) in LOOP_STATES.iter().enumerate() {
                 if number > 0 {
-                    ui.label(
-                        egui::RichText::new("›")
-                            .text_style(DesignTokens::welcome_screen_body())
-                            .color(palette.muted),
-                    );
+                    crate::widgets::weak_body(ui, "›");
                 }
                 // A block of the disc's height, its width measured: a nested
                 // row grew the wrapped row a little each time.
@@ -828,11 +799,7 @@ fn the_loop(ui: &mut egui::Ui) {
                     |ui| {
                         ui.spacing_mut().item_spacing.x = STEP_TEXT_GAP;
                         step_number(ui, number + 1);
-                        ui.label(
-                            egui::RichText::new(words)
-                                .text_style(DesignTokens::welcome_screen_body())
-                                .color(palette.text),
-                        );
+                        crate::widgets::body(ui, words, palette.text);
                     },
                 )
                 .response
@@ -848,13 +815,11 @@ fn start_your_own(ui: &mut egui::Ui, actions: &ActionState, home: Option<&Path>)
     let palette = crate::theme::palette(ui);
     let mut clicked = false;
     welcome_card(ui, Section::Robots.icon(), "Start your own", |ui| {
-        ui.label(
-            egui::RichText::new(
-                "A project holds one robot effort: its model, its data, and \
-                 everything trained from them.",
-            )
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.text),
+        crate::widgets::body(
+            ui,
+            "A project holds one robot effort: its model, its data, and \
+             everything trained from them.",
+            palette.text,
         );
         ui.add_space(16.0);
         if actions.is_running(NEW_PROJECT) {
@@ -954,11 +919,7 @@ fn sample_text(ui: &mut egui::Ui, sample: &SampleCard) {
         tag(ui, "sample");
     });
     ui.add_space(4.0);
-    ui.label(
-        egui::RichText::new(sample.summary)
-            .text_style(DesignTokens::welcome_screen_body())
-            .color(palette.text),
-    );
+    crate::widgets::body(ui, sample.summary, palette.text);
 }
 
 /// A sample's title, summary, and Open (or where its opening stands).
