@@ -259,9 +259,9 @@ pub struct StudioState {
     pub viewport_fps: Option<f32>,
     /// Over the last second, in milliseconds: the mean time from one
     /// frame's start to the next's (`frame_ms`, what a person waits), and
-    /// what drawing a frame cost (eframe's `cpu_usage`: the pages and the
-    /// rendering, not the wait for vsync), on average and at worst; and
-    /// how many frames the window drew.
+    /// the CPU time a frame took (eframe's `cpu_usage`: laying out the
+    /// pages, tessellating and uploading; not submit, present or the GPU's
+    /// own time), on average and at worst; and how many frames it drew.
     pub frame_ms: Option<f32>,
     pub frame_cost_ms: Option<f32>,
     pub frame_cost_max_ms: Option<f32>,
