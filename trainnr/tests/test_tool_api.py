@@ -443,17 +443,36 @@ class TheJobTable(unittest.TestCase):
     home's `.current` (an agent run, 2026-10-04)."""
 
     def setUp(self) -> None:
+        from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+
         home = tempfile.TemporaryDirectory()
         self.addCleanup(home.cleanup)
         self.home = Path(home.name)
         env = {"TRAINNR_HOME": str(self.home), "TRAINNR_PROJECTS": str(self.home / "p")}
+        # The tools build a job manager per call; their watchers still
+        # writing an exit raced the home's removal ("Directory not empty",
+        # macOS CI, 2026-10-27), so each is joined first.
+        managers: list[JobManager] = []
+        real_init = JobManager.__init__
+
+        def init(manager: JobManager, *args: Any, **kwargs: Any) -> None:
+            real_init(manager, *args, **kwargs)
+            managers.append(manager)
+
         for patcher in (
             mock.patch.dict(os.environ, env),
             mock.patch("trainnr.project.locate.checkout_projects", return_value=None),
             mock.patch("trainnr.mcp_jobs._spawn", _spawn),
+            mock.patch.object(JobManager, "__init__", init),
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
+
+        def join() -> None:
+            for manager in managers:
+                manager.join(5)
+
+        self.addCleanup(join)
         os.environ.pop("TRAINNR_PROJECT", None)
         from trainnr.mcp_server import build_server  # noqa: PLC0415
 
