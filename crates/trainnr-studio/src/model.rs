@@ -668,17 +668,11 @@ impl Model {
     }
 
     /// An artifact's preview as an absolute path, when it has one: the
-    /// light set when `light` and it exists, else the dark set.
+    /// light set when `light` and it exists, else the dark set (files
+    /// checked at load, `reload_index`).
     pub fn preview_path(&self, artifact: &Artifact, light: bool) -> Option<PathBuf> {
-        let pick = |rel: &Option<String>| {
-            rel.as_ref()
-                .map(|rel| self.project_root.join(rel))
-                .filter(|p| p.is_file())
-        };
-        light
-            .then(|| pick(&artifact.preview_light))
-            .flatten()
-            .or_else(|| pick(&artifact.preview))
+        let light = artifact.preview_light.as_ref().filter(|_| light);
+        Some(self.project_root.join(light.or(artifact.preview.as_ref())?))
     }
 
     /// Every project under the projects home, by name, with what its own
@@ -899,6 +893,13 @@ impl Model {
         match std::fs::read_to_string(&self.index.path) {
             Ok(text) => match serde_json::from_str::<Index>(&text).map(|mut i| {
                 i.finish();
+                // A picture whose file is gone reads as none: asked once
+                // per index, not by every card on every frame.
+                for a in &mut i.artifacts {
+                    for rel in [&mut a.preview, &mut a.preview_light] {
+                        rel.take_if(|rel| !self.project_root.join(rel).is_file());
+                    }
+                }
                 i
             }) {
                 Ok(index) if !schema_compatible(&index.schema, INDEX_SCHEMA) => {
@@ -1275,6 +1276,37 @@ mod tests {
             .problem
             .as_deref()
             .is_some_and(|p| p.contains("somebody-else/1") && p.contains(INDEX_SCHEMA)));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_picture_whose_file_is_gone_reads_as_none_and_light_falls_back_to_dark() {
+        let root = std::env::temp_dir().join(format!("studio-previews-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".index/previews")).unwrap();
+        std::fs::write(root.join(MANIFEST_FILE), "{}").unwrap();
+        std::fs::write(root.join(".index/previews/a.png"), "").unwrap();
+        std::fs::write(
+            root.join(INDEX_RELATIVE),
+            serde_json::json!({"schema": INDEX_SCHEMA, "project": "p", "states": [], "artifacts": [
+                {"kind": "run", "stamp": "a@1", "path": "a", "preview": ".index/previews/a.png",
+                 "preview_light": ".index/previews/light/a.png"},
+                {"kind": "run", "stamp": "b@2", "path": "b", "preview": ".index/previews/b.png"}
+            ]})
+            .to_string(),
+        )
+        .unwrap();
+        let model = Model::at(root.clone(), vec![]);
+        let index = model.index().expect("reads");
+        let (a, b) = (&index.artifacts[0], &index.artifacts[1]);
+        let dark = Some(root.join(".index/previews/a.png"));
+        assert_eq!(
+            model.preview_path(a, true),
+            dark,
+            "no light file: the dark one"
+        );
+        assert_eq!(model.preview_path(a, false), dark);
+        assert_eq!(model.preview_path(b, true), None, "no file at all");
         let _ = std::fs::remove_dir_all(root);
     }
 
