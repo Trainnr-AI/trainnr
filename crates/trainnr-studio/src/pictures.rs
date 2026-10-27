@@ -8,12 +8,12 @@
 //! card draws, the UI thread uploads that small texture when it arrives, and
 //! the page paints at once with the pictures filling in.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc, Mutex};
 
-/// A picture by its key (the preview's versioned URI) and its size in
-/// pixels: ready as a texture, or failed and never retried for that version.
+/// A picture at one size: ready as a texture, or failed and never retried
+/// for that version and size.
 enum Picture {
     Ready(egui::TextureHandle),
     Failed,
@@ -21,11 +21,12 @@ enum Picture {
 
 type Decoded = (String, [u32; 2], Option<egui::ColorImage>);
 
-/// Textures by key and size, with when each was last asked for; the size
-/// decoding per key; the channel the decoded pictures arrive on.
+/// Per key (the preview's versioned URI), its pictures by size in pixels,
+/// each with when it was last drawn; the keys decoding; the channel the
+/// decoded pictures arrive on.
 pub struct Pictures {
-    ready: HashMap<(String, [u32; 2]), (Picture, f64)>,
-    pending: HashMap<String, [u32; 2]>,
+    ready: HashMap<String, Vec<([u32; 2], Picture, f64)>>,
+    pending: HashSet<String>,
     tx: mpsc::Sender<Decoded>,
     rx: mpsc::Receiver<Decoded>,
 }
@@ -35,7 +36,7 @@ impl Default for Pictures {
         let (tx, rx) = mpsc::channel();
         Self {
             ready: HashMap::new(),
-            pending: HashMap::new(),
+            pending: HashSet::new(),
             tx,
             rx,
         }
@@ -53,9 +54,10 @@ pub fn shared(ctx: &egui::Context) -> Arc<Mutex<Pictures>> {
 
 impl Pictures {
     /// The texture for `key` at `size` pixels, the size it is drawn at, so
-    /// it is shown one texel to one pixel. Until that size arrives, the
-    /// key's texture at another size stands in (a resized window never
-    /// flashes empty), or None; one decode per key runs at a time.
+    /// it is shown one texel to one pixel. Until that size arrives, or if
+    /// it failed, the key's texture at another size stands in (a resized
+    /// window never flashes empty), or None. One decode per key runs at a
+    /// time; a size not drawn for a second (left by a resize) is dropped.
     pub fn get(
         &mut self,
         ctx: &egui::Context,
@@ -66,57 +68,67 @@ impl Pictures {
         let now = ctx.input(|i| i.time);
         self.receive(ctx, now);
         let mut stand_in = None;
-        for ((k, s), (picture, used)) in &mut self.ready {
-            if k != key {
-                continue;
-            }
-            match picture {
-                Picture::Failed => return None,
-                Picture::Ready(texture) if *s == size => {
-                    *used = now;
-                    return Some(texture.clone());
+        if let Some(sizes) = self.ready.get_mut(key) {
+            sizes.retain(|(s, _, used)| *s == size || now - *used < 1.0);
+            let mut failed = false;
+            if let Some((_, picture, used)) = sizes.iter_mut().find(|(s, _, _)| *s == size) {
+                *used = now;
+                match picture {
+                    Picture::Ready(texture) => return Some(texture.clone()),
+                    Picture::Failed => failed = true,
                 }
-                Picture::Ready(texture) => stand_in = Some(texture.clone()),
+            }
+            if let Some((_, Picture::Ready(texture), used)) = sizes
+                .iter_mut()
+                .find(|(_, p, _)| matches!(p, Picture::Ready(_)))
+            {
+                *used = now;
+                stand_in = Some(texture.clone());
+            }
+            if failed {
+                return stand_in;
             }
         }
-        if !self.pending.contains_key(key) {
-            self.pending.insert(key.to_owned(), size);
+        if self.pending.insert(key.to_owned()) {
             let tx = self.tx.clone();
             let ctx = ctx.clone();
-            let key = key.to_owned();
+            let owned = key.to_owned();
             let path: PathBuf = path.to_owned();
-            std::thread::Builder::new()
+            let spawned = std::thread::Builder::new()
                 .name("trainnr-picture".to_owned())
                 .spawn(move || {
                     let image = decode_to_fill(&path, size);
-                    let _ = tx.send((key, size, image));
+                    let _ = tx.send((owned, size, image));
                     ctx.request_repaint();
-                })
-                .ok();
+                });
+            if spawned.is_err() {
+                self.pending.remove(key);
+            }
         }
         stand_in
     }
 
-    /// Drop a key whose file changed; the next `get` decodes the new one.
+    /// Drop a key whose file changed; the next `get` decodes the new one,
+    /// and a decode of the old one still running is dropped when it lands.
     pub fn forget(&mut self, key: &str) {
-        self.ready.retain(|(k, _), _| k != key);
+        self.ready.remove(key);
         self.pending.remove(key);
     }
 
-    /// Takes the decoded pictures in; a key's other sizes not drawn in the
-    /// last second go (the old card size after a resize).
     fn receive(&mut self, ctx: &egui::Context, now: f64) {
         while let Ok((key, size, image)) = self.rx.try_recv() {
-            self.pending.remove(&key);
-            self.ready
-                .retain(|(k, s), (_, used)| k != &key || *s == size || now - *used < 1.0);
+            if !self.pending.remove(&key) {
+                continue; // forgotten while it decoded
+            }
             let picture = match image {
                 Some(image) => {
                     Picture::Ready(ctx.load_texture(&key, image, egui::TextureOptions::LINEAR))
                 }
                 None => Picture::Failed,
             };
-            self.ready.insert((key, size), (picture, now));
+            let sizes = self.ready.entry(key).or_default();
+            sizes.retain(|(s, _, _)| *s != size);
+            sizes.push((size, picture, now));
         }
     }
 }
@@ -143,6 +155,71 @@ fn decode_to_fill(path: &std::path::Path, size: [u32; 2]) -> Option<egui::ColorI
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One frame at `time` seconds, calling `get` for `key` at `size`.
+    /// The key is marked as decoding first, so `get` starts no thread and
+    /// only what the test sends arrives.
+    fn frame(
+        ctx: &egui::Context,
+        pictures: &mut Pictures,
+        time: f64,
+        size: [u32; 2],
+    ) -> Option<[usize; 2]> {
+        let mut got = None;
+        let raw = egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(raw, |ui| {
+            pictures.pending.insert("k".to_owned());
+            got = pictures
+                .get(ui.ctx(), "k", std::path::Path::new("none"), size)
+                .map(|t| t.size());
+        });
+        output.textures_delta.clear(); // no renderer here to apply them
+        got
+    }
+
+    fn arrive(pictures: &Pictures, size: [u32; 2], ok: bool) {
+        let image = ok.then(|| {
+            egui::ColorImage::filled([size[0] as usize, size[1] as usize], egui::Color32::GRAY)
+        });
+        pictures.tx.send(("k".to_owned(), size, image)).unwrap();
+    }
+
+    #[test]
+    fn a_failed_size_shows_another_and_a_size_left_unused_goes() {
+        let ctx = egui::Context::default();
+        let mut pictures = Pictures::default();
+        arrive(&pictures, [10, 10], true);
+        assert_eq!(frame(&ctx, &mut pictures, 0.0, [10, 10]), Some([10, 10]));
+        arrive(&pictures, [20, 20], false);
+        assert_eq!(
+            frame(&ctx, &mut pictures, 0.1, [20, 20]),
+            Some([10, 10]),
+            "the failed size falls back to the good one"
+        );
+        arrive(&pictures, [30, 30], true);
+        assert_eq!(frame(&ctx, &mut pictures, 0.2, [30, 30]), Some([30, 30]));
+        assert_eq!(frame(&ctx, &mut pictures, 2.0, [30, 30]), Some([30, 30]));
+        let sizes: Vec<_> = pictures.ready["k"].iter().map(|(s, _, _)| *s).collect();
+        assert_eq!(
+            sizes,
+            vec![[30, 30]],
+            "the sizes not drawn for a second went"
+        );
+    }
+
+    #[test]
+    fn a_decode_that_lands_after_forget_is_dropped() {
+        let ctx = egui::Context::default();
+        let mut pictures = Pictures::default();
+        pictures.pending.insert("k".to_owned());
+        pictures.forget("k");
+        arrive(&pictures, [10, 10], true);
+        pictures.receive(&ctx, 0.0);
+        assert!(!pictures.ready.contains_key("k"));
+    }
 
     #[test]
     fn a_picture_is_decoded_to_the_exact_size_it_is_drawn_at() {
