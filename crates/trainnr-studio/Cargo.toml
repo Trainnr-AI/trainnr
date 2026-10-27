@@ -66,7 +66,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # winit's X11 extension trait is not re-exported by eframe. Same crate
 # instance eframe uses (cargo unifies the version; 0.30 locked).
 winit = { version = "0.30", default-features = false, features = ["x11"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 # `kill(pid, 0)` without spawning a process or writing unsafe code: is a
 # recorded pid alive (running::pid_alive). Already in the tree through
