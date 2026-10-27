@@ -27,8 +27,8 @@ use crate::model::{
     summary_line, Artifact, Index, Job, Model, ProjectSummary, BASIS_OWN, UNRECORDED,
 };
 use crate::widgets::{
-    card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, CARD_INNER_MARGIN,
-    CARD_RADIUS, THUMBNAIL_ASPECT,
+    card, grid_columns, icon_at, tag, thumbnail, thumbnail_placeholder, weak_body,
+    CARD_INNER_MARGIN, CARD_RADIUS, THUMBNAIL_ASPECT,
 };
 
 /// The artifact kinds the index writes (`trainnr/project/kinds.py`,
@@ -426,14 +426,6 @@ pub fn subheading(ui: &mut egui::Ui, title: &str) {
             .strong(),
     );
     ui.add_space(8.0);
-}
-
-fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
-    ui.label(
-        egui::RichText::new(text.into())
-            .text_style(DesignTokens::welcome_screen_body())
-            .weak(),
-    )
 }
 
 /// What a picture card says under its picture.

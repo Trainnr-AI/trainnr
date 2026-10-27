@@ -151,8 +151,7 @@ pub fn empty_state(ui: &mut egui::Ui, icon: &Icon, guide: &Guide) {
 
 /// "Ask your agent:" and a chip per prompt.
 pub fn ask_your_agent(ui: &mut egui::Ui, prompts: &[&str]) {
-    let palette = crate::theme::palette(ui);
-    crate::widgets::body(ui, "Ask your agent:", palette.muted);
+    crate::widgets::weak_body(ui, "Ask your agent:");
     ui.add_space(6.0);
     for prompt in prompts {
         prompt_chip(ui, prompt);
@@ -370,7 +369,7 @@ pub fn start_here(
                     });
                     ui.add_space(6.0);
                     ui.horizontal_wrapped(|ui| {
-                        crate::widgets::body(ui, "or ask your agent:", palette.muted);
+                        crate::widgets::weak_body(ui, "or ask your agent:");
                         prompt_chip(ui, step.prompt);
                     });
                 });
@@ -782,7 +781,7 @@ fn the_loop(ui: &mut egui::Ui) {
             ui.set_row_height(STEP_DISC);
             for (number, (state, section)) in LOOP_STATES.iter().enumerate() {
                 if number > 0 {
-                    crate::widgets::body(ui, "›", palette.muted);
+                    crate::widgets::weak_body(ui, "›");
                 }
                 // A block of the disc's height, its width measured: a nested
                 // row grew the wrapped row a little each time.

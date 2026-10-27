@@ -22,6 +22,12 @@ pub fn body(ui: &mut egui::Ui, text: impl Into<String>, color: egui::Color32) ->
     )
 }
 
+/// Body text in egui's weak colour (the palette's muted, both themes).
+pub fn weak_body(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
+    let color = ui.visuals().weak_text_color();
+    body(ui, text, color)
+}
+
 /// "1 row", "13 rows", "2 policies": a count with its noun, never
 /// "1 rows" (the drawer's "Used by" said "1 deployments" until the
 /// 2026-10-12 design review).
