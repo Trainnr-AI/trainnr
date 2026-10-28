@@ -497,6 +497,11 @@ These are the ones that cost real time and are worth not rediscovering:
 - **The simulator image counts pixels, not points.** Sending egui points to a
   renderer that wants pixels rendered every second frame at half
   resolution; passing the physical size made it Retina-sharp.
+- **A row of the simulator image is a whole 256 bytes.** On WSLg a
+  1388-pixel-wide picture took 111 ms of a frame to upload and a
+  1344-pixel one 9 ms, so the width rounds up to 64 pixels. A rule that
+  halved the picture when repaints came slowly was measuring the
+  stream's own frame rate, never recovered, and is gone (2026-10-28).
 - **Kill the whole process tree.** A surviving Python grandchild once
   flooded the ingest as a zombie; killing the Studio by signal skips
   Rust's `Drop`, so the simulator child exits on stdin EOF instead.

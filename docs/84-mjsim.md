@@ -59,7 +59,7 @@ list it offers comes in as an argument.
 ## 3. What it buys, what it costs
 
 Buys: the widget improves on its own cadence and pull requests (rendering
-quality, the drawer, the half-size rule, a Windows build of just the
+quality, the drawer, the row alignment of uploads, a Windows build of just the
 widget's demo), a demo app in the repo that is the smallest MuJoCo
 simulator window anyone can run, and a second consumer is possible (a notebook,
 another egui app). Costs: two version pins to keep in step (the Studio's
