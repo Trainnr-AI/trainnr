@@ -71,8 +71,8 @@ static GLOBAL: re_memory::AccountingAllocator<mimalloc::MiMalloc> =
 /// (seen live on the embed's first launch).
 const VIEWPORT_DEFAULT_HEIGHT: f32 = 520.0;
 const VIEWPORT_MIN_HEIGHT: f32 = 240.0;
-/// The picker row alone, when no scene runs above a streaming viewer.
-const VIEWPORT_PICKER_HEIGHT: f32 = 34.0;
+/// The transport row: the picker alone, or the strip under a scene.
+const TRANSPORT_ROW_HEIGHT: f32 = 34.0;
 /// The standard Rerun SDK port, on this machine only: anything here
 /// calling `rr.connect_grpc()` lands in this window, and nothing on the
 /// network can stream into it (it listened on every interface until
@@ -509,7 +509,7 @@ impl eframe::App for StudioShell {
             } else {
                 egui::Panel::top("sim_scene_picker")
                     .resizable(false)
-                    .exact_size(VIEWPORT_PICKER_HEIGHT)
+                    .exact_size(TRANSPORT_ROW_HEIGHT)
             };
             panel.show(ui, |ui| self.viewport_body(ui));
             if has_recording {
@@ -542,40 +542,44 @@ impl StudioShell {
     /// Inspect drawer floating over it (simulator.rs) - the same body in
     /// the Live page's top panel and alone in full screen.
     fn viewport_body(&mut self, ui: &mut egui::Ui) {
-        let mut action = None;
-        if !self.viewport.is_active() {
-            // No scene: the row is the picker and nothing else; no idle
-            // placeholder above it (2026-10-02, "too many border lines").
-            // Drawn in a foreground area over the panel's own rect: the
-            // viewer below paints its hidden top bar into this region
-            // (`viewer_ui`), and the row must win both paint and input.
-            let rect = ui.max_rect();
-            let palette = crate::theme::palette(ui);
-            let deployments = self.shell.model.deploy_scenes();
-            let viewport = &mut self.viewport;
-            let inner = egui::Area::new(ui.id().with("scene-picker-row"))
-                .order(egui::Order::Foreground)
-                .fixed_pos(rect.min)
-                .show(ui.ctx(), |ui| {
-                    egui::Frame::new()
-                        .fill(palette.canvas)
-                        .inner_margin(egui::Margin::symmetric(8, 4))
-                        .show(ui, |ui| {
-                            ui.set_width(rect.width() - 16.0);
-                            simulator::transport(ui, viewport, &deployments)
-                        })
-                        .inner
-                });
-            action = inner.inner;
+        // No scene: the row is the picker and nothing else; no idle
+        // placeholder above it (2026-10-02, "too many border lines"). A
+        // scene: the row is a strip under the picture. Either way it is
+        // drawn in a foreground area over the panel's full width: the
+        // viewer below paints its hidden top bar up into this region
+        // (`viewer_ui`; an egui panel sets its clip to its own rect), and
+        // the row must win both paint and input (2026-10-28: the bar hid
+        // a running scene's buttons and took their clicks).
+        let active = self.viewport.is_active();
+        let mut rect = ui.max_rect();
+        if active {
+            let strip = egui::Panel::bottom("simulator_transport").exact_size(TRANSPORT_ROW_HEIGHT);
+            rect = strip.resizable(false).show(ui, |_| {}).response.rect;
+        }
+        let clip = ui.clip_rect();
+        let rect = rect.with_min_x(clip.min.x).with_max_x(clip.max.x);
+        let palette = crate::theme::palette(ui);
+        let deployments = self.shell.model.deploy_scenes();
+        let viewport = &mut self.viewport;
+        let action = egui::Area::new(ui.id().with("transport-row"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(rect.min)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::new()
+                    .fill(palette.canvas)
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.set_width(rect.width() - 16.0);
+                        ui.set_min_height(rect.height() - 8.0);
+                        simulator::transport(ui, viewport, &deployments)
+                    })
+                    .inner
+            })
+            .inner;
+        if !active {
             self.spawn_or_stop(ui, action);
             return;
         }
-        egui::Panel::bottom("simulator_transport")
-            .resizable(false)
-            .show(ui, |ui| {
-                let deployments = self.shell.model.deploy_scenes();
-                action = simulator::transport(ui, &mut self.viewport, &deployments);
-            });
         let picture = self.viewport.show(ui);
         if let Some(picture) = picture {
             simulator::overlays(ui.ctx(), picture, &mut self.viewport);
