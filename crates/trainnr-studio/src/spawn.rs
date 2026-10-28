@@ -31,6 +31,12 @@ pub const TRAINNR_CLI_MODULE: &str = "trainnr.cli";
 /// viewport. `uv run` adds them the first time a stream runs and keeps
 /// what is there (its sync is inexact): the viewer piece, on demand.
 const PIPELINE_EXTRAS: &[&str] = &["sim", "viz", "deploy"];
+/// The trainer extras the walk view needs: the Rerun SDK (`viz`) for its
+/// overview of the worlds, as `trainnr/mcp_actions.py::TRAINER_EXTRAS`
+/// asks for the trainer's own runs. Without it a trainer environment
+/// synced bare died on `import rerun` and the walk scene stood still
+/// (2026-10-28).
+const WALK_EXTRAS: &[&str] = &["viz"];
 
 /// The WSL-only environment for MuJoCo's offscreen GL (the WSL machine's
 /// documented gotcha: without these it falls back to llvmpipe, the
@@ -190,14 +196,19 @@ fn python_with(extras: &[&str]) -> Command {
     command
 }
 
-/// `uv run --offline python -m <module>` from the walk package's
-/// directory: the trainnr_mjlab venv (torch, warp, mjlab), not the pipeline's.
+/// `uv run --offline --extra viz python -m <module>` from the walk
+/// package's directory: the trainnr_mjlab venv (torch, warp, mjlab), not
+/// the pipeline's.
 pub fn walk_command(module: &str) -> Command {
     let root = repo_root();
     let uv = crate::engine::uv_program();
     let mut command = Command::new(&uv);
+    command.args(["run", "--offline"]);
+    for extra in WALK_EXTRAS {
+        command.args(["--extra", extra]);
+    }
     command
-        .args(["run", "--offline", "python", "-m", module])
+        .args(["python", "-m", module])
         .current_dir(root.join(WALK_PACKAGE_DIR))
         .env(crate::engine::UV_ENV, &uv)
         .env(REPO_ENV, &root);
@@ -388,6 +399,8 @@ mod tests {
             .get_current_dir()
             .is_some_and(|d| d.ends_with(PIPELINE_DIR)));
         let walk = walk_command("trainnr_mjlab.walk_view");
+        let walk_args: Vec<_> = walk.get_args().collect();
+        assert!(walk_args.windows(2).any(|w| w == ["--extra", "viz"]));
         assert!(walk
             .get_current_dir()
             .is_some_and(|d| d.ends_with(WALK_PACKAGE_DIR)));
