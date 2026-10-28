@@ -138,6 +138,12 @@ const INITIAL_RENDER_SIZE: (u32, u32) = (1024, 576);
 /// on a viewport this size.
 const MIN_RENDER_SIDE: u32 = 128;
 const MAX_RENDER_SIDE: u32 = 1920;
+/// The render width is a whole number of these, so each RGBA row is a
+/// whole number of 256 bytes: any other row length took WSLg's Vulkan
+/// driver down a slow upload path, 111 ms of a frame for a 1388-pixel
+/// picture against 9 ms for 1344 (2026-10-28). Both bounds above are
+/// multiples of it.
+const ROW_PIXELS: u32 = 64;
 
 /// A size change makes the Python side throw away and rebuild its
 /// `mujoco.Renderer` (fixed-size once constructed), so during a live
@@ -233,10 +239,6 @@ pub struct ViewportFeed {
     sent_size: (u32, u32),
     /// When the last size change went out — see `RESIZE_DEBOUNCE`.
     last_resize_sent: Option<std::time::Instant>,
-    /// The fraction of the panel's pixels the simulation renders: 1.0, or
-    /// 0.5 when a frame of this window costs too much (see
-    /// `set_render_scale`); egui stretches the picture to the panel.
-    render_scale: f32,
     /// A Ctrl+drag perturbation is in flight (select sent, release owed).
     perturbing: bool,
     /// Set by the reader thread when the frame stream ends. A dead
@@ -460,7 +462,6 @@ impl ViewportFeed {
             spawn_error: None,
             sent_size: INITIAL_RENDER_SIZE,
             last_resize_sent: None,
-            render_scale: 1.0,
             perturbing: false,
             stream_ended: Arc::new(AtomicBool::new(false)),
             task: None,
@@ -607,7 +608,6 @@ impl ViewportFeed {
                     spawn_error: None,
                     sent_size: INITIAL_RENDER_SIZE,
                     last_resize_sent: None,
-                    render_scale: 1.0,
                     perturbing: false,
                     stream_ended,
                     task: Some(task_name.to_owned()),
@@ -639,20 +639,6 @@ impl ViewportFeed {
         let mut feed = Self::idle();
         feed.spawn_error = Some(message);
         feed
-    }
-
-    /// Render at a fraction of the panel's pixels. The window's own frame
-    /// time decides (main.rs): past 150 ms a frame the simulation draws
-    /// at half size and egui stretches it, under 60 ms it draws at full
-    /// size again; between, the last choice holds. On WSLg's graphics
-    /// layer the cost of a frame is the pixels it carries (2026-10-03:
-    /// 435 ms a frame at full size with a scene streaming).
-    pub fn set_render_scale(&mut self, scale: f32) {
-        self.render_scale = scale;
-    }
-
-    pub fn render_scale(&self) -> f32 {
-        self.render_scale
     }
 
     /// Draws the newest frame into `ui`, or a placeholder/error message
@@ -796,7 +782,7 @@ impl ViewportFeed {
         // let egui upscale the difference — visibly soft next to the
         // Rerun viewer beside it.
         let pixels_per_point = ui.ctx().pixels_per_point();
-        let want = render_size(available * pixels_per_point * self.render_scale);
+        let want = render_size(available * pixels_per_point);
         let size_changed = want != self.sent_size;
         let resize_ripe = self
             .last_resize_sent
@@ -1098,12 +1084,16 @@ fn fitted_rect(outer: egui::Rect, aspect: f32) -> egui::Rect {
 /// width cap with its height untouched, and the requested aspect no
 /// longer matched the panel's — the frame letterboxed to a strip
 /// (seen live). Aspect is the invariant; resolution is the variable.
+/// The width then rounds UP to whole `ROW_PIXELS`, the height with it,
+/// so egui shrinks the picture a little to the panel, never stretches it.
 fn render_size(desired: egui::Vec2) -> (u32, u32) {
     let (w, h) = (desired.x.max(1.0), desired.y.max(1.0));
     let max = MAX_RENDER_SIDE as f32;
     let min = MIN_RENDER_SIDE as f32;
     let mut scale = (max / w).min(max / h).min(1.0);
     scale = scale.max(min / w).max(min / h);
+    let row = ROW_PIXELS as f32;
+    scale = ((w * scale / row).ceil() * row).min(max) / w;
     // The final per-dimension clamp only bites on degenerate aspects
     // (a sliver so extreme both bounds can't hold at once) — there,
     // staying inside the compiled framebuffer wins over exact aspect.
@@ -1362,6 +1352,17 @@ mod tests {
         // them (framebuffer safety beats exact aspect there).
         let (w, h) = render_size(egui::vec2(10_000.0, 10.0));
         assert!(w <= MAX_RENDER_SIDE && h >= MIN_RENDER_SIDE);
+    }
+
+    #[test]
+    fn a_render_row_is_a_whole_number_of_256_bytes() {
+        // The simulator panel measured on WSLg: 1388×482 uploaded at
+        // 111 ms a frame; widened to whole rows, the panel's aspect kept.
+        assert_eq!(render_size(egui::vec2(1388.0, 482.0)), (1408, 489));
+        for (x, y) in [(1388.0, 482.0), (1000.0, 700.0), (64.0, 40.0)] {
+            let (w, _) = render_size(egui::vec2(x, y));
+            assert_eq!(w * 4 % 256, 0, "{x}×{y} → width {w}");
+        }
     }
 
     #[test]
