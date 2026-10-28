@@ -1,9 +1,7 @@
 # Governance
 
 trainnr is developed in the open under the Trainnr AI name by its copyright
-holder, Prakhar Aggarwal, under the Functional Source License
-(FSL-1.1-ALv2): any use other than a competing product or service, and each
-version under the Apache License 2.0 two years after its release.
+holder, Prakhar Aggarwal, under the Apache License 2.0.
 
 ## Roles
 
@@ -39,10 +37,9 @@ version under the Apache License 2.0 two years after its release.
 
 Everything in this repository (the Python packages, the Studio, the CLI,
 the agent plugin, the robot bundles, the docs and the findings records) is
-FSL-1.1-ALv2, apart from the third-party material `NOTICE` lists under its
-own licence. Each version becomes Apache-2.0 on the second anniversary of
-its release, irrevocably; that clock is the licence's, not a promise that
-can be withdrawn. A hosted service may be
+Apache-2.0, apart from the third-party material `NOTICE` lists under its
+own licence. Versions released before 2026-10-28 were made available under
+FSL-1.1-ALv2. A hosted service may be
 built on top of it; if it is, it extends these packages through the same
 public entry points any other package can use (`trainnr.mcp_tools`, the
 task and robot registries), which are part of the public API below.
@@ -159,8 +156,7 @@ Step by step:
    - the Studio archives: one per platform
      (`trainnr-studio-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`,
      `-aarch64-apple-darwin.tar.gz`, `-x86_64-pc-windows-msvc.zip`), each
-     holding the binary, LICENSE, LICENSES/Apache-2.0.txt, NOTICE and
-     THIRD_PARTY_LICENSES.md;
+     holding the binary, LICENSE, NOTICE and THIRD_PARTY_LICENSES.md;
    - the Python packages: `trainnr-X.Y.Z.tar.gz`,
      `trainnr-X.Y.Z-py3-none-any.whl`, `trainnr_mjlab-X.Y.Z.tar.gz`,
      `trainnr_mjlab-X.Y.Z-py3-none-any.whl`;

@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml"><img src="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml/badge.svg?branch=main" alt="gates"></a>
   <a href="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml"><img src="https://github.com/Trainnr-AI/trainnr/raw/badges/coverage.svg" alt="coverage"></a>
-  <a href="#licence"><img src="https://img.shields.io/badge/licence-FSL--1.1--ALv2-blue" alt="licence: FSL-1.1-ALv2"></a>
+  <a href="#licence"><img src="https://img.shields.io/badge/licence-Apache--2.0-blue" alt="licence: Apache-2.0"></a>
   <a href="trainnr/pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-blue" alt="python 3.11 to 3.13"></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-77%20tools-6f42c1" alt="MCP server: 77 tools"></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
@@ -621,10 +621,9 @@ Tool names and arguments changed before 0.1.0; [`CHANGELOG.md`](CHANGELOG.md) li
 
 ## Licence
 
-trainnr is licensed under the [Functional Source License, Version 1.1, ALv2
-Future License](LICENSE) (FSL-1.1-ALv2). Two years after each version is
-made available, that version is also licensed under the
-[Apache License 2.0](LICENSES/Apache-2.0.txt).
+trainnr is licensed under the [Apache License 2.0](LICENSE). Versions
+released before 2026-10-28 were made available under the Functional Source
+License, Version 1.1, ALv2 Future License.
 
 Third-party material keeps its own licence and is listed in
 [`NOTICE`](NOTICE). The code of the 2025–26 hardware rig this

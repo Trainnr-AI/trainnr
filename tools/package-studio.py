@@ -21,8 +21,8 @@ certificate are the maintainer's to obtain (docs/85 §7). Until then,
 macOS asks the person to open the app from System Settings, Privacy &
 Security, the first time.
 
-The licences travel inside each layout (LICENSE, NOTICE, LICENSES/, and
-the third-party list when the release passes it). Stdlib only.
+The licences travel inside each layout (LICENSE, NOTICE, and the
+third-party list when the release passes it). Stdlib only.
 """
 
 from __future__ import annotations
@@ -70,11 +70,10 @@ exec "$here/usr/bin/trainnr-studio" "$@"
 
 
 def copy_licences(into: Path, third_party: Path | None) -> None:
-    """LICENSE, NOTICE, LICENSES/ and the third-party list, beside the app."""
+    """LICENSE, NOTICE and the third-party list, beside the app."""
     into.mkdir(parents=True, exist_ok=True)
     for name in ("LICENSE", "NOTICE"):
         shutil.copy2(ROOT / name, into / name)
-    shutil.copytree(ROOT / "LICENSES", into / "LICENSES", dirs_exist_ok=True)
     if third_party is not None:
         shutil.copy2(third_party, into / third_party.name)
 

@@ -7,4 +7,4 @@ docs/76-the-loop.md.
 
 __version__ = "0.2.0-rc.2"
 # The licence a record names when it cites trainnr itself as a tool.
-__license__ = "FSL-1.1-ALv2"
+__license__ = "Apache-2.0"

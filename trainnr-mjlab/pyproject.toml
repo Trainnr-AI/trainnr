@@ -17,8 +17,8 @@ version = "0.2.0-rc.2"
 description = "The mjlab trainer for trainnr: identified actuator physics (BAM) as mjlab actuators, randomization from measured intervals, and a linter that refuses silent no-ops."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-license = "FSL-1.1-ALv2"
-license-files = ["LICENSE", "LICENSES/Apache-2.0.txt", "NOTICE"]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Prakhar Aggarwal" }]
 keywords = ["physical-ai", "robotics", "reinforcement-learning", "mjlab", "mujoco", "sim-to-real", "actuators"]
 classifiers = [

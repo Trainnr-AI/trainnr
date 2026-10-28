@@ -5,7 +5,7 @@
  "stamp": "microduck@ad90736153cc",
  "carried": "337dbcb17b56",
  "licence": "Creative Commons BY-SA-NC, as Pollen Robotics' README states for its 3D model files",
- "why": "the meshes' licence does not let this repository (FSL-1.1-ALv2) redistribute them; they are fetched from their publisher on first use, byte-identical to the files the bundle's stamp was taken over",
+ "why": "the meshes' licence does not let this repository (Apache-2.0) redistribute them; they are fetched from their publisher on first use, byte-identical to the files the bundle's stamp was taken over",
  "files": {
   "assets/ankle_left.stl": {
    "upstream": "src/mjlab_microduck/robot/microduck/assets/ankle_left.stl",

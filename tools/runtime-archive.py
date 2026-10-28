@@ -32,9 +32,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 # What a job, the presenter or the simulator stream reads from a checkout.
 FOLDERS = ("trainnr", "trainnr-mjlab", "tools", "robots")
-# What travels with them: the licence, its notices, the third parties'.
+# What travels with them: the licence and its notices.
 FILES = ("LICENSE", "NOTICE")
-LICENCE_FOLDER = "LICENSES"
 # Never shipped: the suites stay in the repository.
 EXCLUDED_PARTS = ("tests",)
 NAME = "trainnr-runtime-v{version}"
@@ -53,7 +52,7 @@ def tracked(paths: tuple[str, ...]) -> list[str]:
 
 def members() -> list[str]:
     """The runtime's files: the folders less their tests, and the licences."""
-    files = tracked((*FOLDERS, *FILES, LICENCE_FOLDER))
+    files = tracked((*FOLDERS, *FILES))
     return [f for f in files if not set(Path(f).parts) & set(EXCLUDED_PARTS)]
 
 

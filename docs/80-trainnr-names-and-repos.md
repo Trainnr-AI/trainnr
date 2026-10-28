@@ -182,6 +182,10 @@ may stay in code: press, referee, presenter, rail, twin (as
 
 ## 7. Licence and governance
 
+*Changed again 2026-10-28: the licence is Apache-2.0, for the whole
+repository; versions released before then were FSL-1.1-ALv2. The note
+below is the 2026-10-05 change.*
+
 *Changed 2026-10-05, before the first public release: the licence is
 FSL-1.1-ALv2 (the Functional Source License with an Apache-2.0 future
 licence), not Apache-2.0. Any use but a competing product or service, and
