@@ -10,6 +10,7 @@ import time
 import unittest
 from pathlib import Path
 
+from tests._fixtures import scratch_dir
 from trainnr.bundles.hashing import fields_hash
 from trainnr.project.kinds import stamp_run
 from trainnr.project.live import (
@@ -39,7 +40,7 @@ LOG = """[g3] 4096 envs on cuda:0, 8000 iterations
 
 class TheLiveRecord(unittest.TestCase):
     def _project(self, log: str) -> tuple[Project, Path]:
-        tmp = Path(tempfile.mkdtemp())
+        tmp = scratch_dir(self)
         (tmp / "project.json").write_text(
             json.dumps(
                 {"schema": "trainnr-project/1", "name": "t", "created": "2026-09-10"}
@@ -118,7 +119,7 @@ class TheLiveVerdict(unittest.TestCase):
     citing a policy, the next tick, and only once."""
 
     def _run(self) -> tuple[Project, Path]:
-        tmp = Path(tempfile.mkdtemp())
+        tmp = scratch_dir(self)
         (tmp / "project.json").write_text(
             json.dumps(
                 {"schema": "trainnr-project/1", "name": "t", "created": "2026-09-10"}
@@ -244,7 +245,7 @@ class TheStatusWord(unittest.TestCase):
     `running` for a trainer that stopped writing without its last line."""
 
     def test_a_stale_log_without_the_done_line_is_unrecorded(self) -> None:
-        _, run = TheLiveRecord()._project(LOG)
+        _, run = TheLiveRecord._project(self, LOG)  # its folder lives with this test
         text = (run / TRAIN_LOG).read_text()
         now = (run / TRAIN_LOG).stat().st_mtime
         self.assertEqual(run_status(run, text, now=now), "running")

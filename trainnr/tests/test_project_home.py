@@ -8,19 +8,19 @@ chosen, else a checkout's `projects/default`, else none, refused by name."""
 import os
 import subprocess
 import sys
-import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests._fixtures import scratch_dir
 from trainnr.mcp_jobs import JobManager
 from trainnr.project import locate
 
 
 class _Home(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = scratch_dir(self)
         env = mock.patch.dict(os.environ, {"TRAINNR_HOME": str(self.tmp / "home")})
         env.start()
         self.addCleanup(env.stop)
@@ -125,7 +125,7 @@ class CancellingAJob(unittest.TestCase):
     time was kept, is refused rather than signalled."""
 
     def setUp(self) -> None:
-        self.jobs = JobManager(Path(tempfile.mkdtemp()))
+        self.jobs = JobManager(scratch_dir(self))
 
     def test_a_job_id_that_is_a_path_is_refused(self) -> None:
         with self.assertRaisesRegex(ValueError, "not a job id"):
@@ -213,7 +213,7 @@ class TheCheckoutSample(unittest.TestCase):
     project; beside the user's own it read as a broken one (2026-10-04)."""
 
     def test_the_sample_steps_aside_for_real_projects(self) -> None:
-        tmp = Path(tempfile.mkdtemp())
+        tmp = scratch_dir(self)
         checkout = tmp / "checkout"
         locate.create_project(checkout / locate.SAMPLE_PROJECT, "sample")
         with (

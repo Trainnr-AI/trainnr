@@ -12,6 +12,7 @@ import time
 import unittest
 from pathlib import Path
 
+from tests._fixtures import scratch_dir
 from trainnr.mcp_jobs import JobManager, exit_path_for, runner_argv
 
 WAIT_S = 20.0
@@ -19,7 +20,7 @@ WAIT_S = 20.0
 
 class TheRunner(unittest.TestCase):
     def test_the_exit_code_is_recorded_by_the_runner_itself(self) -> None:
-        root = Path(tempfile.mkdtemp())
+        root = scratch_dir(self)
         jobs = JobManager(root)
         handle = jobs.start(
             "fake", [sys.executable, "-c", "print('hi'); raise SystemExit(3)"], root
@@ -56,7 +57,7 @@ class AJobInAnotherProject(unittest.TestCase):
     rather than "no job; known: []" (review, 2026-10-04)."""
 
     def test_the_reply_names_the_owning_project(self) -> None:
-        projects = Path(tempfile.mkdtemp())
+        projects = scratch_dir(self)
         first = JobManager(projects / "qa")
         handle = first.start("fake", [sys.executable, "-c", "pass"], projects)
         first.join(WAIT_S)
@@ -73,7 +74,7 @@ class AFailedJobSaysWhy(unittest.TestCase):
     its last exception line. The log read is the one beside the record."""
 
     def test_the_last_exception_line_is_the_error(self) -> None:
-        root = Path(tempfile.mkdtemp())
+        root = scratch_dir(self)
         jobs = JobManager(root)
         script = (
             "import sys\n"
@@ -91,7 +92,7 @@ class AFailedJobSaysWhy(unittest.TestCase):
         self.assertNotIn("ModuleNotFoundError", "\n".join(status["log_tail"]))
 
     def test_a_record_naming_another_log_is_not_followed(self) -> None:
-        root = Path(tempfile.mkdtemp())
+        root = scratch_dir(self)
         secret = root / "secret.txt"
         secret.write_text("do not show")
         jobs = JobManager(root)
@@ -114,7 +115,7 @@ class WaitingOnAJob(unittest.TestCase):
     def test_the_wait_returns_when_the_job_ends(self) -> None:
         from trainnr.mcp_actions import Actions  # noqa: PLC0415
 
-        root = Path(tempfile.mkdtemp())
+        root = scratch_dir(self)
         actions = Actions(JobManager(root), env_file=None)
         handle = actions.jobs.start(
             "fake", [sys.executable, "-c", "import time; time.sleep(1)"], root
