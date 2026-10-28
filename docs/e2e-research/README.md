@@ -89,10 +89,11 @@ bundle is not shipped and the line numbers are its.
 
 | Doc | What it covers | Status |
 |---|---|---|
-| [74 The simulation window](74-the-simulation-window.md) | How Isaac Sim, Isaac Lab, MuJoCo's simulate, Gazebo, Genesis and mujoco-rs lay out the runtime; the Studio's simulator page followed | current |
+| [74 The simulation window](74-the-simulation-window.md) | How Isaac Sim, Isaac Lab, MuJoCo's simulate, Gazebo, Genesis and mujoco-rs lay out the runtime; the Studio's simulator page followed | current; its mujoco-rs part is updated by 78 |
 | [75 Scene capture for the loop](75-scene-capture-2026-09.md) | Phone capture to splat to proxy in minutes; a splat scene ranks policies and never predicts absolute success | current |
 | [76 Physics on gaussians](76-physics-on-gaussians-2026-09.md) | Continuum, splat-native, differentiable and learned physics on gaussians; the proxy stays; a certification protocol | current |
 | [77 Native USD import](77-usd-import-2026-09.md) | Isaac's 2F-85 USD imported through Newton into a stamped bundle, audited equal to the source | current |
+| [78 mujoco-rs 7.0.0](78-mujoco-rs-7.md) | The Rust binding read in full for what trainnr could use it for: the simulator stays a stream, the viewer is a reference, physics-only waits for a matching engine | current |
 
 ## How this corpus was made
 

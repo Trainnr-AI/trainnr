@@ -201,6 +201,9 @@ Accessed 2026-09-09.
 
 ## 5. mujoco-rs 6.0.1 (the supplied bundle)
 
+*Updated by [78](78-mujoco-rs-7.md), which read 7.0.0 in full on
+2026-10-28: the conclusion below still holds, with two more reasons.*
+
 Read 2026-09-09 from a Repomix export of github.com/davidhozic/mujoco-rs
 at `main` (`Cargo.toml`: `version = "6.0.1+mj-3.12.0"`, `license = "MIT
 OR Apache-2.0"`, Rust 1.95+). "A high-level Rust wrapper around the
