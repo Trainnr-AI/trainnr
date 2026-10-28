@@ -28,6 +28,7 @@ All notable changes to trainnr. The format follows
 
 ### Changed
 
+- A running scene's controls under the simulator's picture are whole again: the viewer's hidden top bar was drawn over them, covering the buttons and taking their clicks.
 - The Studio's simulator picture is sharp: it renders at the panel's full size, widened to rows of a whole 256 bytes, which WSLg's graphics layer uploads in about a tenth of the time. It used to drop to half size when frames ran slow, measured by the time between repaints, which tracks the stream's own frame rate, and on WSLg it never came back.
 - The Studio's card and drawer pictures are sharp: each is decoded to the exact pixel size it is drawn at with a sharp filter, instead of shrunk to fit with a fast one and stretched to fill the card; the drawer no longer enlarges the card's smaller copy.
 - The Studio's empty pages say what each page holds and what to ask the agent, in prompts that copy on a click; an empty project's Overview shows a Start here card with the first three steps instead of a row of zeros; the Overview's next step for an empty project is one short line.
