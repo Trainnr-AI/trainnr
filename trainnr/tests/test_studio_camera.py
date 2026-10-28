@@ -72,3 +72,36 @@ class PanReachesTheCamera(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@needs_sim
+class OverlaysDrawWithoutTheReflection(unittest.TestCase):
+    """An overlay drops the floor's mirror pass, which draws every shape
+    twice (2026-10-28: 271 against 136 ms a frame, four overlays, WSLg)."""
+
+    def reflection(self, vis: dict, rnd: dict) -> bool:
+        import threading  # noqa: PLC0415
+
+        import mujoco  # noqa: PLC0415 - the sim extra
+
+        srs = render_stream()
+        sim = object.__new__(srs.SimControl)
+        sim._lock, sim._vis, sim._rnd, sim._groups = threading.Lock(), vis, rnd, {}
+        vopt, scene = mujoco.MjvOption(), mujoco.MjvScene()
+        sim.apply_flags(vopt, scene)
+        return bool(scene.flags[srs.REFLECTION])
+
+    def test_an_overlay_turns_it_off_and_its_end_back_on(self) -> None:
+        import mujoco  # noqa: PLC0415 - the sim extra
+
+        contacts = int(mujoco.mjtVisFlag.mjVIS_CONTACTPOINT)
+        self.assertTrue(self.reflection({}, {}))
+        self.assertFalse(self.reflection({contacts: True}, {}))
+        self.assertTrue(self.reflection({contacts: False}, {}))
+
+    def test_a_reflection_asked_for_stays(self) -> None:
+        import mujoco  # noqa: PLC0415 - the sim extra
+
+        srs = render_stream()
+        contacts = int(mujoco.mjtVisFlag.mjVIS_CONTACTPOINT)
+        self.assertTrue(self.reflection({contacts: True}, {int(srs.REFLECTION): True}))
