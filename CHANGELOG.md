@@ -49,6 +49,7 @@ All notable changes to trainnr. The format follows
 
 ### Security
 
+- The locks take the fixes for every advisory published against them: aiohttp 3.14.5, certifi 2026.10.23, filelock 4.2.4, GitPython 3.2.1, msgpack 1.2.4 and opentelemetry-api 1.45.1 in trainnr's; certifi, filelock, GitPython, opentelemetry-api, Pillow 13.0.0 and setuptools 84.2.1 in trainnr-mjlab's; pulldown-cmark 0.13.5 in the Studio's (RUSTSEC-2026-0414). trainnr's Pillow (12.3.0) and setuptools (81) stay where LeRobot 0.6.1 caps them, below the fixed versions, each advisory a written exception in `tools/supply-chain.py`.
 - The Studio's lock takes rustls 0.23.46, rustls-webpki 0.103.16, webpki-roots 1.0.11, tokio 1.53.3 (now also its floor in Cargo.toml), zstd-sys 2.1.2 and clipboard-win 5.4.3 (RUSTSEC-2026-0346, -0347, -0348, -0349, -0381, -0382, -0386, -0410; the yanked clipboard-win 5.4.1). No other crate or dependency edge moves. Dated exceptions in deny.toml: zvariant, zvariant_derive and zbus_names, unmaintained since they merged into zbus 6, until AccessKit moves to zbus 6; and zstd 0.13 and zstd-safe 7 (RUSTSEC-2026-0391, -0398, -0403), pinned through Rerun 0.36's arrow, parquet and mcap, until the Rerun update that takes zstd 0.14.
 
 ## [0.1.0] - 2026-10-06
