@@ -7,18 +7,18 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests._fixtures import scratch_dir
 from trainnr.project import create_project, locate
 from trainnr.project.index import index_project, write_index
 
 
 class FromAFreshHome(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = scratch_dir(self)
         env = mock.patch.dict(os.environ, {"TRAINNR_HOME": str(self.tmp / "home")})
         env.start()
         self.addCleanup(env.stop)

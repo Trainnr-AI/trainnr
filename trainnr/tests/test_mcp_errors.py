@@ -8,13 +8,12 @@ in a scratch home, with job launching refused so nothing real runs."""
 import asyncio
 import os
 import re
-import tempfile
 import unittest
-from pathlib import Path
 from typing import Any
 from unittest import mock
 
 from tests._extras import needs_mcp, needs_sim
+from tests._fixtures import scratch_dir
 
 BARE = re.compile(r"^Error executing tool \w+:?\s*$")
 BANNED = re.compile(
@@ -50,7 +49,7 @@ def _text(result: Any) -> str:
 @needs_sim
 class EveryToolSaysWhy(unittest.TestCase):
     def setUp(self) -> None:
-        self.home = Path(tempfile.mkdtemp())
+        self.home = scratch_dir(self)
         env = {"TRAINNR_HOME": str(self.home), "TRAINNR_PROJECTS": str(self.home / "p")}
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
@@ -89,8 +88,8 @@ class EveryToolSaysWhy(unittest.TestCase):
         self.assertGreater(len(tools), 70)
         bare = {}
         for tool in tools:
-            if tool.name in {"launch_studio", "start_capture"}:
-                continue  # a window or a socket; their refusals are tested elsewhere
+            if tool.name in {"launch_studio", "start_capture", "open_sample"}:
+                continue  # a window, a socket, a download; tested elsewhere
             props = tool.parameters.get("properties", {})
             args = {
                 k: _dummy(v)

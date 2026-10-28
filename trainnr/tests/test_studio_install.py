@@ -7,11 +7,11 @@ import io
 import os
 import sys
 import tarfile
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests._fixtures import scratch_dir
 from trainnr import studio_install as si
 
 
@@ -37,7 +37,7 @@ def _release(
 @unittest.skipIf(sys.platform.startswith("win"), "the fixture writes a POSIX archive")
 class DownloadedStudio(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = scratch_dir(self)
         self.env = mock.patch.dict(
             os.environ,
             {"XDG_CACHE_HOME": str(self.tmp / "cache"), si.RELEASE_ENV: "v9.9.9"},
@@ -87,7 +87,7 @@ class ThreeInstallsAtOnce(unittest.TestCase):
         import json  # noqa: PLC0415
         import subprocess  # noqa: PLC0415
 
-        tmp = Path(tempfile.mkdtemp())
+        tmp = scratch_dir(self)
         urls = _release(tmp, "v9.9.9", "x86_64-unknown-linux-gnu")
         script = (
             "import json, sys\n"

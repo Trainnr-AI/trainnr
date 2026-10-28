@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,14 @@ from trainnr.project.locate import Project
 REPO = Path(__file__).resolve().parents[2]
 RIG_BUNDLE = REPO / "robots" / "rig-drivetrain"
 RIG_FILES = ("model.xml", "profile.json", "README.md")
+
+
+def scratch_dir(case: unittest.TestCase) -> Path:
+    """A temporary folder removed when the test ends: `mkdtemp` alone left
+    45 folders (and the downloaded sample) in /tmp on every run."""
+    tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+    case.addCleanup(tmp.cleanup)
+    return Path(tmp.name)
 
 
 def rig_project(tmp: Path, name: str = "p") -> Project:
