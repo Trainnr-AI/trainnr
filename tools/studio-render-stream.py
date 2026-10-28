@@ -243,6 +243,8 @@ SHADOW_BUDGET_MS = 14.0  # the render lane must fit under one 60 Hz display fram
 SHADOW_PROBE_FRAMES = 30  # frames averaged before shadows are judged
 SHADOW_PROBE_MS = 1000.0  # or this much render time, whichever comes first
 SHADOWS_MODE = "auto"
+REFLECTION = mujoco.mjtRndFlag.mjRND_REFLECTION
+VIS_DEFAULT = tuple(bool(on) for on in mujoco.MjvOption().flags)  # simulate's start
 # The lane reports itself on stderr this often: frames, render and ship
 # times — the same facts MuJoCo's simulate shows in its Info overlay.
 LANE_STATS_EVERY_S = 5.0
@@ -1461,6 +1463,16 @@ class SimControl:
                 scene.flags[flag] = on
         for (kind, group), on in groups.items():
             getattr(vopt, f"{kind}group")[group] = on
+        # An overlay (a visualization flag on beyond MuJoCo's defaults)
+        # draws without the floor's reflection unless asked for: the mirror
+        # pass draws every shape twice, and on WSLg's d3d12 GL each shape
+        # is a draw call that costs milliseconds (four overlays on the Go2,
+        # shadows off: 271 ms a frame with the reflection, 136 without).
+        if REFLECTION not in rnd:
+            overlay = any(
+                on and not was for on, was in zip(vopt.flags, VIS_DEFAULT, strict=True)
+            )
+            scene.flags[REFLECTION] = not overlay
 
     def follow_lookat(self, local: "mujoco.MjData") -> "np.ndarray | None":
         """Where the camera should look: the followed world's root, if any."""
