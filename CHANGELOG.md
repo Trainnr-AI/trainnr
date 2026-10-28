@@ -40,6 +40,7 @@ All notable changes to trainnr. The format follows
 
 ### Fixed
 
+- The Simulator's walk scene runs its policy again when the trainer's environment was synced without the `viz` extra: the Studio's walk view now asks for it, as the trainer's own runs do, instead of dying on `import rerun`.
 - A walk's stamp hashes its robot with its knobs: `go1-walk` and `go2-walk` at their defaults shared one hash. A walk already declared keeps the stamp its `task.json` recorded.
 - A plugin install lists no projects from its own copy of the repository: `list_projects` on a fresh install showed `sample` from the plugin's cache folder.
 - A job no longer inherits the server's `VIRTUAL_ENV`; every job log began with uv's warning about it.
