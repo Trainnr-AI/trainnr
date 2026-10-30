@@ -18,15 +18,18 @@ from trainnr import studio_install as si
 def _release(
     where: Path, tag: str, triple: str, *, corrupt: bool = False
 ) -> dict[str, str]:
-    """A fake release: the archive with a binary inside, and its checksum."""
+    """A fake release: the archive with a binary and the licences inside,
+    and its checksum."""
     name = si.asset_name(tag, triple)
     archive = where / name
-    payload = b"#!/bin/sh\necho studio\n"
+    files = {si.EXE: b"#!/bin/sh\necho studio\n"}
+    files.update({licence: licence.encode() for licence in si.LICENCE_FILES})
     with tarfile.open(archive, "w:gz") as tar:
-        info = tarfile.TarInfo(f"trainnr-studio-{tag}/{si.EXE}")
-        info.size = len(payload)
-        info.mode = 0o755
-        tar.addfile(info, io.BytesIO(payload))
+        for file, payload in files.items():
+            info = tarfile.TarInfo(f"trainnr-studio-{tag}/{file}")
+            info.size = len(payload)
+            info.mode = 0o755 if file == si.EXE else 0o644
+            tar.addfile(info, io.BytesIO(payload))
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     if corrupt:
         digest = "0" * 64
@@ -56,6 +59,9 @@ class DownloadedStudio(unittest.TestCase):
             path = si.install(say=lambda _line: None)
             self.assertEqual(path, si.installed_binary())
             self.assertTrue(os.access(path, os.X_OK))
+            for licence in si.LICENCE_FILES:
+                with self.subTest(licence=licence):
+                    self.assertEqual((path.parent / licence).read_text(), licence)
             # a second call downloads nothing
             self.assertEqual(si.install(say=lambda _line: None), path)
             self.assertEqual(fetched.call_count, 1)
