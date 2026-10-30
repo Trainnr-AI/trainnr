@@ -292,7 +292,8 @@ uv run --directory trainnr trainnr studio --install
 
 It installs under your user cache (`~/.cache/trainnr/studio/` on Linux,
 `~/Library/Caches/trainnr/studio/` on macOS), the version that matches the
-package; `TRAINNR_STUDIO_RELEASE` picks another release's.
+package, with its LICENSE, NOTICE and third-party licences beside it;
+`TRAINNR_STUDIO_RELEASE` picks another release's.
 
 **From source**, only if you change the Studio: [CONTRIBUTING.md](CONTRIBUTING.md)
 has the toolchain and the build (about 3.5 GB and 4 to 9 minutes). A

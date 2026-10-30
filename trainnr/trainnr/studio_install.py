@@ -10,7 +10,8 @@ workflow (`.github/workflows/release.yml`) publishes one archive
 per platform, `trainnr-studio-<tag>-<target>.tar.gz` (`.zip` on Windows),
 each with a `.sha256` beside it. The archive is fetched, its checksum
 checked, unpacked into the user's cache, and only then moved into place,
-so a broken download never leaves a half-written binary behind.
+so a broken download never leaves a half-written binary behind. The
+archive's LICENSE, NOTICE and THIRD_PARTY_LICENSES.md stay beside it.
 
 Standard library only: this runs before any extra is installed.
 """
@@ -40,6 +41,9 @@ REPOSITORY = "Trainnr-AI/trainnr"
 RELEASE_ENV = "TRAINNR_STUDIO_RELEASE"  # a tag other than `v<version>`
 TOKEN_ENVS = ("GH_TOKEN", "GITHUB_TOKEN")  # a private repository's releases
 EXE = "trainnr-studio.exe" if sys.platform.startswith("win") else "trainnr-studio"
+# Kept beside the binary: the Studio links third-party crates whose
+# licences ask for their notices to travel with every copy.
+LICENCE_FILES = ("LICENSE", "NOTICE", "THIRD_PARTY_LICENSES.md")
 CHUNK = 1 << 20
 TIMEOUT_S = 60
 
@@ -328,6 +332,9 @@ def _install_locked(
         staged = work / "staged"
         staged.mkdir()
         shutil.move(str(binary), staged / EXE)
+        for licence in LICENCE_FILES:
+            if (binary.parent / licence).is_file():
+                shutil.move(str(binary.parent / licence), staged / licence)
         # A complete install is never removed: an incomplete leftover (no
         # binary inside) is cleared, then the staged folder is renamed into
         # place in one step.
