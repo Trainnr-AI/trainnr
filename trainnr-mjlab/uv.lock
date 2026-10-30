@@ -1736,7 +1736,7 @@ wheels = [
 
 [[package]]
 name = "trainnr"
-version = "0.2.0rc3"
+version = "0.2.0"
 source = { editable = "../trainnr" }
 dependencies = [
     { name = "onnx" },
@@ -1774,7 +1774,7 @@ remote = [{ name = "openpi-client", git = "https://github.com/Physical-Intellige
 
 [[package]]
 name = "trainnr-mjlab"
-version = "0.2.0rc3"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "mjlab" },
