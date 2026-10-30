@@ -5,7 +5,7 @@
 <h1 align="center">trainnr</h1>
 
 <p align="center">
-  <b>The physical AI platform for robot learning: a desktop app to work in, that your coding agent can drive.</b><br>
+  <b>The physical AI platform for robot training: a desktop app to work in, that your coding agent can drive.</b><br>
   Simulation, reinforcement learning, deployment, and a data flywheel from<br>
   the robot's telemetry back into training.
 </p>
