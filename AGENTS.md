@@ -6,7 +6,7 @@ reads them through `CLAUDE.md`). Humans: the same rules are in
 
 ## What this is
 
-trainnr is a physical AI platform for robot learning, driven by an AI
+trainnr is a physical AI platform for robot training, driven by an AI
 agent through one MCP server: telemetry and identification (real-to-sim),
 simulation, synthetic data, reinforcement and imitation learning,
 evaluation with exact intervals, sim-to-real deployment through a gate,

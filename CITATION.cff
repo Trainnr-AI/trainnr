@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: >-
   If you use trainnr, please cite the software.
 type: software
-title: "trainnr: the physical AI platform for robot learning, run from your coding agent"
+title: "trainnr: the physical AI platform for robot training, run from your coding agent"
 abstract: >-
   The end-to-end robotics platform, run from a coding agent: a robot's
   dynamics are identified from its own telemetry into a content-hashed
