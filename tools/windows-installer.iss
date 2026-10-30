@@ -34,7 +34,6 @@ Source: "$exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "$name.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "NOTICE"; DestDir: "{app}"; Flags: ignoreversion
-Source: "LICENSES\*"; DestDir: "{app}\LICENSES"; Flags: ignoreversion recursesubdirs
 $third_party
 [Icons]
 Name: "{autoprograms}\$name"; Filename: "{app}\$exe"; IconFilename: "{app}\$name.ico"

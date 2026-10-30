@@ -38,11 +38,11 @@ holder, Prakhar Aggarwal, under the Apache License 2.0.
 Everything in this repository (the Python packages, the Studio, the CLI,
 the agent plugin, the robot bundles, the docs and the findings records) is
 Apache-2.0, apart from the third-party material `NOTICE` lists under its
-own licence. Versions released before 2026-10-28 were made available under
-FSL-1.1-ALv2. A hosted service may be
-built on top of it; if it is, it extends these packages through the same
-public entry points any other package can use (`trainnr.mcp_tools`, the
-task and robot registries), which are part of the public API below.
+own licence. Releases up to and including 0.2.0-rc.2 were made available
+under FSL-1.1-ALv2. A hosted service may be built on top of it; if it
+is, it extends these packages through the same public entry points any
+other package can use (`trainnr.mcp_tools`, the task and robot
+registries), which are part of the public API below.
 Nothing in this repository depends on a hosted service, and nothing here
 requires an account.
 

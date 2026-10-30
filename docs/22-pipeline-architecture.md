@@ -126,7 +126,7 @@ suite on every commit — the same discipline the Rust side has, mechanical
 rather than conventional. Floor is Python ≥ 3.10; heavy stages are extras
 with their own floors (LeRobot ≥ 3.12, Warp needs NVIDIA).
 
-**Apache-2.0, commercialisable** (as planned in 2026-08; FSL-1.1-ALv2 from 2026-10-05, Apache-2.0 again since 2026-10-28, README). Core dependency-free; every planned
+**Apache-2.0, commercialisable** (as planned in 2026-08; FSL-1.1-ALv2 from 2026-10-05, Apache-2.0 again after 0.2.0-rc.2, README). Core dependency-free; every planned
 dependency (MuJoCo, LeRobot, Newton, gsplat) is Apache/BSD. The research
 corpus's licence traps — INRIA mesh extraction, CC-BY-NC asset tiers,
 proprietary ovrtx — stay outside the dependency tree by policy.

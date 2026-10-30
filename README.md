@@ -621,9 +621,9 @@ Tool names and arguments changed before 0.1.0; [`CHANGELOG.md`](CHANGELOG.md) li
 
 ## Licence
 
-trainnr is licensed under the [Apache License 2.0](LICENSE). Versions
-released before 2026-10-28 were made available under the Functional Source
-License, Version 1.1, ALv2 Future License.
+trainnr is licensed under the [Apache License 2.0](LICENSE). Releases up
+to and including 0.2.0-rc.2 were made available under the Functional
+Source License, Version 1.1, ALv2 Future License.
 
 Third-party material keeps its own licence and is listed in
 [`NOTICE`](NOTICE). The code of the 2025–26 hardware rig this

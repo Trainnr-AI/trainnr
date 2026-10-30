@@ -28,7 +28,7 @@ All notable changes to trainnr. The format follows
 
 ### Changed
 
-- trainnr is licensed under the Apache License 2.0, the whole repository: the Python packages, the Studio, the CLI, the agent plugin, the robot bundles and the docs. Versions released before 2026-10-28 were made available under FSL-1.1-ALv2. Each package's and release's `LICENSE` is the Apache text; the separate `LICENSES/Apache-2.0.txt` copy is gone.
+- trainnr is licensed under the Apache License 2.0, the whole repository: the Python packages, the Studio, the CLI, the agent plugin, the robot bundles and the docs. Releases up to and including 0.2.0-rc.2 were made available under FSL-1.1-ALv2. Each package's and release's `LICENSE` is the Apache text; the separate `LICENSES/Apache-2.0.txt` copy is gone.
 - The simulator's overlays (contacts, forces, joints, actuators and the rest) draw without the floor's reflection unless the Rendering panel asks for it: the mirror pass drew every shape twice. On the kitting scene under WSL, contact forces render in 29 ms a frame instead of 81 and all overlays at 5 frames a second instead of 2.6.
 - A running scene's controls under the simulator's picture are whole again: the viewer's hidden top bar was drawn over them, covering the buttons and taking their clicks.
 - The Studio's simulator picture is sharp: it renders at the panel's full size, widened to rows of a whole 256 bytes, which WSLg's graphics layer uploads in about a tenth of the time. It used to drop to half size when frames ran slow, measured by the time between repaints, which tracks the stream's own frame rate, and on WSLg it never came back.

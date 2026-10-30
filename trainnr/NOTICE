@@ -2,8 +2,8 @@ trainnr
 Copyright 2026 Prakhar Aggarwal
 
 This product is licensed under the Apache License, Version 2.0 (see
-LICENSE). Versions released before 2026-10-28 were made available under
-the Functional Source License, Version 1.1, ALv2 Future License. The
+LICENSE). Releases up to and including 0.2.0-rc.2 were made available
+under the Functional Source License, Version 1.1, ALv2 Future License. The
 third-party material below keeps its own licence.
 
 It includes or builds on the third-party material below. Each vendored
