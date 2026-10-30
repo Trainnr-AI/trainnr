@@ -6,6 +6,8 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
 ### Added
 
 - `describe_studio` says what a frame costs to draw: `frame_cost_ms` and `frame_cost_max_ms`, the mean and the worst over the last second, counting the pages and the rendering but not the wait for vsync (eframe's `cpu_usage`). `frame_ms` stays the time from one frame to the next.
