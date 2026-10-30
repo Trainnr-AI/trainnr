@@ -38,7 +38,7 @@
   <img alt="The Studio's Overview of a Go2 project: the stages of the loop, and the best policy under each test condition with its exact interval" src="docs/figures/readme/studio-overview-light.png">
 </picture>
 
-trainnr is a platform for **physical AI**: robot learning
+trainnr is a platform for **physical AI**: robot training
 from the robot's own data, end to end. It identifies a robot's dynamics
 from its telemetry into a **simulation** model (real-to-sim), creates
 training data on that model, trains policies with **reinforcement learning
@@ -82,7 +82,7 @@ Studio shows each stage as it lands, whoever ran it.
 
 | Area | What trainnr does |
 |---|---|
-| **Physical AI, end to end** | Robot learning from the robot's own data: real-to-sim, synthetic data, training, evaluation, deployment gated in simulation, and the data flywheel back, driven by an AI agent over MCP |
+| **Physical AI, end to end** | Robot training from the robot's own data: real-to-sim, synthetic data, training, evaluation, deployment gated in simulation, and the data flywheel back, driven by an AI agent over MCP |
 | **Data collection** | Robot telemetry from ROS 2 bags (rosbag2), MCAP, Unitree's DDS (`rt/lowstate`, `rt/lowcmd`), LeRobot datasets, motion capture (marker CSV, BVH) and registered public robot logs, each with its rate, dropouts, licence and provenance |
 | **Real-to-sim** | System identification of joints and actuators with confidence intervals (MuJoCo's `sysid`, BAM actuator models), an identified digital twin stamped `name@hash`, robots onboarded from MJCF, URDF or Isaac Sim USD (through Newton), captured scenes from a phone video as Gaussian splats with a collision proxy |
 | **Simulation** | MuJoCo on CPU, MuJoCo Warp and MJX on the GPU, mjlab for massively parallel training, the Studio's interactive simulator with the Rerun viewer |

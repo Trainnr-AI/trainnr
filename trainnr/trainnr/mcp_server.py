@@ -3477,7 +3477,7 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         name="trainnr",
         version=__version__,
         instructions=(
-            "trainnr's tools for robot learning. Start with create_project "
+            "trainnr's tools for robot training. Start with create_project "
             "(or use_project); then onboard a robot, ingest or capture its "
             "telemetry, identify its dynamics, declare and check a task, "
             "generate demonstrations, train, evaluate, export, gate, run "

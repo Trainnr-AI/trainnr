@@ -1,4 +1,4 @@
-"""trainnr: the physical AI platform for robot learning, run from your
+"""trainnr: the physical AI platform for robot training, run from your
 coding agent.
 
 The package map is trainnr/README.md; the loop it implements is
