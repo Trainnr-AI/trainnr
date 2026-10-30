@@ -9,7 +9,7 @@
 name = "trainnr-studio"
 version = "0.2.0-rc.2"
 edition = "2021"
-license = "FSL-1.1-ALv2"
+license = "Apache-2.0"
 description = "The trainnr Studio: the desktop app with the embedded Rerun viewer and the MuJoCo simulator"
 repository = "https://github.com/Trainnr-AI/trainnr"
 # Released as prebuilt archives on the GitHub release (studio-release.yml),

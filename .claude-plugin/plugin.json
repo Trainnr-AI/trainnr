@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/Trainnr-AI/trainnr",
   "repository": "https://github.com/Trainnr-AI/trainnr",
-  "license": "FSL-1.1-ALv2",
+  "license": "Apache-2.0",
   "keywords": [
     "physical-ai",
     "robotics",

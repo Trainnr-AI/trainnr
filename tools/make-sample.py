@@ -103,7 +103,7 @@ SAMPLES: dict[str, Sample] = {
         notice=(
             "This sample project is trainnr's own results (the fit, the walk, the run, "
             "the policy, the evaluations, the deployment and the drift check), "
-            "licensed as trainnr is (FSL-1.1-ALv2), with two third-party parts under "
+            "licensed as trainnr is (Apache-2.0), with two third-party parts under "
             "their own "
             "licences:\n\n"
             "- robots/go2: Unitree's Go2 model from unitreerobotics/unitree_rl_mjlab, "

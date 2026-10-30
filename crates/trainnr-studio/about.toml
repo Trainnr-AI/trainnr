@@ -29,7 +29,7 @@ accepted = [
 ]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
-# The Studio crate itself (FSL-1.1-ALv2, publish = false) is this
+# The Studio crate itself (Apache-2.0, publish = false) is this
 # repository's own code: the notices are for what it links.
 private = { ignore = true }
 

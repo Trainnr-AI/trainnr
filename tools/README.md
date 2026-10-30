@@ -25,7 +25,7 @@ page says what each one is for.
 | `check-numbers.py` | Every success figure the README quotes (k/n or "k of n") exists in a finding record under `docs/findings/`. |
 | `check-unsafe-gates.py` | `unsafe` stays forbidden in the crate's manifest. |
 | `third-party-notices.py` | Completes the Studio's THIRD_PARTY_LICENSES.md after cargo-about: `append` adds the NOTICE files of Apache-2.0 crates and each embedded font's copyright, `check` refuses a missing attribution or an HTML-escaped licence text (the release workflow). |
-| `check-package.py` | Both wheels build and carry LICENSE, LICENSES/Apache-2.0.txt and NOTICE; the packages' copies of them are identical to the root's (the required `package` job). |
+| `check-package.py` | Both wheels build and carry LICENSE and NOTICE; the packages' copies of them are identical to the root's (the required `package` job). |
 | `findings.py` | Renders `docs/findings/*.json` into `docs/68-findings.md`; `--check` fails when the page is stale. The ledger is generated, never hand-edited. |
 | `coverage.sh` | Rust line coverage for the Studio crate. |
 | `coverage-badge.py` | Turns coverage.py's JSON report into the README's coverage badge (CI, after the tests). |

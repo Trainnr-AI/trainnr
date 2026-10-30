@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import plistlib
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -87,6 +88,10 @@ class TheLayouts(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue((stage / name).is_file())
                 self.assertIn(f'"{name}"', script)
+        # Inno Setup refuses a Source that matches nothing.
+        for source in re.findall(r'^Source: "([^"]+)"', script, re.M):
+            with self.subTest(source=source):
+                self.assertTrue(list(stage.glob(source.replace("\\", "/"))))
 
     def test_the_icon_wraps_the_png_as_windows_reads_it(self) -> None:
         png = self.tool.ICON.read_bytes()

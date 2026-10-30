@@ -4,8 +4,8 @@
 #   - the Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and
 #     Windows (x86_64), which `trainnr.studio_install` downloads (the
 #     plugin's session hook, `launch_studio`, `trainnr studio`), so a user
-#     never needs Rust; each archive carries LICENSE,
-#     LICENSES/Apache-2.0.txt, NOTICE and THIRD_PARTY_LICENSES.md (every
+#     never needs Rust; each archive carries LICENSE, NOTICE and
+#     THIRD_PARTY_LICENSES.md (every
 #     crate's licence, the embedded fonts' included) and has a `.sha256`
 #     beside it, which the installer checks;
 #   - the Python packages, trainnr and trainnr-mjlab, each as an sdist and
@@ -234,9 +234,8 @@ jobs:
         run: |
           name="trainnr-studio-${TAG}-${{ matrix.target }}"
           bin="crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio"
-          mkdir -p "dist/$name/LICENSES"
+          mkdir -p "dist/$name"
           cp LICENSE NOTICE notices/THIRD_PARTY_LICENSES.md "dist/$name/"
-          cp LICENSES/Apache-2.0.txt "dist/$name/LICENSES/"
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp "$bin.exe" "dist/$name/"
             (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
@@ -377,8 +376,8 @@ jobs:
 
   python:
     # The two Python packages, from the tag on a clean runner (no cache):
-    # each sdist and wheel carries LICENSE, LICENSES/Apache-2.0.txt and
-    # NOTICE, which check-package.py proves on the same build first.
+    # each sdist and wheel carries LICENSE and NOTICE, which
+    # check-package.py proves on the same build first.
     needs: licenses
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -496,7 +495,7 @@ jobs:
               "info, then Run anyway).\n"
               "- The Studio, prebuilt for Linux (x86_64), macOS (Apple Silicon) and "
               "Windows (x86_64): the plugin and `trainnr studio` download the right one. "
-              "Each archive carries LICENSE, LICENSES/Apache-2.0.txt, NOTICE and "
+              "Each archive carries LICENSE, NOTICE and "
               "THIRD_PARTY_LICENSES.md, with its SHA-256 beside it.\n"
               "- The Python packages `trainnr` and `trainnr-mjlab`, as an sdist and a wheel each.\n"
               "- The engine's runtime (`trainnr-runtime-v*.tar.gz`): what the Studio "

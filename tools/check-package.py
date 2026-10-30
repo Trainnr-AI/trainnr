@@ -3,13 +3,11 @@
 
     python3 tools/check-package.py
 
-A redistribution carries the licence (FSL-1.1-ALv2's Redistribution
-clause), and the third-party code under Apache-2.0 carries that licence's
-text and the NOTICE (its 4(a) and 4(d)). Each package's pyproject lists
-`LICENSE`, `LICENSES/Apache-2.0.txt` and `NOTICE` as licence files; trainnr-mjlab's
-NOTICE and trainnr's are copies of the root one (each wheel ships the
-third-party code NOTICE lists), and both packages' LICENSE and
-LICENSES/Apache-2.0.txt are copies of the root's.
+A redistribution carries the Apache License's text and the NOTICE (its
+4(a) and 4(d)). Each package's pyproject lists `LICENSE` and `NOTICE` as
+licence files; trainnr-mjlab's NOTICE and trainnr's are copies of the root
+one (each wheel ships the third-party code NOTICE lists), and both
+packages' LICENSE is a copy of the root's.
 This checks the copies are identical, then builds both wheels with
 `uv build` into a scratch directory and refuses one without LICENSE or
 NOTICE under its `.dist-info/licenses/`. CI runs it as the required
@@ -33,10 +31,8 @@ COPIES = (
     ("trainnr/NOTICE", "NOTICE"),
     ("trainnr/LICENSE", "LICENSE"),
     ("trainnr-mjlab/LICENSE", "LICENSE"),
-    ("trainnr/LICENSES/Apache-2.0.txt", "LICENSES/Apache-2.0.txt"),
-    ("trainnr-mjlab/LICENSES/Apache-2.0.txt", "LICENSES/Apache-2.0.txt"),
 )
-LICENCE_FILES = ("LICENSE", "LICENSES/Apache-2.0.txt", "NOTICE")
+LICENCE_FILES = ("LICENSE", "NOTICE")
 
 
 def main() -> int:
