@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trainnr"
-version = "0.2.0-rc.2"
+version = "0.2.0-rc.3"
 description = "The physical AI platform for robot training, run from your coding agent: telemetry, real-to-sim identification, simulation, RL and imitation, evaluation, sim-to-real deployment."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
