@@ -433,9 +433,9 @@ pub const SAMPLES: &[SampleCard] = &[SampleCard {
     title: "Go2 walk",
     summary: "A Unitree Go2 through the whole loop: identified from a public log, a walk declared and accepted, trained by reinforcement, evaluated in seven conditions, exported and gated against Unitree's own runtime in simulation, and checked for drift.",
     project: "go2-walk-sample",
-    bytes: 12_555_361,
-    sha256: "8b0b3fb5a029c41ad674984c6b152df9ae0d637abc210c57d6a3dca8ad182cc5",
-    url: "https://huggingface.co/datasets/trainnr/trainnr-artifacts/resolve/e5879a2709763f23967fff911e3fbb39d9e6a074/samples/go2-walk-sample.tar.gz",
+    bytes: 12_572_960,
+    sha256: "04fa83dfb33787860402bc556c9d5aa0e6779a2de79c87cde4dd3bde765d4cc6",
+    url: "https://huggingface.co/datasets/trainnr/trainnr-artifacts/resolve/47f240c11d4ceaf1fafa4d6f3be66c56d297d541/samples/go2-walk-sample.tar.gz",
 }];
 
 /// Where a button's `trainnr` command stands (a sample opening, a new

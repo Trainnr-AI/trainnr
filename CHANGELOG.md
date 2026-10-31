@@ -6,6 +6,10 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Go2 walk sample is Apache-2.0, as trainnr is: its NOTICE said FSL-1.1-ALv2. The Hugging Face dataset's card and LICENSE say Apache-2.0 too. The sample's files are the same; its prebuilt index uses today's wording, and the deployment's card picture no longer has a black band.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

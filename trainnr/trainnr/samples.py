@@ -34,7 +34,7 @@ from trainnr.studio_install import (
 DATASET = "trainnr/trainnr-artifacts"
 # The dataset commit the samples are read at; a new sample is a new commit
 # and a new pin, so a published one never changes under a user.
-REVISION = "e5879a2709763f23967fff911e3fbb39d9e6a074"
+REVISION = "47f240c11d4ceaf1fafa4d6f3be66c56d297d541"
 MARKER = "sample"  # project.json's flag for a project that came from here
 
 
@@ -71,8 +71,8 @@ SAMPLES: dict[str, Sample] = {
         ),
         path="samples/go2-walk-sample.tar.gz",
         project="go2-walk-sample",
-        sha256="8b0b3fb5a029c41ad674984c6b152df9ae0d637abc210c57d6a3dca8ad182cc5",
-        bytes=12_555_361,
+        sha256="04fa83dfb33787860402bc556c9d5aa0e6779a2de79c87cde4dd3bde765d4cc6",
+        bytes=12_572_960,
     ),
 }
 
