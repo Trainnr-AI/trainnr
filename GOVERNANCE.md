@@ -187,3 +187,5 @@ Step by step:
    SHA-256; then, in Claude Code, `claude plugin marketplace add
    Trainnr-AI/trainnr` and `claude plugin install trainnr@trainnr`, and a
    new session, which fetches the Studio in the background.
+9. **Point the README's downloads at it** (*Quickstart*, *The app*): a
+   pull request naming the published tag in every link.
