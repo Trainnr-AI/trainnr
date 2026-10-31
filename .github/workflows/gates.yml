@@ -182,7 +182,7 @@ jobs:
   macos:
     # The Mac the README promises: the core suite on Apple Silicon.
     if: github.event_name != 'schedule'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       UV_LOCKED: 1
