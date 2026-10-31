@@ -97,8 +97,10 @@ EXCEPTIONS: dict[str, str] = {
             "CVE-2026-112894",
             "CVE-2026-112895",
             "CVE-2026-112897",
+            "CVE-2026-112898",
             "CVE-2026-112899",
             "CVE-2026-112900",
+            "CVE-2026-112902",
             "CVE-2026-96638",
             "CVE-2026-96640",
             "CVE-2026-96778",
@@ -124,7 +126,7 @@ EXCEPTIONS: dict[str, str] = {
         ),
         "pillow 12.3.0 in trainnr's lock; each fixed only in 13.0.0, which "
         "trainnr-mjlab's lock has; LeRobot 0.6.1 (train) requires pillow<13; "
-        "2026-10-28",
+        "2026-10-28 (CVE-2026-112898 and CVE-2026-112902: 2026-10-31)",
     ),
 }
 
