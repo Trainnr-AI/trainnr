@@ -304,6 +304,38 @@ pub struct Index {
     /// the chain's latest stage (`trainnr/project/index.py`).
     #[serde(default)]
     pub in_progress: Vec<InProgress>,
+    /// The template the project was made from, its steps marked done
+    /// as their stages are (`trainnr/project/index.py`, `_plan`); None
+    /// for a blank project.
+    #[serde(default)]
+    pub template: Option<Plan>,
+}
+
+/// A template's plan as the index writes it (`trainnr/templates.py`).
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+pub struct Plan {
+    pub title: String,
+    #[serde(default)]
+    pub robot: String,
+    #[serde(default)]
+    pub vendor: String,
+    #[serde(default)]
+    pub steps: Vec<PlanStep>,
+}
+
+/// One step of a plan: what it does, what it runs on, the tool that does
+/// it (none while it is planned), and whether its stage is proved.
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+pub struct PlanStep {
+    pub title: String,
+    pub body: String,
+    pub runs_on: String,
+    #[serde(default)]
+    pub tool: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub done: bool,
 }
 
 #[derive(Deserialize, Clone)]

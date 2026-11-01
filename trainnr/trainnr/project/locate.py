@@ -91,6 +91,9 @@ class Manifest:
     # dataset stage). Empty when the project has not said; the index
     # then reads it off the runs it holds.
     loop: str = ""
+    # The template the project was made from (`trainnr/templates.py`),
+    # whose steps its Overview walks; empty for a blank project.
+    template: str = ""
 
 
 LOOPS = ("imitation", "reinforcement")
@@ -329,15 +332,23 @@ def use_project(target: str | Path) -> Project:
 
 
 def create_project(
-    root: Path, name: str, description: str = "", loop: str = ""
+    root: Path, name: str, description: str = "", loop: str = "", template: str = ""
 ) -> Project:
     """Make a project: the manifest and every kind's folder. Refuses to
-    overwrite an existing manifest — a project is never silently reset."""
+    overwrite an existing manifest — a project is never silently reset.
+    A template sets the loop, and refuses a different one."""
+    from trainnr.templates import resolve  # noqa: PLC0415
+
     root = Path(root)
     manifest_path = root / MANIFEST_FILE
     if manifest_path.exists():
         raise FileExistsError(f"a project already exists at {root}")
     plain_name(name, "project name")
+    if template:
+        planned = resolve(template).loop
+        if loop and loop != planned:
+            raise ValueError(f"template {template!r} is a {planned} loop, not {loop}")
+        loop = planned
     root.mkdir(parents=True, exist_ok=True)
     for folder in FOLDERS:
         (root / folder).mkdir(exist_ok=True)
@@ -347,6 +358,7 @@ def create_project(
         created=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         description=description,
         loop=_loop_or_refuse(loop),
+        template=template,
     )
     write_json(manifest_path, asdict(manifest))
     return Project(root)
