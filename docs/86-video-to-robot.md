@@ -202,9 +202,9 @@ a clip too short or too unsure to use.
 
 ### 5.4 Compute, network and licences
 
-- The NVIDIA models need an NVIDIA GPU, mostly a large one. A tool says
-  what its step needs (`runs_on`) and runs locally when the machine
-  has it, or on a rented GPU through `cloud/` when the user asks.
+- The NVIDIA models need an NVIDIA GPU. A tool says what its step needs
+  (`runs_on`) and runs locally; a rented GPU through `cloud/` stays
+  possible when the user asks, never the default (§5.5).
 - **No download happens without the user asking** (AGENTS.md;
   SECURITY.md lists the network calls). Fetching GEM-X's weights or a
   Cosmos checkpoint is a step the user starts, and SECURITY.md gains
@@ -213,6 +213,44 @@ a clip too short or too unsure to use.
   trainnr.** trainnr runs NVIDIA's tools where the user installed them;
   the records name the model and its weights by hash so a result says
   what made it. The user accepts each licence once, and the tool says so.
+
+### 5.5 One 24 GB card, kept busy
+
+The development machine's card is an RTX 3090 Ti (24 GB, PCIe 4.0 ×8
+under WSL2, 31 GB of RAM in the VM), and the pipeline is built to run
+end to end on it. Every stage fits the card alone, and the work around
+it keeps it fed:
+
+| Stage | On the card | What we know |
+|---|---|---|
+| GEM-X (estimate) | inference, frame batches; its motion-cache mode keeps features so a re-run skips the image model | no published memory figure: measured on the first clip |
+| SOMA Retargeter | Warp IK, small | measured on the first clip |
+| mjlab tracking (G1) | 4096 environments | the Go2 walk on this card ran 8000 iterations in 2 h 24 min (docs/77 §5); the G1 has more joints and contacts, and mjlab's tracking config allows 30,000 iterations, so expect a night, not hours |
+| Replay with success filtering | CPU MuJoCo across the 24 cores, so the card stays free for training | three rendering shards is this machine's ceiling under WSL (docs/34) |
+| GR00T N1.7 fine-tune | backbones frozen (NVIDIA's default), BF16, AdamW | NVIDIA recommends 40 GB+, but its single-GPU table (max batch 213 on an L40, 409 on an H100, 502 on a 96 GB RTX Pro 6000) is linear in memory: about 13 GB fixed and 0.16 GB a sample. That predicts a batch near 50 on 24 GB, above the example's 32. An extrapolation until measured |
+| GR00T inference (evaluation) | 16 GB+ by NVIDIA's figure | fits, but not beside a fine-tune |
+| Cosmos Transfer 2.5 (2B) | no published figure for 24 GB; the repo now points to Cosmos 3 | the least certain fit: phase 5 measures it first |
+
+The rules that keep the card at full use:
+
+1. **One GPU job at a time.** The card's 24 GB is shared with the
+   desktop (about 2 GB under WSLg); two jobs would both shrink their
+   batches or one would fail. GPU jobs queue; the next starts the moment
+   one ends, so a night runs a whole chain.
+2. **Everything that is not GPU work runs beside it on the CPU:** video
+   decoding, quality checks, retarget validation, replay, dataset
+   export, evaluation trials that do not render.
+3. **Size each job to the card, once, by measurement.** The first run of
+   each stage searches its largest batch (or environment count) the way
+   NVIDIA's table does, bounded by an out-of-memory trial, and writes it
+   as a record; later runs read the record instead of guessing.
+4. **Keep data on the card.** The ×8 link halves host-to-device
+   bandwidth, so CPU offloading costs more here than on a server: a
+   stage that needs offloading to fit is a stage to shrink instead
+   (frozen modules, smaller batch with gradient accumulation).
+5. **Cache what does not change.** GEM-X's features, the retargeted
+   references and the exported datasets are artifacts; a re-run reads
+   them.
 
 ## 6. Templates
 
@@ -253,8 +291,8 @@ The first three, NVIDIA's stack by default:
    `train_tracking` through mjlab, an evaluation with intervals. Measured
    as a record in `docs/findings/` before any claim.
 4. **Manipulation on the SO-101**: hand pose, the retarget feed, success filtering,
-   `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on a
-   rented GPU.
+   `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on
+   the 24 GB card (§5.5).
 5. **Augmentation**: Cosmos Transfer, and the paired evaluation that
    decides whether it stays.
 6. **Policies trained elsewhere**: `import_policy`, then the same
@@ -274,7 +312,7 @@ The first three, NVIDIA's stack by default:
 - Hide a failed estimate or retarget: a clip that cannot be used is a
   record that says why, not a missing file.
 
-## 9. Decisions and open questions
+## 9. Decisions
 
 **Decided 2026-11-01: mjlab is the only trainer; Isaac Lab policies come
 in, Isaac Lab training does not.** Reasons:
@@ -309,7 +347,7 @@ Menagerie. There is no G1 to deploy to, so phase 3 ends at the
 deployment gate in simulation; a claim about the real robot waits for
 one.
 
-Still open:
-
-- **GR00T fine-tuning cost.** 40 GB+ means a rented A100 or H100 for
-  each fine-tune. Which provider and budget per run?
+**Decided 2026-11-01: everything runs on the one RTX 3090 Ti** (§5.5).
+No rented GPU by default; `cloud/` stays for when a user asks. The first
+measurement is the GR00T fine-tune's largest batch on 24 GB, since
+NVIDIA recommends 40 GB+ and the fit is an extrapolation until then.

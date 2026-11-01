@@ -22,7 +22,8 @@ from typing import Any
 # What a step runs on, in the words the Overview shows.
 THIS_MACHINE = "this machine"
 NVIDIA_GPU = "an NVIDIA GPU"
-CLOUD_GPU = "a rented GPU, 40 GB or more"
+# GR00T fine-tunes fit 24 GB with its backbones frozen (docs/86 §5.5).
+GPU_24GB = "an NVIDIA GPU, 24 GB"
 
 
 @dataclass(frozen=True)
@@ -149,14 +150,14 @@ TEMPLATES: dict[str, Template] = {
                     "Replay the motions in simulation, keep the successes",
                     "Each hand path is retargeted to the gripper and tried; the task's "
                     "success criterion decides which become episodes.",
-                    NVIDIA_GPU,
+                    THIS_MACHINE,
                 ),
                 Step(
                     "policy trained",
                     f"Fine-tune {GR00T}",
                     "The episodes exported in GR00T's LeRobot format with its modality "
                     "file, then a fine-tune of the 3B model.",
-                    CLOUD_GPU,
+                    GPU_24GB,
                     model=GR00T,
                 ),
                 Step(
@@ -199,7 +200,7 @@ TEMPLATES: dict[str, Template] = {
                     f"Fine-tune {GR00T}, with and without the variations",
                     "Two policies from the same episodes, so the variations are judged "
                     "by what they change.",
-                    CLOUD_GPU,
+                    GPU_24GB,
                     model=GR00T,
                 ),
                 Step(
