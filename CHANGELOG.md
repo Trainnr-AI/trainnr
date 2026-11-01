@@ -6,6 +6,10 @@ All notable changes to trainnr. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Project templates: New project can start from a plan instead of a blank project. Three come first, on NVIDIA's stack: Humanoid motion from video (GEM-X, the SOMA Retargeter and mjlab's tracking task, on a Unitree G1), Manipulation from human video and More from your own demonstrations (GR00T N1.7 and Cosmos Transfer, on an SO-101). A project made from one shows its plan on the Overview, each step marked done, with its button, or planned. `create_project` takes `template`, and `list_templates` lists them. The design is docs/86.
+
 ### Changed
 
 - The Go2 walk sample is Apache-2.0, as trainnr is: its NOTICE said FSL-1.1-ALv2. The Hugging Face dataset's card and LICENSE say Apache-2.0 too. The sample's files are the same; its prebuilt index uses today's wording, and the deployment's card picture no longer has a black band.

@@ -194,6 +194,9 @@ class ProjectIndex:
     # Folders a chain is still filling (a scene being captured): the path
     # and the chain's latest stage - shown as work, not warned about.
     in_progress: list[dict[str, str]] = field(default_factory=list)
+    # The template the project was made from, its steps each marked done
+    # when its stage is (docs/86 §6); None for a blank project.
+    template: dict[str, Any] | None = None
 
     def by_kind(self, kind: Kind) -> list[Artifact]:
         return [a for a in self.artifacts if a.kind == kind.value]
@@ -276,7 +279,23 @@ def index_project(project: Project) -> ProjectIndex:
         next_move=(missing[0].note or NEXT_MOVE[missing[0].name]) if missing else None,
         refused=refused,
         in_progress=in_progress + _live_capture(project),
+        template=_plan(manifest.template, states),
     )
+
+
+def _plan(name: str, states: list[State]) -> dict[str, Any] | None:
+    """The template's plan with each step's state: done when its stage
+    is proved. A name this version does not know keeps its name alone."""
+    from trainnr.templates import TEMPLATES, describe  # noqa: PLC0415
+
+    if not name:
+        return None
+    if name not in TEMPLATES:
+        return {"name": name, "title": name, "steps": []}
+    proved = {s.name for s in states if s.present}
+    plan = describe(TEMPLATES[name])
+    plan["steps"] = [step | {"done": step["stage"] in proved} for step in plan["steps"]]
+    return plan
 
 
 def _live_capture(project: Project) -> list[dict[str, str]]:
