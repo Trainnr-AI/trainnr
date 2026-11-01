@@ -302,10 +302,14 @@ when Newton leaves beta: then an Isaac Lab trainer on Newton, without
 Isaac Sim, is cheap, and one re-measured record showing it agrees with
 mjlab within the intervals admits it.
 
+**Decided 2026-11-01: the first whole-body run is a Unitree G1, in
+simulation only.** It is the one humanoid both the SOMA Retargeter and
+mjlab's tracking task already carry, and its model is in MuJoCo
+Menagerie. There is no G1 to deploy to, so phase 3 ends at the
+deployment gate in simulation; a claim about the real robot waits for
+one.
+
 Still open:
 
-- **The robot for the first whole-body run.** The SOMA Retargeter ships
-  the G1, H2, Booster T1 and two AgiBot models; mjlab's tracking config
-  is the G1. Is a G1 the target, or is there a robot you have?
 - **GR00T fine-tuning cost.** 40 GB+ means a rented A100 or H100 for
   each fine-tune. Which provider and budget per run?
