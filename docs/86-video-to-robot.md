@@ -192,6 +192,9 @@ Verb first, as GOVERNANCE.md asks; long ones are jobs:
 - `export_dataset(batch, format="lerobot-v3" | "gr00t")` → dataset (the
   missing "make a dataset" tool the map found)
 - `augment_batch(batch, augmenter="cosmos-transfer", ...)` → batch (job)
+- `import_policy(path, robot, name)` → policy: one trained elsewhere
+  (Isaac Lab, most often), from its ONNX file, joint order and gains,
+  evaluated and gated like one of ours (§9)
 
 Each refuses with its reason rather than guessing: no GPU, the tool not
 installed (and how to install it), a licence the user has not accepted,
@@ -254,6 +257,9 @@ The first three, NVIDIA's stack by default:
    rented GPU.
 5. **Augmentation**: Cosmos Transfer, and the paired evaluation that
    decides whether it stays.
+6. **Policies trained elsewhere**: `import_policy`, then the same
+   evaluation and deployment gate as ours. Independent of 2–5; it can
+   come whenever someone brings an Isaac Lab policy.
 
 ## 8. What we do not do
 
@@ -264,15 +270,40 @@ The first three, NVIDIA's stack by default:
 - Ship NVIDIA weights, or call NVIDIA's services, or require an NVIDIA
   GPU for anything that does not need one: footage, templates and the
   Overview work on any machine.
+- Train in Isaac Lab (§9). Its policies come in through `import_policy`.
 - Hide a failed estimate or retarget: a clip that cannot be used is a
   record that says why, not a missing file.
 
-## 9. Open questions for Prakhar
+## 9. Decisions and open questions
 
-- **Isaac Lab as a trainer beside mjlab.** NVIDIA's own examples train in
-  Isaac Lab; trainnr trains in mjlab and pins MuJoCo as its instrument.
-  A second trainer means a second instrument and its own records. Worth
-  it, or mjlab only?
+**Decided 2026-11-01: mjlab is the only trainer; Isaac Lab policies come
+in, Isaac Lab training does not.** Reasons:
+
+- The trainer is part of the instrument. A second one means the measured
+  actuator models (BAM) and the linter ported and kept twice, another
+  environment (Isaac Lab 3.0 pins its own PyTorch, CUDA, Warp and
+  Newton), and every record measured twice or shown to agree.
+- Nothing in phases 2–5 needs it: mjlab ships the tracking task and the
+  CSV-to-motion converter; GR00T has its own trainer; GEM-X, SOMA and
+  Cosmos are external programs.
+- The physics is converging. Isaac Lab 3.0 installs without Isaac Sim on
+  Newton, whose default solver is MuJoCo-Warp, the engine mjlab runs
+  ([physics backends](https://isaac-sim.github.io/IsaacLab/develop/source/overview/core-concepts/physical-backends/index.html));
+  Newton is still beta there. The PhysX backend needs Isaac Sim and its
+  proprietary licence, so it stays off every default path.
+- What travels out of Isaac Lab is an ONNX policy with its joint order
+  and kinematics ([e2e-research/59](e2e-research/59-arena-composition-and-datagen.md)
+  §3), and NVIDIA lists sim-to-real validated evaluation as a gap (§4). So
+  `import_policy` (§5.3, phase 6) gives an Isaac Lab user trainnr's
+  evaluation and gate without trainnr keeping their trainer.
+
+Revisit when a user brings an Isaac Lab task that cannot be ported, or
+when Newton leaves beta: then an Isaac Lab trainer on Newton, without
+Isaac Sim, is cheap, and one re-measured record showing it agrees with
+mjlab within the intervals admits it.
+
+Still open:
+
 - **The robot for the first whole-body run.** The SOMA Retargeter ships
   the G1, H2, Booster T1 and two AgiBot models; mjlab's tracking config
   is the G1. Is a G1 the target, or is there a robot you have?
