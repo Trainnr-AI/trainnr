@@ -232,7 +232,7 @@ it keeps it fed:
 | SOMA Retargeter | Warp IK, small | measured on the first clip |
 | mjlab tracking (G1) | 4096 environments | the Go2 walk on this card ran 8000 iterations in 2 h 24 min (docs/77 §5); the G1 has more joints and contacts, and mjlab's tracking config allows 30,000 iterations, so expect a night, not hours |
 | Replay with success filtering | CPU MuJoCo across the 24 cores, so the card stays free for training | three rendering shards is this machine's ceiling under WSL (docs/34) |
-| GR00T N1.7 fine-tune | backbones frozen (NVIDIA's default), BF16, AdamW | NVIDIA recommends 40 GB+, but its single-GPU table (max batch 213 on an L40, 409 on an H100, 502 on a 96 GB RTX Pro 6000) is linear in memory: about 13 GB fixed and 0.16 GB a sample. That predicts a batch near 50 on 24 GB, above the example's 32. An extrapolation until measured |
+| GR00T N1.7 fine-tune | backbones frozen (NVIDIA's default), the DiT trained, with three savers NVIDIA's launcher does not expose: the frozen backbone in bf16, the DiT's activations recomputed, AdamW state in 8 bits (`tools/gr00t-fit.py`) | measured 2026-11-02 ([record](findings/gr00t-n17-on-a-24gb-card-2026-11-02.json)): NVIDIA's own settings do not fit with the DiT trained (about 32 GB before a single activation) and fit at batch 8 with it frozen; with the savers, the full default fine-tune (1.62B trainable parameters) fits at batch 58, 24.4 samples/s. Whether the savers change what a fine-tune learns is not measured yet (phase 4) |
 | GR00T inference (evaluation) | 16 GB+ by NVIDIA's figure | fits, but not beside a fine-tune |
 | Cosmos Transfer 2.5 (2B) | no published figure for 24 GB; the repo now points to Cosmos 3 | the least certain fit: phase 5 measures it first |
 
@@ -355,5 +355,8 @@ one.
 
 **Decided 2026-11-01: everything runs on the one RTX 3090 Ti** (§5.5).
 No rented GPU by default; `cloud/` stays for when a user asks. The first
-measurement is the GR00T fine-tune's largest batch on 24 GB, since
-NVIDIA recommends 40 GB+ and the fit is an extrapolation until then.
+measurement was the GR00T fine-tune's largest batch on 24 GB (2026-11-02,
+[record](findings/gr00t-n17-on-a-24gb-card-2026-11-02.json)): the
+estimate it replaced, a batch near 50 from a straight line through
+NVIDIA's table, missed that NVIDIA's settings keep every weight in fp32
+with full AdamW state; with the savers the full fine-tune fits at 58.
