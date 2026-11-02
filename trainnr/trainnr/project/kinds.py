@@ -39,6 +39,7 @@ from trainnr.fleet.drift import DRIFT_FILE as _DRIFT_FILE
 from trainnr.project.files import read_json
 from trainnr.robots.recording import MANIFEST_FILE as RECORDING_FILE
 from trainnr.scenes.record import SCENE_FILE
+from trainnr.video.footage import FOOTAGE_FILE
 
 # Markers this module owns because no writer exists yet (docs/76 §2):
 # a drift record. The rest are imported from their writers above or
@@ -73,6 +74,7 @@ class Kind(str, Enum):
     DEPLOY = "deploy"
     DRIFT = "drift"
     SCENE = "scene"  # a captured scene: splat, proxy, the gap (docs/78 §3)
+    FOOTAGE = "footage"  # a video as it came, before any motion (docs/86 §5.1)
     FINDING = "finding"
 
 
@@ -114,6 +116,7 @@ RULES: dict[Kind, tuple[Marker, ...]] = {
     Kind.DEPLOY: (Marker(file=DEPLOY_FILE),),
     Kind.DRIFT: (Marker(file=DRIFT_FILE),),
     Kind.SCENE: (Marker(file=SCENE_FILE),),
+    Kind.FOOTAGE: (Marker(file=FOOTAGE_FILE),),
     Kind.ROBOT: (Marker(suffix=ROBOT_MODEL_SUFFIX, fallback=True),),
     Kind.POLICY: (
         Marker(file=CHECKPOINT_WEIGHTS, fallback=True),
