@@ -9,6 +9,7 @@ All notable changes to trainnr. The format follows
 ### Added
 
 - Project templates: New project can start from a plan instead of a blank project. Three come first, on NVIDIA's stack: Humanoid motion from video (GEM-X, the SOMA Retargeter and mjlab's tracking task, on a Unitree G1), Manipulation from human video and More from your own demonstrations (GR00T N1.7 and Cosmos Transfer, on an SO-101). A project made from one shows its plan on the Overview, each step marked done, with its button, or planned. `create_project` takes `template`, and `list_templates` lists them. The design is docs/86.
+- Footage: `ingest_video` brings a video into the project as it is, with its duration, frame rate, size, codec and first frame, stamped. It shows on the Recordings page with its first frame, and Show in viewer plays it on its own timeline (AV1, LeRobot's codec, as frames ffmpeg decodes, since the Studio's viewer does not decode AV1 itself). The first step from video to robot training data (docs/86).
 
 ### Changed
 

@@ -3020,6 +3020,57 @@ def check_drift(
     }
 
 
+def ingest_video(
+    source: str,
+    name: str | None = None,
+    origin: str | None = None,
+    licence: str | None = None,
+) -> dict[str, Any] | Refusal:
+    """Bring a video into the current project as footage (docs/86 §5.1):
+    copied as it is, with what ffprobe says (duration, frame rate, size,
+    codec) and its first frame, stamped over its bytes. The first step of
+    the video-to-robot path; nothing is estimated yet, so it proves no
+    loop state alone. `origin` says where it came from (filmed, or a
+    URL) and `licence` under what terms, for a video that is not yours.
+    Refused by name: no project open, no such file, a file with no video
+    stream, a name already taken, a bad name, ffprobe or ffmpeg missing."""
+    from trainnr.project import index_project, write_index  # noqa: PLC0415
+    from trainnr.project.index import UNRECORDED  # noqa: PLC0415
+    from trainnr.project.locate import FOOTAGE_FOLDER, current_project  # noqa: PLC0415
+    from trainnr.video.footage import (  # noqa: PLC0415
+        FOOTAGE_FILE,
+        Footage,
+        ingest_footage,
+    )
+
+    try:
+        project = current_project()
+        folder = ingest_footage(
+            project.footage,
+            Path(source).expanduser(),
+            name=name,
+            origin=origin or UNRECORDED,
+            licence=licence or UNRECORDED,
+        )
+    except (FileNotFoundError, ValueError, OSError) as refused:
+        return refusal(_reason(refused))
+    index = index_project(project)
+    write_index(project, index)
+    path = project.relative(FOOTAGE_FOLDER, folder.name)
+    stamp = next((a.stamp for a in index.artifacts if a.path == path), UNRECORDED)
+    record = Footage.read(folder / FOOTAGE_FILE)
+    return {
+        "status": DONE,
+        "footage": stamp,
+        "path": path,
+        "duration_s": record.duration_s,
+        "fps": record.fps,
+        "size": [record.width, record.height],
+        "codec": record.codec,
+        "frames": record.frames,
+    }
+
+
 def import_scene(source: str, name: str) -> dict[str, Any] | Refusal:
     """Bring a captured scene into the project as an artifact (docs/78
     §3): today a Neverwhere benchmark scene folder (MIT; a web splat, a
@@ -3588,6 +3639,11 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "rosbag2 .db3) into the project as a stamped recording with channels, "
         "units, measured rates, census."
     )(ingest_recording)
+    server.tool(
+        description="Bring a video into the project as footage: copied as it is, "
+        "with its duration, frame rate, size, codec and first frame, stamped. "
+        "The first step from video to robot training data."
+    )(ingest_video)
     server.tool(
         description="Every protocol a live capture listens on (udp, dds), its "
         "options, and whether it runs on this machine."

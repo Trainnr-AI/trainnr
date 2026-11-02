@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import contextlib
 import json
+import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -325,6 +327,108 @@ def _present_robot(
             rrb.TextDocumentView(origin=f"{root}/census", name="census"),
             column_shares=[3, 1],
         ),
+    }
+
+
+# The Studio's viewer is built without Rerun's `nasm` feature, so it cannot
+# decode AV1 (LeRobot's codec) itself: those videos come as frames ffmpeg
+# decoded, thinned and shrunk so a long clip stays a small stream.
+FRAMES_CODECS = frozenset({"av1"})
+FRAMES_FPS = 15
+FRAMES_WIDTH = 640
+
+
+def _log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
+    import rerun as rr  # noqa: PLC0415
+
+    from trainnr.video.footage import tool  # noqa: PLC0415
+
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(
+            [
+                str(tool("ffmpeg")),
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-vf",
+                f"fps={FRAMES_FPS},scale='min({FRAMES_WIDTH},iw)':-2",
+                "-q:v",
+                "4",
+                str(Path(tmp) / "%06d.jpg"),
+            ],
+            capture_output=True,
+            timeout=600,
+            check=True,
+        )
+        for i, frame in enumerate(sorted(Path(tmp).glob("*.jpg"))):
+            rr_.set_time("video", duration=i / FRAMES_FPS)
+            rr_.log(entity, rr.EncodedImage(path=frame))
+    return f"frames at {FRAMES_FPS} fps"
+
+
+def _present_footage(
+    project: Project, artifact: Artifact, rr_: rr.RecordingStream, root: str = "footage"
+) -> Shown:
+    """A video on its own timeline, decoded by the viewer, its numbers
+    beside it: Rerun plays an MP4 it decodes, AV1 comes as frames, and
+    a container it cannot read shows its first frame."""
+    import rerun as rr  # noqa: PLC0415
+    import rerun.blueprint as rrb  # noqa: PLC0415
+
+    from trainnr.video.footage import (  # noqa: PLC0415
+        FIRST_FRAME,
+        FOOTAGE_FILE,
+        Footage,
+    )
+
+    folder = project.root / artifact.path
+    record = Footage.read(folder / FOOTAGE_FILE)
+    lines = [f"# {record.name}", ""] + [
+        f"- {key}: {value}"
+        for key, value in (
+            ("duration", f"{record.duration_s:g} s"),
+            ("frame rate", f"{record.fps:g} fps"),
+            ("size", f"{record.width}x{record.height}"),
+            ("codec", record.codec),
+            ("source", record.source),
+            ("origin", record.origin),
+            ("licence", record.licence),
+        )
+    ]
+    view = "video"
+    with _AsDefault(rr_):
+        try:
+            if record.codec in FRAMES_CODECS:
+                view = _log_frames(rr_, f"{root}/video", folder / record.video)
+            else:
+                asset = rr.AssetVideo(path=folder / record.video)
+                stamps = asset.read_frame_timestamps_nanos()
+                rr_.log(f"{root}/video", asset, static=True)
+                rr_.send_columns(
+                    f"{root}/video",
+                    indexes=[rr.TimeColumn("video", duration=1e-9 * stamps)],
+                    columns=rr.VideoFrameReference.columns_nanos(stamps),
+                )
+        except Exception as why:  # the still, and the reason beside it
+            rr_.log(
+                f"{root}/video", rr.EncodedImage(path=folder / FIRST_FRAME), static=True
+            )
+            view = "first frame"
+            lines += [
+                "",
+                f"Showing the first frame: the viewer could not play it ({why}).",
+            ]
+        rr_.log(f"{root}/record", _doc("\n".join(lines)), static=True)
+    layout = rrb.Horizontal(
+        rrb.Spatial2DView(origin=f"{root}/video", name=record.name),
+        rrb.TextDocumentView(origin=f"{root}/record", name="footage"),
+        column_shares=[3, 1],
+    )
+    return {
+        "paths": [f"{root}/video", f"{root}/record"],
+        "view": view,
+        "layout": layout,
     }
 
 
@@ -1232,6 +1336,7 @@ def _obj_mesh(path: Path) -> tuple[Any, Any] | None:
 
 _PRESENTERS: dict[Kind, Presenter] = {
     Kind.SCENE: _present_scene,
+    Kind.FOOTAGE: _present_footage,
     Kind.DRIFT: _present_drift,
     Kind.ROBOT: _present_robot,
     Kind.DEPLOY: _present_deploy,
