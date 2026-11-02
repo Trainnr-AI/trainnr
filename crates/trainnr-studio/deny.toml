@@ -46,13 +46,14 @@ ignore = [
   { id = "RUSTSEC-2026-0391", reason = "zstd 0.13 via arrow-ipc 58, parquet 58 and mcap 0.25, pinned by Rerun 0.36; fixed in zstd 0.14" },
   { id = "RUSTSEC-2026-0398", reason = "zstd-safe 7 via zstd 0.13; needs the seekable feature, which is off" },
   { id = "RUSTSEC-2026-0403", reason = "zstd-safe 7 via zstd 0.13 under Rerun 0.36's arrow, parquet and mcap; fixed in zstd-safe 8" },
+  # thrift 0.17.0 via parquet 58 under re_importer, which Rerun 0.36 pins;
+  # fixed in thrift 0.23, which parquet 60 takes. Known to OSV since
+  # 2026-10-07 (GHSA-2f9f-gq7v-9h6m), named by RustSec 2026-11-02. The
+  # advisory is TBinaryInputProtocol::read_bytes; parquet 58 reads metadata
+  # with its own compact reader (`parquet_thrift.rs`), not that one. It
+  # clears with the Rerun update that takes parquet 60.
+  { id = "RUSTSEC-2026-0435", reason = "thrift 0.17 via parquet 58, pinned by Rerun 0.36; parquet reads with its own compact reader, not the affected binary one" },
 ]
-# Known to OSV but not to RustSec, so cargo-deny cannot name it and
-# Scorecard's vulnerability check counts it (2026-10-07): thrift 0.17.0
-# (GHSA-2f9f-gq7v-9h6m, fixed in 0.23) via parquet 58 under re_importer.
-# Rerun 0.37.2 still requires parquet ^58 (crates.io, 2026-10-07); it
-# clears when Rerun takes parquet 60. Exposure: a crafted Parquet file the
-# user opens.
 
 [licenses]
 version = 2

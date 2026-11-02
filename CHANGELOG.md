@@ -10,6 +10,10 @@ All notable changes to trainnr. The format follows
 
 - The Go2 walk sample is Apache-2.0, as trainnr is: its NOTICE said FSL-1.1-ALv2. The Hugging Face dataset's card and LICENSE say Apache-2.0 too. The sample's files are the same; its prebuilt index uses today's wording, and the deployment's card picture no longer has a black band.
 
+### Security
+
+- The Studio's lock takes pulldown-cmark 0.13.6 (RUSTSEC-2026-0433). thrift 0.17 (RUSTSEC-2026-0435, fixed in 0.23) stays where Rerun 0.36's parquet 58 pins it, a written exception in the Studio's `deny.toml`: parquet reads its metadata with its own reader, not the affected one.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added
