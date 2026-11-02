@@ -15,7 +15,7 @@
   <a href="https://github.com/Trainnr-AI/trainnr/actions/workflows/gates.yml"><img src="https://github.com/Trainnr-AI/trainnr/raw/badges/coverage.svg" alt="coverage"></a>
   <a href="#licence"><img src="https://img.shields.io/badge/licence-Apache--2.0-blue" alt="licence: Apache-2.0"></a>
   <a href="trainnr/pyproject.toml"><img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-blue" alt="python 3.11 to 3.13"></a>
-  <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-77%20tools-6f42c1" alt="MCP server: 77 tools"></a>
+  <a href="#quickstart"><img src="https://img.shields.io/badge/MCP-78%20tools-6f42c1" alt="MCP server: 78 tools"></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/DCO-signed--off-green" alt="DCO"></a>
   <!-- After the repository is public and the scorecard workflow has run once:
@@ -92,7 +92,7 @@ Studio shows each stage as it lands, whoever ran it.
 | **Evaluation** | Paired, seed-matched trials, exact Clopper-Pearson intervals, milestone funnels, sensitivity tables, mismatch matrices across the sim-to-real gap |
 | **Deployment, up to sim-to-real** | ONNX export with a manifest, a sim-to-sim gate on MuJoCo and on Unitree's own simulator over DDS, failure attribution (latency first), pre-flight checks, soft stops: everything before the first tick on a real robot |
 | **Telemetry and monitoring** | A robot's new telemetry re-identified against its fitted intervals: drift named per parameter, re-identification recommended, and the new fit available to the next training run |
-| **Agents and tools** | One MCP server with 77 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
+| **Agents and tools** | One MCP server with 78 tools, a Claude Code plugin with seven agents and two skills, and the same server for Cursor, Codex and any MCP client; cloud GPUs (RunPod) for long training runs |
 
 ## Quickstart
 
@@ -160,7 +160,7 @@ run.
   (`tools/cloud-gpu.py`). A smoke run and `check_task` run on a laptop
   CPU, as does everything else.
 
-Install the plugin. It brings the MCP server (77 tools), seven agents and
+Install the plugin. It brings the MCP server (78 tools), seven agents and
 two skills. In a terminal:
 
 ```sh

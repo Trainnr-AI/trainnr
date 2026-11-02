@@ -31,6 +31,7 @@ not in this repository.
 | [80 Names and repositories](80-trainnr-names-and-repos.md) | The names, the repository layout, the layering rules, the rename from the former identifiers; since 2026-10-04 this repository is where trainnr is developed (§8) | decided 2026-10-03 |
 | [84 mjsim](84-mjsim.md) | The plan to cut the Studio's simulator window into its own module | planned, not started, 2026-10-03 |
 | [85 The desktop app](85-the-desktop-app.md) | The app people download and use on their own, which an agent can also drive over MCP: the evidence from Paper and Spline, the architecture, the phases | phases 1 to 5 built on feat/desktop-app, 2026-10-11; signing and the Mac and Windows checks left |
+| [86 From video to robot training data](86-video-to-robot.md) | Raw video to robot training data on NVIDIA's stack: video gives the motion, physics gives the contact; the core modules, and the project templates that start a project on it | proposed 2026-11-01; phase 1 (templates) on feat/video-to-robot |
 
 ## Research
 

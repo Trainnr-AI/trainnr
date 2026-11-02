@@ -30,6 +30,7 @@ DETAIL_RS = (SHELL_SRC / "detail.rs").read_text(encoding="utf-8")
 PAGES_RS = (SHELL_SRC / "pages.rs").read_text(encoding="utf-8")
 RUNNING_RS = (SHELL_SRC / "running.rs").read_text(encoding="utf-8")
 ONBOARDING_RS = (SHELL_SRC / "onboarding.rs").read_text(encoding="utf-8")
+TEMPLATES_RS = (SHELL_SRC / "templates.rs").read_text(encoding="utf-8")
 SHELL_RS = (SHELL_SRC / "shell.rs").read_text(encoding="utf-8")
 
 
@@ -245,6 +246,18 @@ class TheWelcomePage(unittest.TestCase):
             self.assertIn(f"bytes: {sample.bytes:_},", ONBOARDING_RS)
             self.assertIn(f'sha256: "{sample.sha256}",', ONBOARDING_RS)
             self.assertIn(f'url: "{sample.url}",', ONBOARDING_RS)
+
+    def test_the_templates_agree(self) -> None:
+        """The New project dialog offers the templates Python makes
+        projects from, in order, with the same words (docs/86 §6)."""
+        from trainnr.templates import TEMPLATES  # noqa: PLC0415
+
+        names = re.findall(r'^\s+name: "([^"]+)",$', TEMPLATES_RS, flags=re.MULTILINE)
+        self.assertEqual(names, list(TEMPLATES))
+        for template in TEMPLATES.values():
+            for field in ("title", "summary", "robot", "vendor"):
+                value = getattr(template, field)
+                self.assertIn(f'{field}: "{value}",', TEMPLATES_RS, field)
 
     def test_the_loops_stages_agree(self) -> None:
         from trainnr.project.index import STATES  # noqa: PLC0415

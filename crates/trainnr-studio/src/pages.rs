@@ -769,7 +769,11 @@ pub fn overview(
 
         // Nothing yet: what to do first, above the stages it will light
         // (the empty pipeline led the page until 2026-10-12).
-        if index.artifacts.is_empty() {
+        // A template's plan stands in for them, and stays (docs/86 §6).
+        if let Some(plan) = &index.template {
+            *open_form = crate::onboarding::plan_card(ui, plan, forms, &|k| index.count(k));
+            ui.add_space(24.0);
+        } else if index.artifacts.is_empty() {
             *open_form = crate::onboarding::start_here(ui, forms, &|k| index.count(k));
             ui.add_space(24.0);
         }

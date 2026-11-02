@@ -104,8 +104,8 @@ pub struct Shell {
     action_out: std::path::PathBuf,
     /// What the buttons show: the command running, the last failure.
     pub actions: ActionState,
-    /// The New project dialog's name, while the dialog is open.
-    new_project_name: Option<String>,
+    /// The New project dialog's answers so far, while it is open.
+    new_project: Option<crate::onboarding::NewProject>,
     /// The forms over the agent's tools (`trainnr forms`), loaded once.
     pub forms: crate::forms::Catalog,
     /// A form being filled in.
@@ -180,7 +180,7 @@ impl Shell {
             action_job: None,
             action_out: std::path::PathBuf::new(),
             actions: ActionState::default(),
-            new_project_name: None,
+            new_project: None,
             forms: crate::forms::Catalog::default(),
             open_form: None,
             engine: crate::engine::Installer::default(),
@@ -332,10 +332,15 @@ impl Shell {
     /// Make a project without an agent: the same `create_project` tool an
     /// agent calls (`trainnr call`), which checks the name and refuses by
     /// name; `tick` switches to the project it made.
-    pub fn create_project(&mut self, name: &str) {
-        // The name alone: create_project makes it a folder in the projects
-        // home, and refuses a name that is not one.
-        let arguments = serde_json::json!({ "name": name }).to_string();
+    pub fn create_project(&mut self, name: &str, template: Option<&str>) {
+        // A name, and the template when one was picked: create_project
+        // makes the name a folder in the projects home, and refuses a name
+        // that is not one.
+        let mut arguments = serde_json::json!({ "name": name });
+        if let Some(template) = template {
+            arguments["template"] = serde_json::json!(template);
+        }
+        let arguments = arguments.to_string();
         self.run_action(
             crate::onboarding::NEW_PROJECT,
             &["call", "create_project", "--args", &arguments],
@@ -1110,7 +1115,9 @@ impl Shell {
         match picked {
             Some(Pick::Project(root)) => self.switch_to = Some(root),
             Some(Pick::Sample(name)) => self.open_sample(name),
-            Some(Pick::NewProject) => self.new_project_name = Some(String::new()),
+            Some(Pick::NewProject) => {
+                self.new_project = Some(crate::onboarding::NewProject::default());
+            }
             Some(Pick::ConnectAgent) => self.open_connect(),
             None => {}
         }
@@ -1121,13 +1128,13 @@ impl Shell {
     /// viewer) has been drawn; the failure banner is a panel and goes
     /// before the page (`presenter_failure`).
     pub fn overlays(&mut self, ctx: &egui::Context) {
-        if let Some(name) = self.new_project_name.as_mut() {
-            match crate::onboarding::new_project_dialog(ctx, name) {
+        if let Some(draft) = self.new_project.as_mut() {
+            match crate::onboarding::new_project_dialog(ctx, draft) {
                 crate::onboarding::Dialog::Open => {}
-                crate::onboarding::Dialog::Cancel => self.new_project_name = None,
-                crate::onboarding::Dialog::Create(name) => {
-                    self.new_project_name = None;
-                    self.create_project(&name);
+                crate::onboarding::Dialog::Cancel => self.new_project = None,
+                crate::onboarding::Dialog::Create(name, template) => {
+                    self.new_project = None;
+                    self.create_project(&name, template);
                 }
             }
             // The dialog has the keys: no palette, no page moves under it.
@@ -1610,7 +1617,7 @@ mod tests {
     #[ignore = "sets an engine up; run by hand"]
     fn a_first_tool_sets_the_engine_up_then_runs() {
         let mut shell = fresh_shell();
-        shell.create_project("lab-arm");
+        shell.create_project("lab-arm", None);
         run_frames(&mut shell);
         assert_eq!(shell.actions.failed, None);
         assert!(crate::spawn::engine_ready());

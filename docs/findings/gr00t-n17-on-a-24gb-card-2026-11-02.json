@@ -1,0 +1,243 @@
+{
+ "id": "gr00t-n17-on-a-24gb-card-2026-11-02",
+ "claim": "GR00T N1.7 fine-tunes on one 24 GB RTX 3090 Ti: NVIDIA's own settings fit only with the DiT action head frozen, at batch 8 (none with it trained), and with three memory savers NVIDIA's launcher does not expose (the frozen backbone in bf16, the DiT's activations recomputed, AdamW state in 8 bits) the full default fine-tune, 1.62B trainable parameters, fits at batch 58, 24.4 samples/s.",
+ "date": "2026-11-02",
+ "repo_commit": "9cfb46a",
+ "argv": [
+  "gr00t-smoke.sh smoke 8",
+  "gr00t-smoke.sh smoke 4 full-lean",
+  "START=8 gr00t-smoke.sh maxbatch full-lean (batches 8 to 32; aborted at 64 by a script fault, see caveats)",
+  "START=32 gr00t-smoke.sh maxbatch full-lean",
+  "START=8 gr00t-smoke.sh maxbatch frozen-lean",
+  "START=8 gr00t-smoke.sh maxbatch frozen"
+ ],
+ "instrument": "NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, PCIe 4.0 x8, WSL2 (Linux 6.18.54.1-microsoft-standard-WSL2), 31 GB of RAM in the VM; Isaac-GR00T c56f541 in its own uv env (Python 3.12, torch 2.9.0+cu128, transformers 4.57.3, flash-attn 2.8.3, bitsandbytes 0.50.2, DeepSpeed removed); BF16 with TF32",
+ "inputs": {
+  "base_model": "nvidia/GR00T-N1.7-3B @ 2fc962b973bccdd5d8ce4f67cc63b264d6886495 (3,144,016,000 parameters)",
+  "backbone": "nvidia/Cosmos-Reason2-2B @ 9ce19a195e423419c349abfc86fd07178b230561",
+  "dataset": "Isaac-GR00T demo_data/cube_to_bowl_5 (SO-101, front and wrist cameras, AV1, 5 episodes, 4,148 frames)",
+  "modality_config": "examples/SO100/so100_config.py, embodiment tag NEW_EMBODIMENT"
+ },
+ "outcome": {
+  "nvidia_settings_dit_trained": {
+   "trainable_parameters": 1620515968,
+   "result": "does not fit at any batch: batch 32 and batch 8 both filled the card before the first step completed (fp32 weights 12.6 GB, gradients 6.5 GB and AdamW state 13 GB come to about 32 GB before activations)",
+   "runs": [
+    {
+     "batch": 32,
+     "status": "spill",
+     "peak_mib": 24239,
+     "note": "273 s for one step before it was stopped by hand"
+    },
+    {
+     "batch": 8,
+     "status": "spill",
+     "peak_mib": 24132
+    }
+   ]
+  },
+  "frozen": {
+   "settings": "NVIDIA's (fp32 weights, AdamW), the DiT frozen (--no-tune-diffusion-model)",
+   "trainable_parameters": 528793728,
+   "max_batch_studio_closed": 8,
+   "max_batch_studio_open": 4,
+   "runs": [
+    {
+     "batch": 8,
+     "status": "pass",
+     "peak_mib": 23694,
+     "note": "20-step smoke, Studio closed; 1.88 steps/s by the progress bar, no step timer yet"
+    },
+    {
+     "batch": 8,
+     "status": "spill",
+     "peak_mib": 24122,
+     "note": "Studio open"
+    },
+    {
+     "batch": 4,
+     "status": "pass",
+     "peak_mib": 23893,
+     "step_ms": 375.5,
+     "note": "Studio open"
+    },
+    {
+     "batch": 6,
+     "status": "spill",
+     "peak_mib": 23964,
+     "note": "Studio open; at the cutoff exactly"
+    },
+    {
+     "batch": 5,
+     "status": "spill",
+     "peak_mib": 24022,
+     "note": "Studio open"
+    }
+   ]
+  },
+  "frozen_lean": {
+   "settings": "frozen, plus --bf16-backbone and --checkpoint-dit",
+   "trainable_parameters": 528793728,
+   "max_batch": 74,
+   "max_batch_note": "74 with the Studio open (the 72 to 80 bracket ran beside it); with it closed 64 passed and 96 spilled",
+   "runs": [
+    {
+     "batch": 8,
+     "status": "pass",
+     "peak_mib": 19514,
+     "step_ms": 542.3
+    },
+    {
+     "batch": 16,
+     "status": "pass",
+     "peak_mib": 20065,
+     "step_ms": 759.2
+    },
+    {
+     "batch": 32,
+     "status": "pass",
+     "peak_mib": 21145,
+     "step_ms": 1280.5
+    },
+    {
+     "batch": 64,
+     "status": "pass",
+     "peak_mib": 23078,
+     "step_ms": 2352.9
+    },
+    {
+     "batch": 128,
+     "status": "spill",
+     "peak_mib": 24089
+    },
+    {
+     "batch": 96,
+     "status": "spill",
+     "peak_mib": 24082,
+     "note": "the Studio opened while it ran"
+    },
+    {
+     "batch": 80,
+     "status": "spill",
+     "peak_mib": 24139,
+     "note": "Studio open"
+    },
+    {
+     "batch": 72,
+     "status": "pass",
+     "peak_mib": 23551,
+     "step_ms": 2728.6,
+     "note": "Studio open"
+    },
+    {
+     "batch": 76,
+     "status": "spill",
+     "peak_mib": 23972,
+     "note": "Studio open"
+    },
+    {
+     "batch": 74,
+     "status": "pass",
+     "peak_mib": 23932,
+     "step_ms": 2788.5,
+     "note": "Studio open"
+    },
+    {
+     "batch": 75,
+     "status": "spill",
+     "peak_mib": 23979,
+     "note": "Studio open"
+    }
+   ]
+  },
+  "full_lean": {
+   "settings": "the DiT trained (NVIDIA's default trainable set), plus --bf16-backbone, --checkpoint-dit and --optim adamw_bnb_8bit",
+   "trainable_parameters": 1620515968,
+   "max_batch": 58,
+   "samples_per_s_at_max": 24.4,
+   "runs": [
+    {
+     "batch": 4,
+     "status": "pass",
+     "peak_mib": 20831,
+     "step_ms": 688.0,
+     "note": "20-step smoke"
+    },
+    {
+     "batch": 8,
+     "status": "pass",
+     "peak_mib": 20930,
+     "step_ms": 796.8
+    },
+    {
+     "batch": 16,
+     "status": "pass",
+     "peak_mib": 21292,
+     "step_ms": 1067.3
+    },
+    {
+     "batch": 32,
+     "status": "pass",
+     "peak_mib": 22798,
+     "step_ms": 1644.5,
+     "note": "first search"
+    },
+    {
+     "batch": 32,
+     "status": "pass",
+     "peak_mib": 22321,
+     "step_ms": 1470.5,
+     "note": "second search"
+    },
+    {
+     "batch": 64,
+     "status": "spill",
+     "peak_mib": 24107
+    },
+    {
+     "batch": 48,
+     "status": "pass",
+     "peak_mib": 23391,
+     "step_ms": 2009.8
+    },
+    {
+     "batch": 56,
+     "status": "pass",
+     "peak_mib": 23724,
+     "step_ms": 2337.4
+    },
+    {
+     "batch": 60,
+     "status": "spill",
+     "peak_mib": 24058
+    },
+    {
+     "batch": 58,
+     "status": "pass",
+     "peak_mib": 23709,
+     "step_ms": 2374.8
+    },
+    {
+     "batch": 59,
+     "status": "spill",
+     "peak_mib": 24020
+    }
+   ]
+  },
+  "desktop_baseline_mib": "1,105 to 1,319 with the Studio closed; 1,889 with it open",
+  "nvidia_reference": "Isaac-GR00T README, N1.7 single-GPU table (the same frozen backbones and AdamW, fp32 trainable weights, no checkpointing): max batch 213 on an L40 at 56.42 samples/s, 409 on an H100 at 192.57"
+ },
+ "artifacts": {
+  "scripts": "tools/gr00t-batch-search.sh and tools/gr00t-fit.py: the scratchpad's gr00t-smoke.sh and gr00t_fit.py as they ran, with their paths and setup's clone changed",
+  "results": "the scratchpad's gr00t-runs/results.txt and per-run .log and .mem files (not kept)"
+ },
+ "protocol": "docs/86-video-to-robot.md §5.5, after the Isaac-GR00T README's single-GPU method: a fresh process per batch, 7 steps, the median of steps 3 to 7 (forward, backward and AdamW step, synchronized; data loading excluded), the batch doubled from a start until it fails, then bisected to an adjacent pass and failure. A failure is a spill: under WSL the Windows driver moves an overfull card into system RAM instead of raising out-of-memory, so a run whose nvidia-smi memory (sampled every 0.5 s, the desktop included) reached 23,964 MiB, 600 below the card's size, was stopped and counted as failed.",
+ "caveats": [
+  "Fit and speed only: 7 steps say nothing about what a fine-tune learns. Whether 8-bit AdamW state and a bf16 backbone change the result of a real fine-tune is unmeasured; it needs a paired evaluation of policies trained both ways (phase 4).",
+  "The ceiling is a spill cutoff, not an out-of-memory error, and it counts the whole card: the desktop's 1.1 to 1.3 GB, and about 0.6 GB more with the Studio open. frozen-lean's 74 and frozen's 4 were found with the Studio open; a run on a native Linux machine with no desktop would fit more.",
+  "One workload: NVIDIA's two-camera SO-100 demo. Another embodiment's images, state and action horizon change the per-sample memory.",
+  "Step times vary between runs: full-lean batch 32 took 1,644.5 ms in the first search and 1,470.5 ms in the second.",
+  "Each run first spends about four minutes decoding the demo's video before step one; that time is outside the step timer, and it is most of a short run's wall clock.",
+  "The first full-lean search stopped at batch 64 (a spill recorded as a crash by the script's marker check), and the frozen-lean and frozen runs right after it started while that run still held the card; those are void and not listed. The script now waits for the card to empty and marks spills in their own file; the second search re-ran full-lean from 32."
+ ]
+}

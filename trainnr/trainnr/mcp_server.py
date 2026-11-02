@@ -3256,7 +3256,11 @@ def describe_identification(robot: str) -> dict[str, Any] | Refusal:
 
 
 def create_project_dir(
-    name: str, path: str | None = None, description: str = "", loop: str = ""
+    name: str,
+    path: str | None = None,
+    description: str = "",
+    loop: str = "",
+    template: str = "",
 ) -> dict[str, Any] | Refusal:
     """Make a project directory: the manifest and one folder per artifact
     kind. It lands in the projects home (`$TRAINNR_PROJECTS`, else
@@ -3265,7 +3269,9 @@ def create_project_dir(
     new project becomes the current one. `loop` says how its policy
     learns — `imitation` (from a dataset) or `reinforcement` (from its
     own rollouts; the dataset stage is then marked not needed) — or is
-    left unset and read off the runs. Never overwrites a project."""
+    left unset and read off the runs. `template` (list_templates) starts
+    it on a plan: its loop, and the steps its Overview walks; nothing is
+    downloaded. Never overwrites a project."""
     from trainnr.project import create_project, remember_project  # noqa: PLC0415
     from trainnr.project.locate import projects_home  # noqa: PLC0415
 
@@ -3280,9 +3286,9 @@ def create_project_dir(
     if not target.is_absolute() and not root.resolve().is_relative_to(home):
         return refusal(f"path {path!r} leaves the projects home {home}")
     try:
-        project = create_project(root, name, description, loop=loop)
-    except (FileExistsError, ValueError) as why:
-        return refusal(str(why))
+        project = create_project(root, name, description, loop=loop, template=template)
+    except (FileExistsError, KeyError, ValueError) as why:
+        return refusal(_reason(why))
     remember_project(project.root)
     return {
         "status": DONE,
@@ -3292,6 +3298,16 @@ def create_project_dir(
         "next": "launch_studio() shows it in the Studio; onboard_robot brings "
         "a robot in",
     }
+
+
+def list_templates() -> list[dict[str, Any]]:
+    """The project templates: a plan for one path from raw video to a
+    robot policy, NVIDIA's models in each step by default (docs/86). Each
+    step names its stage, what it runs on, and the trainnr tool that does
+    it, or none while it is planned."""
+    from trainnr.templates import TEMPLATES, describe  # noqa: PLC0415
+
+    return [describe(t) for t in TEMPLATES.values()]
 
 
 def list_samples() -> list[dict[str, Any]]:
@@ -3368,6 +3384,7 @@ READ_ONLY_TOOLS = frozenset(
         "list_jobs",
         "list_projects",
         "list_samples",
+        "list_templates",
         "list_public_logs",
         "list_robot_adapters",
         "list_robots",
@@ -3684,8 +3701,13 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     server.tool(
         name="create_project",
         description="Make a project (a bare name lands in ~/trainnr/projects) "
-        "and make it the current one; never overwrites an existing project.",
+        "and make it the current one, blank or from a template; never overwrites "
+        "an existing project.",
     )(create_project_dir)
+    server.tool(
+        description="The project templates: plans from raw video to a robot "
+        "policy, with NVIDIA's models by default, and which steps are built."
+    )(list_templates)
     server.tool(
         description="Choose the current project by name or path; later calls "
         "and later sessions act on it."

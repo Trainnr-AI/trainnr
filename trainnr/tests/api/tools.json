@@ -244,7 +244,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Make a project (a bare name lands in ~/trainnr/projects) and make it the current one; never overwrites an existing project.",
+    "description": "Make a project (a bare name lands in ~/trainnr/projects) and make it the current one, blank or from a template; never overwrites an existing project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -260,6 +260,10 @@
           "type": "string"
         },
         "path": {
+          "type": "string"
+        },
+        "template": {
+          "default": "",
           "type": "string"
         }
       },
@@ -1218,6 +1222,19 @@
       "type": "object"
     },
     "name": "list_tasks"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "description": "The project templates: plans from raw video to a robot policy, with NVIDIA's models by default, and which steps are built.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_templates"
   },
   {
     "annotations": {

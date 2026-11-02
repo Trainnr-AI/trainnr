@@ -386,6 +386,85 @@ pub fn start_here(
     asked
 }
 
+/// A project made from a template: its plan, each step with what it runs
+/// on and the model it uses, a button where trainnr has the step's form,
+/// "planned" where trainnr has no tool for it yet, "done" once its stage
+/// is proved (docs/86 §6). Returns the tool whose form was asked for.
+pub fn plan_card(
+    ui: &mut egui::Ui,
+    plan: &crate::model::Plan,
+    forms: &crate::forms::Catalog,
+    count: &dyn Fn(&str) -> usize,
+) -> Option<String> {
+    let palette = crate::theme::palette(ui);
+    let mut asked = None;
+    let done = plan.steps.iter().filter(|s| s.done).count();
+    card(ui, None).show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.label(
+            egui::RichText::new(&plan.title)
+                .text_style(DesignTokens::welcome_screen_h2())
+                .strong()
+                .color(ui.visuals().strong_text_color()),
+        );
+        ui.add_space(2.0);
+        let mut about: Vec<&str> = vec![&plan.vendor, &plan.robot];
+        about.retain(|s| !s.is_empty());
+        let progress = format!("{done} of {} steps done", plan.steps.len());
+        crate::widgets::weak_body(ui, format!("{} · {progress}", about.join(" · ")));
+        ui.add_space(4.0);
+        crate::widgets::body(
+            ui,
+            "This project's plan. Each step lights its stage below when its result \
+             lands; a planned step is one trainnr does not do yet.",
+            palette.text,
+        );
+        ui.add_space(16.0);
+        for (number, step) in plan.steps.iter().enumerate() {
+            ui.horizontal_top(|ui| {
+                step_number(ui, number + 1);
+                ui.add_space(10.0);
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(&step.title)
+                                .text_style(DesignTokens::welcome_screen_body())
+                                .strong()
+                                .color(palette.text),
+                        );
+                        if step.done {
+                            tag(ui, "done");
+                        } else if step.tool.is_none() {
+                            tag(ui, "planned");
+                        }
+                    });
+                    crate::widgets::body(ui, &step.body, palette.text);
+                    let runs = match &step.model {
+                        Some(model) => format!("Runs on {} · {model}", step.runs_on),
+                        None => format!("Runs on {}", step.runs_on),
+                    };
+                    crate::widgets::weak_body(ui, runs);
+                    let form = step.tool.as_deref().and_then(|t| forms.form(t));
+                    if let (false, Some(form)) = (step.done, form) {
+                        ui.add_space(6.0);
+                        let missing = crate::forms::missing_input(form, count);
+                        let hover = missing.clone().unwrap_or_else(|| form.summary.clone());
+                        if primary_button(ui, &form.label, missing.is_none())
+                            .on_hover_text(&hover)
+                            .on_disabled_hover_text(&hover)
+                            .clicked()
+                        {
+                            asked = Some(form.tool.clone());
+                        }
+                    }
+                });
+            });
+            ui.add_space(14.0);
+        }
+    });
+    asked
+}
+
 /// A step number's disc, across, and the gap before its words.
 const STEP_DISC: f32 = 24.0;
 const STEP_TEXT_GAP: f32 = 6.0;
@@ -498,17 +577,27 @@ pub enum Pick {
     ConnectAgent,
 }
 
-/// What the New project dialog answered this frame.
+/// What the New project dialog answered this frame: the name, and the
+/// template picked (None for a blank project).
 pub enum Dialog {
     Open,
-    Create(String),
+    Create(String, Option<&'static str>),
     Cancel,
 }
 
-/// The New project dialog: a name, Create and Cancel; Enter creates and
-/// Escape cancels. The name is checked by `create_project` itself, which
-/// refuses by name, so the rule lives in one place.
-pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
+/// The New project dialog's answers while it is open.
+#[derive(Default)]
+pub struct NewProject {
+    pub name: String,
+    pub template: Option<&'static str>,
+}
+
+/// The New project dialog: a name, what to start from (blank, or a
+/// template, `templates.rs`), Create and Cancel; Enter in the name
+/// creates and Escape cancels. The name is checked by `create_project`
+/// itself, which refuses by name, so the rule lives in one place.
+pub fn new_project_dialog(ctx: &egui::Context, draft: &mut NewProject) -> Dialog {
+    let NewProject { name, template } = draft;
     let mut answer = Dialog::Open;
     let modal = egui::Modal::new(egui::Id::new("new-project")).show(ctx, |ui| {
         let palette = crate::theme::palette(ui);
@@ -541,6 +630,8 @@ pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
         // tells the two apart.
         let in_field = field.has_focus() || field.lost_focus();
         let entered = in_field && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        ui.add_space(16.0);
+        template_choice(ui, template);
         ui.add_space(14.0);
         egui::Sides::new().height(BUTTON_HEIGHT).show(
             ui,
@@ -548,7 +639,7 @@ pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
             |ui| {
                 let ready = !name.trim().is_empty();
                 if primary_button(ui, "Create", ready).clicked() || (entered && ready) {
-                    answer = Dialog::Create(name.trim().to_owned());
+                    answer = Dialog::Create(name.trim().to_owned(), *template);
                 }
                 if secondary_button(ui, "Cancel", true).clicked() {
                     answer = Dialog::Cancel;
@@ -560,6 +651,46 @@ pub fn new_project_dialog(ctx: &egui::Context, name: &mut String) -> Dialog {
         answer = Dialog::Cancel;
     }
     answer
+}
+
+/// What a new project starts from: nothing, or a template's plan, each a
+/// radio row with its summary under it.
+fn template_choice(ui: &mut egui::Ui, template: &mut Option<&'static str>) {
+    let palette = crate::theme::palette(ui);
+    ui.label(
+        egui::RichText::new("Start from")
+            .strong()
+            .color(ui.visuals().strong_text_color()),
+    );
+    ui.add_space(6.0);
+    let mut row = |ui: &mut egui::Ui, value, title: &str, summary: &str, note: &str| {
+        ui.radio_value(
+            template,
+            value,
+            egui::RichText::new(title)
+                .text_style(DesignTokens::welcome_screen_body())
+                .strong()
+                .color(palette.text),
+        );
+        ui.indent(title, |ui| {
+            crate::widgets::body(ui, summary, palette.text);
+            if !note.is_empty() {
+                crate::widgets::weak_body(ui, note);
+            }
+        });
+        ui.add_space(8.0);
+    };
+    row(
+        ui,
+        None,
+        "Blank project",
+        "Nothing yet: bring in your robot first.",
+        "",
+    );
+    for card in crate::templates::TEMPLATES {
+        let note = format!("{} · {}", card.vendor, card.robot);
+        row(ui, Some(card.name), card.title, card.summary, &note);
+    }
 }
 
 /// A download under way: its step in words, a bar when its size is known
@@ -681,7 +812,7 @@ pub const LOOP_STATES: [(&str, Section); 9] = [
 /// What a user says to start their own project.
 const START_PROMPT: &str = "Create a project called my-robot";
 /// The New project dialog's width.
-const NEW_PROJECT_DIALOG_WIDTH: f32 = 380.0;
+const NEW_PROJECT_DIALOG_WIDTH: f32 = 520.0;
 
 /// The window before any project exists: what trainnr is, start your own
 /// project, or explore a sample; then the projects already there.
@@ -991,7 +1122,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let frame = |ctx: &egui::Context, input, name: &mut String| {
+        let frame = |ctx: &egui::Context, input, name: &mut NewProject| {
             let mut answer = Dialog::Open;
             let mut output = ctx.run_ui(input, |ui| answer = new_project_dialog(ui.ctx(), name));
             output.textures_delta.clear(); // no renderer here to apply them
@@ -999,7 +1130,10 @@ mod tests {
         };
         let ctx = egui::Context::default();
         re_ui::apply_style_and_install_loaders(&ctx);
-        let mut name = "  lab-arm ".to_owned();
+        let mut name = NewProject {
+            name: "  lab-arm ".to_owned(),
+            template: Some("humanoid-motion-from-video"),
+        };
         assert!(matches!(
             frame(&ctx, Default::default(), &mut name),
             Dialog::Open
@@ -1009,12 +1143,15 @@ mod tests {
             Dialog::Open
         ));
         match frame(&ctx, press(egui::Key::Enter), &mut name) {
-            Dialog::Create(made) => assert_eq!(made, "lab-arm"),
+            Dialog::Create(made, template) => {
+                assert_eq!(made, "lab-arm");
+                assert_eq!(template, Some("humanoid-motion-from-video"));
+            }
             _ => panic!("Enter did not create"),
         }
         let ctx = egui::Context::default();
         re_ui::apply_style_and_install_loaders(&ctx);
-        let mut empty = String::new();
+        let mut empty = NewProject::default();
         let _ = frame(&ctx, Default::default(), &mut empty);
         assert!(
             matches!(
