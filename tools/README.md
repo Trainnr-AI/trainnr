@@ -116,6 +116,7 @@ with its log beside the artifact it writes.
 |---|---|
 | `cloud-gpu.py` | A rented GPU as a runbook: `offers`, `launch`, `push` (rsync, never `.env`), `bootstrap`, `run`, `pull`, `terminate`; `follow <id> NAME --watch` mirrors a running pod's light files and opens the dashboard. RunPod first, behind `trainnr/cloud`'s provider seam (docs/34). |
 | `_pod-bootstrap.sh`, `_pod-resume.sh` | Sent over ssh by `cloud-gpu.py`: the train environment on a fresh machine, and a fresh pod over a network volume made ready in one line. |
+| `gr00t-batch-search.sh`, `gr00t-fit.py` | GR00T N1.7 fine-tuning on one GPU, sized by measurement: `setup` (Isaac-GR00T at the measured commit, in its own environment, and the models), `smoke`, and `maxbatch <config>` (NVIDIA's batch search, a spill counted as a failure under WSL); `gr00t-fit.py` adds the memory savers NVIDIA's launcher does not expose (docs/86 §5.5). |
 | `pod-volume.py` | A RunPod network volume over its S3 API: `du`, `ls`, `rm` (dry run unless `--yes`); works when the pod is stopped. |
 
 ## The archived rig

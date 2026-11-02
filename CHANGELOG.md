@@ -9,6 +9,7 @@ All notable changes to trainnr. The format follows
 ### Added
 
 - Project templates: New project can start from a plan instead of a blank project. Three come first, on NVIDIA's stack: Humanoid motion from video (GEM-X, the SOMA Retargeter and mjlab's tracking task, on a Unitree G1), Manipulation from human video and More from your own demonstrations (GR00T N1.7 and Cosmos Transfer, on an SO-101). A project made from one shows its plan on the Overview, each step marked done, with its button, or planned. `create_project` takes `template`, and `list_templates` lists them. The design is docs/86.
+- GR00T N1.7 fine-tunes on one 24 GB card (an RTX 3090 Ti): `tools/gr00t-batch-search.sh` sets up NVIDIA's Isaac-GR00T in its own environment and finds the largest batch each configuration fits, and `tools/gr00t-fit.py` adds three memory savers NVIDIA's launcher does not expose. NVIDIA's settings fit only with the action head frozen, at batch 8; with the savers, the full default fine-tune fits at batch 58 (the record `gr00t-n17-on-a-24gb-card-2026-11-02`).
 
 ### Changed
 
