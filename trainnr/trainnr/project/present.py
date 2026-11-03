@@ -330,10 +330,10 @@ def _present_robot(
     }
 
 
-# The Studio's viewer is built without Rerun's `nasm` feature, so it cannot
-# decode AV1 (LeRobot's codec) itself: those videos come as frames ffmpeg
-# decoded, thinned and shrunk so a long clip stays a small stream.
-FRAMES_CODECS = frozenset({"av1"})
+# Footage comes as frames ffmpeg decoded, thinned and shrunk so a long clip
+# stays a small stream, not as a video for the viewer to decode: the Studio's
+# viewer has no AV1 decoder (Rerun's `nasm` feature), and it plays H.264 only
+# through an ffmpeg 5.1 or newer, which Ubuntu 22.04 does not ship.
 FRAMES_FPS = 15
 FRAMES_WIDTH = 640
 
@@ -370,9 +370,8 @@ def _log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
 def _present_footage(
     project: Project, artifact: Artifact, rr_: rr.RecordingStream, root: str = "footage"
 ) -> Shown:
-    """A video on its own timeline, decoded by the viewer, its numbers
-    beside it: Rerun plays an MP4 it decodes, AV1 comes as frames, and
-    a container it cannot read shows its first frame."""
+    """A video on its own timeline as frames, its numbers beside it; a
+    file ffmpeg cannot decode shows its first frame and why."""
     import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
@@ -396,20 +395,9 @@ def _present_footage(
             ("licence", record.licence),
         )
     ]
-    view = "video"
     with _AsDefault(rr_):
         try:
-            if record.codec in FRAMES_CODECS:
-                view = _log_frames(rr_, f"{root}/video", folder / record.video)
-            else:
-                asset = rr.AssetVideo(path=folder / record.video)
-                stamps = asset.read_frame_timestamps_nanos()
-                rr_.log(f"{root}/video", asset, static=True)
-                rr_.send_columns(
-                    f"{root}/video",
-                    indexes=[rr.TimeColumn("video", duration=1e-9 * stamps)],
-                    columns=rr.VideoFrameReference.columns_nanos(stamps),
-                )
+            view = _log_frames(rr_, f"{root}/video", folder / record.video)
         except Exception as why:  # the still, and the reason beside it
             rr_.log(
                 f"{root}/video", rr.EncodedImage(path=folder / FIRST_FRAME), static=True

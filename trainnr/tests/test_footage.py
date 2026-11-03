@@ -110,9 +110,10 @@ class FootageInAProject(unittest.TestCase):
 
 @unittest.skipUnless(HAS_FFMPEG, "needs ffmpeg and ffprobe")
 class FootageInTheViewer(unittest.TestCase):
-    """Show in viewer: Rerun's player for what it decodes, frames for AV1
-    (the Studio's viewer has no AV1 decoder), and the first frame, with
-    the reason, for a file nothing can play."""
+    """Show in viewer: frames ffmpeg decoded, whatever the codec (the
+    Studio's viewer decodes no AV1, and H.264 only with an ffmpeg 5.1 or
+    newer), and the first frame, with the reason, for a file nothing can
+    play."""
 
     def setUp(self) -> None:
         try:
@@ -155,8 +156,8 @@ class FootageInTheViewer(unittest.TestCase):
     def test_av1_comes_as_frames(self) -> None:
         self.assertEqual(self.shown("libaom-av1")[0], "frames at 15 fps")
 
-    def test_h264_plays_in_the_viewer(self) -> None:
-        self.assertEqual(self.shown("libx264")[0], "video")
+    def test_h264_comes_as_frames(self) -> None:
+        self.assertEqual(self.shown("libx264")[0], "frames at 15 fps")
 
     def test_an_unplayable_file_shows_its_first_frame_and_why(self) -> None:
         view, record = self.shown("libx264", damage=True)
