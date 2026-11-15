@@ -17,6 +17,7 @@ All notable changes to trainnr. The format follows
 
 ### Security
 
+- The Studio's lock takes rustix 1.1.6 (RUSTSEC-2026-0486) and async-executor 1.14.1 (1.14.0 was yanked); both Python locks take opentelemetry-api 1.45.2 (CVE-2026-126360). pillow 12.3.0 (CVE-2026-128066, CVE-2026-128067) stays a written exception: LeRobot 0.6.1 requires Pillow<13, and trainnr writes no TIFF and opens only the user's own images.
 - The Studio's lock takes pulldown-cmark 0.13.6 (RUSTSEC-2026-0433). thrift 0.17 (RUSTSEC-2026-0435, fixed in 0.23) stays where Rerun 0.36's parquet 58 pins it, a written exception in the Studio's `deny.toml`: parquet reads its metadata with its own reader, not the affected one.
 
 ## [0.2.0] - 2026-10-30
