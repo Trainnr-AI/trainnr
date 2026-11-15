@@ -57,6 +57,13 @@ class RenderSideCap(unittest.TestCase):
 
 
 class WireTags(unittest.TestCase):
+    def test_the_training_app_prefix_agrees(self) -> None:
+        """The shell keeps a training run's stream out of the view by this
+        prefix; the trainer streams under it (issue #105)."""
+        py = constant(VIZ, r'^TRAINING_APP_PREFIX = "([^"]+)"$')
+        rs = constant(MAIN_RS, r'^const TRAINING_APP_PREFIX: &str = "([^"]+)";$')
+        self.assertEqual(py, rs)
+
     def test_the_twin_app_prefix_agrees(self) -> None:
         """The shell closes the previous twin by this prefix before a new
         viewport starts; the tool streams under it (2026-09-26)."""

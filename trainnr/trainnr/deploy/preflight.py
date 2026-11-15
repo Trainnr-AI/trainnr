@@ -546,6 +546,20 @@ def check_gains(ctx: Context) -> Check:
         )
     want_kp = np.asarray(joints.stiffness, float)
     want_kd = np.asarray(joints.damping, float)
+    if np.isnan(want_kp).all() and joints.servos:
+        # Position servos close their own loop: what must match is the
+        # servo's register and supply, which only the robot can report.
+        return Check(
+            "gains",
+            None,
+            "position servos",
+            "the servo's own settings",
+            "; ".join(
+                f"{g.get('actuator')}: kp {g.get('kp')}, vin {g.get('vin_v')} V "
+                f"on {len(g.get('joints', []))} joints"
+                for g in joints.servos
+            ),
+        )
     tol = ctx.margins.gain_rel_tol
     kp, kd = _scene_gains(ctx.runtime)
     off: list[str] = []
@@ -555,6 +569,7 @@ def check_gains(ctx: Context) -> Check:
             if got.shape != want.shape:
                 off.append(f"{where} {name}: {got.size} values for {want.size} joints")
                 continue
+            # NaN: a servo's joint, its gains its own (`servos`)
             bad = np.flatnonzero(
                 np.abs(got - want) > tol * np.maximum(1.0, np.abs(want))
             )

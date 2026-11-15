@@ -13,6 +13,7 @@ them from here.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,10 @@ TERM_KEYS = frozenset(
 )
 TWIST_AXES = ("lin_vel_x", "lin_vel_y", "ang_vel_z")
 HEADING_GAIN = "heading_gain"  # the commands block's key, beside "twist"
+# The joints block's servo groups: joints a position servo drives under
+# BAM's law, whose stiffness/damping/effort_limit are null (issue #107).
+SERVOS = "servos"
+SERVO_LAW_BAM = "bam"
 # The same axes as a door and the Studio name them (forward, left, turn).
 TWIST_SHORT = ("vx", "vy", "wz")
 # The word that hands the commands back to the task (the door, the
@@ -147,11 +152,14 @@ class Joints:
     action_to_ctrl: tuple[int, ...]
     default_pos: tuple[float, ...]
     ctrl_order: tuple[str, ...] = ()
+    # NaN for a joint a position servo drives: its gains are the servo's
+    # own (`servos`), not a PD controller's.
     stiffness: tuple[float, ...] = ()
     damping: tuple[float, ...] = ()
     effort_limit: tuple[float, ...] = ()
     sdk_order_map: tuple[int, ...] | None = None
     sdk_order_source: str | None = None
+    servos: tuple[dict[str, Any], ...] = ()
 
     @classmethod
     def of(cls, raw: dict[str, Any]) -> Joints:
@@ -161,12 +169,17 @@ class Joints:
             action_to_ctrl=tuple(int(i) for i in raw["action_to_ctrl"]),
             default_pos=tuple(float(v) for v in raw["default_pos"]),
             ctrl_order=tuple(raw.get("ctrl_order", ())),
-            stiffness=tuple(float(v) for v in raw.get("stiffness", ())),
-            damping=tuple(float(v) for v in raw.get("damping", ())),
-            effort_limit=tuple(float(v) for v in raw.get("effort_limit", ())),
+            stiffness=_gains(raw.get("stiffness")),
+            damping=_gains(raw.get("damping")),
+            effort_limit=_gains(raw.get("effort_limit")),
             sdk_order_map=tuple(int(i) for i in sdk) if sdk is not None else None,
             sdk_order_source=raw.get("sdk_order_source"),
+            servos=tuple(raw.get(SERVOS) or ()),
         )
+
+
+def _gains(values: list[float | None] | None) -> tuple[float, ...]:
+    return tuple(math.nan if v is None else float(v) for v in values or ())
 
 
 @dataclass(frozen=True)
@@ -403,8 +416,12 @@ def read_gates(folder: Path) -> dict[str, dict[str, Any]]:
 
 def gate_word(record: dict[str, Any]) -> str:
     """A gate record's verdict in one word: passed, failed, or reported
-    (no evaluation was cited, so nothing was judged)."""
-    passed = (record.get("verdict") or {}).get("passed")
+    (no evaluation was cited, so nothing was judged); a gate that agrees
+    with an evaluation that demonstrated nothing says so."""
+    verdict = record.get("verdict") or {}
+    passed = verdict.get("passed")
     if passed is True:
         return "passed"
+    if verdict.get("agrees") and verdict.get("demonstrated") is False:
+        return "failed: nothing demonstrated"
     return "failed" if passed is False else "reported, not judged"

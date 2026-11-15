@@ -380,6 +380,26 @@ class TheCourseVerdict(unittest.TestCase):
         self.assertIsNone(course["passed"])
         self.assertEqual(course["rule"], OTHER_PROTOCOL)
 
+    def test_agreeing_with_an_evaluation_that_never_succeeded_does_not_pass(
+        self,
+    ) -> None:
+        """Issue #108: 0/4 in evaluation and 0/4 in the runtime agree, but
+        nothing was demonstrated to transfer."""
+        from trainnr.deploy.gate import _verdict  # noqa: PLC0415
+        from trainnr.deploy.manifest import gate_word  # noqa: PLC0415
+
+        nothing = _verdict(0, 4, 0.1, {"successes": 0, "trials": 4})
+        self.assertEqual(
+            (nothing["agrees"], nothing["demonstrated"], nothing["passed"]),
+            (True, False, False),
+        )
+        self.assertIn("demonstrated nothing", nothing["why"])
+        self.assertEqual(
+            gate_word({"verdict": nothing}), "failed: nothing demonstrated"
+        )
+        some = _verdict(4, 4, 0.1, {"successes": 4, "trials": 4, "ci95": [0.4, 1.0]})
+        self.assertTrue(some["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()

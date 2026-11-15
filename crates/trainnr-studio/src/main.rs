@@ -83,6 +83,11 @@ const TRANSPORT_ROW_HEIGHT: f32 = 34.0;
 /// `0.0.0.0:9876` to stream from another machine on a trusted network.
 const GRPC_BIND: &str = "127.0.0.1:9876";
 const GRPC_BIND_ENV: &str = "TRAINNR_VIEWER_BIND";
+/// A training run's stream: `trainnr.viz.TRAINING_APP_PREFIX` (mirrored,
+/// test_studio_mirrors); it arrives without taking the view (issue #105).
+const TRAINING_APP_PREFIX: &str = "trainnr-train-";
+/// How long after a training stream arrives the view is kept from it.
+const TRAINING_SETTLE: std::time::Duration = std::time::Duration::from_secs(5);
 /// Bounds on what one agent command may ask of the viewer and the
 /// simulator: time steps in the viewer, physics steps in the stream.
 const MAX_TIME_STEPS: u64 = 1000;
@@ -244,6 +249,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 last_navigation: None,
                 seen_recording: false,
                 activated_shown: None,
+                last_active: None,
+                seen_active: std::collections::HashMap::new(),
                 viewport_full: false,
                 closing: false,
                 theme_preference: chosen,
@@ -286,6 +293,13 @@ struct StudioShell {
     seen_recording: bool,
     /// The presenter's last `shown` we brought to the front.
     activated_shown: Option<String>,
+    /// The recording the viewer showed last frame, and when each one it
+    /// has shown first came up: a training run's stream arriving selected
+    /// is sent to the background while it settles, never a later click on
+    /// it (issue #105).
+    last_active: Option<re_viewer::external::re_log_types::StoreId>,
+    seen_active:
+        std::collections::HashMap<re_viewer::external::re_log_types::StoreId, std::time::Instant>,
     /// The viewport alone on the Live page: no rail, no viewer panels,
     /// the picture and its transport bar (the `f` key; Escape leaves).
     viewport_full: bool,
@@ -428,6 +442,7 @@ impl eframe::App for StudioShell {
             }
             self.activated_shown = landed;
         }
+        self.keep_the_view_from_training();
         // A deployment played or replayed from its drawer: the viewport
         // runs it and the page turns to it.
         if let Some(scene) = self.shell.scene_request.take() {
@@ -637,6 +652,49 @@ impl StudioShell {
 
     /// No scene: the viewport idle and the page back to its rails — the
     /// one way a scene ends, from the button and from the door alike.
+    /// Rerun selects every new SDK stream as it arrives, so a training
+    /// job started through the agent took over the view of whatever the
+    /// user was reading, with no sign of where it came from (issue #105).
+    /// A training run's stream arriving that way goes back behind what was
+    /// shown, with a note naming it; it stays in Sources, and a click there
+    /// or `show_in_studio(stream=...)` brings it up. The viewer selects it
+    /// again when its blueprint lands, so for its first seconds it is sent
+    /// back each time (measured 2026-11-15: once was not enough).
+    fn keep_the_view_from_training(&mut self) {
+        use re_viewer::external::re_viewer_context::{SystemCommand, SystemCommandSender as _};
+        let active = self.rerun_app.active_recording_id().cloned();
+        if active == self.last_active {
+            return;
+        }
+        if let (Some(before), Some(now)) = (&self.last_active, &active) {
+            let app = now.application_id().to_string();
+            let first = !self.seen_active.contains_key(now);
+            let arrived = *self
+                .seen_active
+                .entry(now.clone())
+                .or_insert_with(std::time::Instant::now);
+            if app.starts_with(TRAINING_APP_PREFIX) && arrived.elapsed() < TRAINING_SETTLE {
+                if first {
+                    // The viewer toasts only Rerun's own log targets.
+                    re_log::info!(
+                        target: "rerun",
+                        "{app} is streaming: it is in Sources, the view stays where it was"
+                    );
+                }
+                self.rerun_app
+                    .command_sender
+                    .send_system(SystemCommand::ActivateApp(before.application_id().clone()));
+                return;
+            }
+        }
+        if let Some(now) = &active {
+            self.seen_active
+                .entry(now.clone())
+                .or_insert_with(std::time::Instant::now);
+        }
+        self.last_active = active;
+    }
+
     /// Close the previous viewport twin's recordings before a new one
     /// streams under the same application id: restarted twice, the viewer
     /// held two twins of one scene and showed the older (2026-09-26).
