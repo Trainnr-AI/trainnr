@@ -38,6 +38,7 @@ pub mod kind {
     pub const TASK: &str = "task";
     pub const SCENE: &str = "scene";
     pub const RECORDING: &str = "recording";
+    pub const FOOTAGE: &str = "footage";
     pub const BATCH: &str = "batch";
     pub const DATASET: &str = "dataset";
     pub const RUN: &str = "run";
@@ -84,6 +85,12 @@ pub const KINDS: &[Kind] = &[
         section: Section::Recordings,
         icon: &icons::RECORDING,
         word: "recording",
+    },
+    Kind {
+        name: kind::FOOTAGE,
+        section: Section::Recordings,
+        icon: &icons::PLAY,
+        word: "video",
     },
     Kind {
         name: kind::BATCH,
@@ -1907,6 +1914,7 @@ mod tests {
         let written = [
             kind::ROBOT,
             kind::RECORDING,
+            kind::FOOTAGE,
             kind::TASK,
             kind::SCENE,
             kind::BATCH,

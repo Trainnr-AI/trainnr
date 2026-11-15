@@ -31,6 +31,7 @@ TIER = {
     "physics": 3,
     "tasks": 3,
     "collect": 3,
+    "video": 3,  # footage and the motion made from it (docs/86): ffprobe beside scenes
     "envs": 4,
     "project": 4,  # the index over every kind: imports their marker constants
     "robots": 4,  # the ingest seam: reads collect's wire, writes project artifacts

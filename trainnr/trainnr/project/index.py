@@ -89,6 +89,7 @@ from trainnr.scenes.record import (
     proxy_from_splat,
 )
 from trainnr.scenes.stage import SCENE_TERRAIN_WORD, scene_name_of
+from trainnr.video.footage import FOOTAGE_FILE
 
 # The one word for a fact an artifact never recorded - never a guess.
 UNRECORDED = "unrecorded"
@@ -548,6 +549,8 @@ def _headline(kind: Kind, s: dict[str, Any]) -> str:  # noqa: PLR0911 - one line
             f"{splats:,} points" if isinstance(splats, int) else None,
             f"gap p95 {s['gap p95']}" if s.get("gap p95") else None,
         )
+    if kind is Kind.FOOTAGE:
+        return _join(s.get("duration"), s.get("rate"), s.get("size"))
     if kind is Kind.RECORDING:
         channels = f"{s['channels']} channels" if "channels" in s else None
         return _join(s.get("duration"), s.get("rate"), channels, s.get("origin"))
@@ -818,6 +821,10 @@ def _own_date(kind: Kind, path: Path) -> str | None:
         created = _read(path / marker).get("created_utc")
         if isinstance(created, str) and created:
             return created
+    if kind is Kind.FOOTAGE:
+        ingested = _read(path / FOOTAGE_FILE).get("ingested")
+        if isinstance(ingested, str) and ingested:
+            return ingested
     if kind is Kind.ROBOT:
         # Onboarding copies the source tree with its dates; the bundle
         # record is written at onboarding, so its time is when the robot
@@ -975,6 +982,22 @@ def _summary_drift(path: Path) -> dict[str, Any]:
     return out
 
 
+def _summary_footage(path: Path) -> dict[str, Any]:
+    """What a card says about a video: how long, how fast, how big, and
+    where it came from when the ingest was told."""
+    raw = _read(path / FOOTAGE_FILE)
+    if not raw:
+        return {}
+    out: dict[str, Any] = {
+        "duration": duration_text(float(raw.get("duration_s", 0.0))),
+        "rate": f"{raw.get('fps', 0):g} fps",
+        "size": f"{raw.get('width')}x{raw.get('height')}",
+        "codec": raw.get("codec", UNRECORDED),
+    }
+    out.update(_take(raw, ("origin", "licence")))
+    return {k: v for k, v in out.items() if v != UNRECORDED}
+
+
 def _summary_scene(path: Path) -> dict[str, Any]:
     """What a card says about a scene: the gap first, then what it holds."""
     s = _read(path / SCENE_FILE)
@@ -1050,6 +1073,7 @@ def _summary_fit(p: Path) -> dict[str, Any]:
 
 _SUMMARY_READERS: dict[Kind, SummaryReader] = {
     Kind.SCENE: _summary_scene,
+    Kind.FOOTAGE: _summary_footage,
     Kind.FIT: _summary_fit,
     Kind.DRIFT: _summary_drift,
     Kind.RECORDING: _summary_recording,

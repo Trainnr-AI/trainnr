@@ -1002,6 +1002,35 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
+    "description": "Bring a video into the project as footage: copied as it is, with its duration, frame rate, size, codec and first frame, stamped. The first step from video to robot training data.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "licence": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "name": "ingest_video"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
     "description": "Open the Studio on the current project and wait for it to start. Without a local build, the first launch downloads the prebuilt Studio (about 72 MB) from the project's GitHub release. Refused when one already runs.",
     "inputSchema": {
       "additionalProperties": false,

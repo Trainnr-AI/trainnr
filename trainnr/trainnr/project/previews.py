@@ -918,8 +918,19 @@ def _scene_caption(draw: ImageDraw, head: str, count: object) -> None:
     draw.text((CARD_MARGIN, 92), gaussians, fill=pal().text_dim, font=_font(PT_LABEL))
 
 
+def _render_footage(
+    _project: Project, source: Path, out: Path, _summary: dict[str, Any]
+) -> bool:
+    """The video's first frame, the still its ingest kept."""
+    from trainnr.video.footage import FIRST_FRAME  # noqa: PLC0415
+
+    frame = source / FIRST_FRAME
+    return frame.is_file() and _copy_scaled(frame, out)
+
+
 _RENDERERS: dict[str, Renderer] = {
     "scene": _render_scene,
+    "footage": _render_footage,
     "drift": _render_drift,
     "recording": _render_recording,
     "robot": _render_robot,

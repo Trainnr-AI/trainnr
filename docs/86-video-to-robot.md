@@ -136,11 +136,16 @@ tool that makes a dataset from a batch, and any notion of a template
    policy ─▶ evaluate (intervals; paired when augmented) ─▶ certificate ─▶ deploy
 ```
 
-- **footage** is the one new kind: `footage.json` (`trainnr-footage/1`)
-  beside the video it describes, stamped over its bytes like any bundle,
-  with what ffprobe says (duration, frame rate, size, codec), the camera
-  if known (intrinsics, ego or exo), the `basis` (own, public) and where
-  it came from. It proves the Telemetry stage, as a recording does.
+- **footage** is the one new kind (built 2026-11-02,
+  `trainnr/trainnr/video/footage.py`): a folder under `footage/` holding the
+  video copied byte for byte, its first frame, and `footage.json`
+  (`trainnr-footage/1`) with what ffprobe says (duration, frame rate,
+  displayed size, codec, frame count, rotation) and where it came from
+  (`origin`: filmed, or a URL; `licence`). Stamped over its files like any
+  bundle. It proves **no** loop state: the motion estimated from it does
+  (Telemetry), so a template's "Turn a video into motion" is not done the
+  moment a raw video lands. The camera (intrinsics, ego or exo) joins the
+  record when an estimator needs it.
 - **motion** is a recording (`trainnr-recording/1`) whose `collection`
   gains one word, `video`, and whose manifest names the estimator by
   stamp (GEM-X's version and weights hash) and the footage it came from.
@@ -285,8 +290,9 @@ The first three, NVIDIA's stack by default:
 1. **Templates and this design** (this branch): `templates.py`, the
    `template` argument to `create_project`, the template in the index,
    the Studio's picker in New project and the steps on the Overview.
-2. **Footage**: the kind, `ingest_video`, the Recordings page showing a
-   video's first frame and length.
+2. **Footage** (built 2026-11-02): the kind, `ingest_video`, the
+   Recordings page showing a video's first frame and length, and the
+   viewer playing it on its own timeline.
 3. **Whole body, end to end on a G1**: GEM-X, SOMA, the tracking task,
    `train_tracking` through mjlab, an evaluation with intervals. Measured
    as a record in `docs/findings/` before any claim.
