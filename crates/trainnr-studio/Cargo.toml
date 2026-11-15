@@ -54,7 +54,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 # Tables for the section views; already in the tree via re_ui (which
 # styles them: `setup_table_body`). No new dependency weight.
-egui_extras = "0.36.1"
+egui_extras = "0.37.0"
 # Native file dialogs for the forms' file fields; the same version and
 # backend re_viewer already builds (xdg-portal), so no new crate.
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
