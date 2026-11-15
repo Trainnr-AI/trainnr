@@ -81,6 +81,12 @@ EXCEPTIONS: dict[str, str] = {
     "which trainnr-mjlab's lock has (84.2.1); only LeRobot 0.6.1 (train) caps "
     "it, setuptools<82; 2026-10-28",
     **dict.fromkeys(
+        ("CVE-2026-128066", "CVE-2026-128067"),
+        "pillow 12.3.0 in trainnr's lock; fixed in 13.0.0, LeRobot 0.6.1 (train) "
+        "requires Pillow<13; trainnr writes no TIFF and opens only the user's own "
+        "images; 2026-11-15",
+    ),
+    **dict.fromkeys(
         (
             "CVE-2026-112390",
             "CVE-2026-112391",
