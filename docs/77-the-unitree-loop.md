@@ -374,7 +374,8 @@ in the walk package's venv: the actor as ONNX (rsl_rl's exporter,
 observation normalization inside the graph, a fixed batch of one, as a
 runtime uses it), checked against the torch actor on sixty-four random
 inputs (max |Δ| recorded; 9.5e-7 on the laptop checkpoint); the manifest
-(`deploy.json`, schema `trainnr-deploy/1`) read from the built
+(`deploy.json`, schema `trainnr-deploy/1`, written down field by field
+in [87](87-the-deployment-manifest.md)) read from the built
 environment — the policy's joint order, the simulator's actuator order
 and the map between them, kp/kd/effort per joint, the home pose, the
 action rule and scale, the seven observation terms in order with their
@@ -396,7 +397,10 @@ command), runs the ONNX, maps actions to controls, steps at the
 manifest's rate; `trainnr.deploy.gate` judges each seeded held
 command the certificate's way (survived and error ratio below 0.5,
 floored at 0.1 m/s), writes the exact interval, and passes when the
-rate is within the stated tolerance (0.10) of the cited certificate's.
+rate is within the stated tolerance (0.10) of the cited certificate's
+and that certificate's lower bound is above zero (since 2026-11-15: a
+policy that fell in 0/4 and falls again agrees, but has nothing to
+transfer; the record says `agrees` and `demonstrated` apart).
 Cross-checked on the laptop checkpoint: the gate says survived 4,
 tracked 0; mjlab's own verdict on the same checkpoint says survived 4,
 tracked 0 (error ratios 0.76–1.0 against 1.01–1.12 — the protocols

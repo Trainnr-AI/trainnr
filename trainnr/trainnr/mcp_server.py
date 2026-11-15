@@ -1100,7 +1100,8 @@ def gate_deployment(
     driven through its manifest alone by a registered runtime — no
     training stack — over seeded held commands and judged the
     evaluation's way; passes when its rate is within `tolerance` (the
-    gate's own default when unset) of the evaluation it cites. `runtime`
+    gate's own default when unset) of the evaluation it cites and that
+    evaluation demonstrated a success (lower bound above 0). `runtime`
     is one of `list_gate_runtimes()`: plain MuJoCo through our manifest,
     or Unitree's own simulator and controller over DDS (the second gate,
     Linux only). A deployment staged on a scene (`stage_deployment`) is
@@ -2273,7 +2274,8 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     """Navigate the Studio: a page by name (projects, overview, robots,
     environments, recordings, datasets, experiments, policies, evaluations,
     findings, deployments, monitoring, live), an artifact by version (its
-    page opens with the detail drawer), another project by root path, one
+    page opens with the detail drawer), another project by name or path
+    (`use_project`'s rule; the Studio moves to it from any project), one
     of the selected artifact's tables by title (Joints, Actuators,
     Episodes…) in the exploration modal — an empty string closes it — or
     the page's view: cards, table, or matrix (evaluations judged under
@@ -2287,6 +2289,20 @@ def open_in_studio(  # noqa: PLR0913, PLR0917 - one door, one argument per thing
     resolved = _studio_artifact(artifact)
     if _refused(resolved):
         return resolved  # type: ignore[return-value]
+    if project is not None:
+        # A bare name, as use_project takes it: the window resolved it
+        # against its own working directory and refused it (issue #103).
+        from trainnr.project.locate import (  # noqa: PLC0415
+            MANIFEST_FILE,
+            resolve_project_path,
+        )
+
+        root = resolve_project_path(project)
+        if not (root / MANIFEST_FILE).is_file():
+            return refusal(
+                f"no project at {root} (no {MANIFEST_FILE}); `list_projects` lists them"
+            )
+        project = str(root.absolute())
     return command(
         _studio_project(),
         "open",
@@ -3394,8 +3410,9 @@ def open_sample(name: str = "go2-walk") -> dict[str, Any] | Refusal:
 
 
 def use_project(project: str) -> dict[str, Any] | Refusal:
-    """Choose the current project by name or path: later tool calls, and
-    later sessions, act on it until another is chosen."""
+    """Choose this session's current project by name or path: its later
+    tool calls act on it until another is chosen; other sessions keep
+    theirs, and a new session starts from the last one chosen."""
     from trainnr.project import use_project as choose  # noqa: PLC0415
 
     try:
@@ -3765,8 +3782,8 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "policy, with NVIDIA's models by default, and which steps are built."
     )(list_templates)
     server.tool(
-        description="Choose the current project by name or path; later calls "
-        "and later sessions act on it."
+        description="Choose this session's current project by name or path; "
+        "other sessions keep theirs, new ones start from it."
     )(use_project)
     server.tool(
         description="The sample projects to explore (the Go2 walk, the whole "

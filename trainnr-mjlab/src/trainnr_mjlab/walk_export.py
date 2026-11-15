@@ -37,12 +37,15 @@ from trainnr.deploy.manifest import (
     HEADING_GAIN,
     MANIFEST_FILE,
     MANIFEST_SCHEMA,
+    SERVO_LAW_BAM,
+    SERVOS,
     SOURCE_GAIT_PHASE,
     Key,
 )
 from trainnr.project.kinds import IDENTITY_FILE, stamp_run
 from trainnr.scenes.stage import FLOOR_GEOM
 
+from trainnr_mjlab.actuator import BamActuator
 from trainnr_mjlab.checkpoint_guard import require_tensor_only
 from trainnr_mjlab.envelope import COMMAND_TERM
 from trainnr_mjlab.walk_view import fit_of, require_same_identity
@@ -328,9 +331,20 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
         for i in range(model.nu)
     ]
     action_to_ctrl = [joint_of_ctrl.index(j) for j in joint_names]
-    stiffness = [float(model.actuator_gainprm[c, 0]) for c in action_to_ctrl]
-    damping = [float(-model.actuator_biasprm[c, 2]) for c in action_to_ctrl]
-    effort = [float(model.actuator_forcerange[c, 1]) for c in action_to_ctrl]
+    servos = _servos(entity)
+    on_servo = {j for group in servos for j in group["joints"]}
+    # A PD joint's gains are what a runtime sets on the motor; a servo's
+    # simulated `<motor>` gains are the simulator's own abstraction and mean
+    # nothing on the hardware, so they are null and `servos` says what the
+    # servo itself must be set to (issue #107).
+    stiffness: list[float | None] = []
+    damping: list[float | None] = []
+    effort: list[float | None] = []
+    for joint, c in zip(joint_names, action_to_ctrl, strict=True):
+        pd = _unprefixed(joint) not in on_servo
+        stiffness.append(float(model.actuator_gainprm[c, 0]) if pd else None)
+        damping.append(float(-model.actuator_biasprm[c, 2]) if pd else None)
+        effort.append(float(model.actuator_forcerange[c, 1]) if pd else None)
     default_pos = [
         round(float(v), FLOAT_DIGITS)
         for v in entity.data.default_joint_pos[0].cpu().tolist()
@@ -415,6 +429,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "damping": damping,
             "effort_limit": effort,
             "default_pos": default_pos,
+            SERVOS: servos,
         },
         Key.ACTION: {
             "kind": "joint position target = default_pos + scale * action",
@@ -446,6 +461,25 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
     if deploy.unitree is not None:
         manifest[Key.UNITREE] = asdict(deploy.unitree)
     return manifest
+
+
+def _servos(entity: Any) -> list[dict[str, Any]]:
+    """Each group of joints a position servo drives under BAM's law (the
+    servo closes its own loop): the actuator bundle, and the operating
+    point the law assumes, which the servo on the robot must be set to."""
+    return [
+        {
+            "law": SERVO_LAW_BAM,
+            "actuator": act.cfg.stamp,
+            "joints": [_unprefixed(n) for n in act.target_names],
+            "vin_v": act.cfg.law.vin,
+            "kp": act.cfg.law.kp,
+            "error_gain": act.cfg.law.error_gain,
+            "max_pwm": act.cfg.law.max_pwm,
+        }
+        for act in entity.actuators
+        if isinstance(act, BamActuator)
+    ]
 
 
 def _unprefixed(name: str) -> str:

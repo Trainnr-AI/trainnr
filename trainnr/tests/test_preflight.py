@@ -115,6 +115,36 @@ class TheArithmetic(unittest.TestCase):
             "passed 7/7 on a simulation stand-in",
         )
 
+    def test_servo_joints_are_not_held_to_a_simulated_motor_s_gains(self) -> None:
+        """Issue #107: a servo's joints export null gains and the servo's
+        own operating point; the check reports it and judges nothing."""
+        from types import SimpleNamespace  # noqa: PLC0415
+
+        from trainnr.deploy.manifest import Joints  # noqa: PLC0415
+
+        joints = Joints.of(
+            {
+                "policy_order": ["knee"],
+                "action_to_ctrl": [0],
+                "default_pos": [0.0],
+                "stiffness": [None],
+                "damping": [None],
+                "effort_limit": [None],
+                "servos": [
+                    {
+                        "law": "bam",
+                        "actuator": "xl330-m6@x",
+                        "joints": ["knee"],
+                        "vin_v": 5.0,
+                        "kp": 400.0,
+                    }
+                ],
+            }
+        )
+        check = pf.check_gains(SimpleNamespace(manifest=SimpleNamespace(joints=joints)))
+        self.assertIsNone(check.passed)
+        self.assertIn("kp 400.0, vin 5.0 V", check.detail)
+
     def test_transitions_come_from_the_manifest_else_the_defaults(self) -> None:
         m = Manifest(raw={"control": {"ramp_in_s": 2.5}}, root=Path("/x"))
         t = pf.transitions_of(m)

@@ -87,11 +87,31 @@ def header_seconds(decoded: dict[str, Any]) -> float:
     return float(stamp["sec"]) + float(stamp["nanosec"]) / NS_PER_S
 
 
+# REP-145 and the `Imu` message's own comments: -1 as the first element of
+# a field's covariance says "this field is not provided" (a robot with no
+# accelerometer); its values are placeholders, not a measurement.
+IMU_FIELDS = ("orientation", "angular_velocity", "linear_acceleration")
+NOT_PROVIDED = -1.0
+
+
+def imu_provided(decoded: dict[str, Any], field: str) -> bool:
+    """Whether a decoded `Imu` message carries `field` (REP-145)."""
+    return bool(decoded[f"{field}_covariance"][0] != NOT_PROVIDED)
+
+
+def imu_not_provided_note(topic: str, field: str) -> str:
+    return (
+        f"{topic}: {field} marked not provided (covariance[0] = -1, REP-145) "
+        "and left out"
+    )
+
+
 __all__ = [
     "ACCEL",
     "CLOCK_HEADER_ELSE_LOG",
     "CLOCK_RECEIVE",
     "HEADER",
+    "IMU_FIELDS",
     "POINT",
     "POSE",
     "POSE_WITH_COVARIANCE",
@@ -104,4 +124,6 @@ __all__ = [
     "TWIST_WITH_COVARIANCE",
     "VECTOR3",
     "header_seconds",
+    "imu_not_provided_note",
+    "imu_provided",
 ]

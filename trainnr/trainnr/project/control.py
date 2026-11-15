@@ -42,6 +42,7 @@ from trainnr.project.locate import (
     PROJECT_ENV,
     PROJECTS_ENV,
     Project,
+    list_projects,
     projects_home,
 )
 from trainnr.viz import STUDIO_ADDRESS
@@ -210,6 +211,18 @@ def state(project: Project) -> dict[str, Any]:
         found, hops = _follow(welcome)
         if found.get("alive"):
             current, seen = found, hops | {str(welcome)}
+    if not current.get("alive") and not seen:
+        # A Studio launched straight onto another project leaves no pointer
+        # here: every door under this one read it as dead, and launch_studio
+        # was refused on its port (issue #103). One window at a time (the
+        # viewer's port), so the live one among the projects is the one.
+        for other in list_projects():
+            if other.root == root:
+                continue
+            found = _read_state(other.root)
+            if found.get("alive"):
+                current, seen = found, {str(other.root)}
+                break
     if seen:
         if current.get("alive"):
             current["elsewhere"] = True

@@ -305,7 +305,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
 
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
-    from trainnr.viz import viewer_file  # noqa: PLC0415
+    from trainnr.viz import TRAINING_APP_PREFIX, viewer_file  # noqa: PLC0415
 
     from trainnr_mjlab.lag_dr import with_command_lag  # noqa: PLC0415
     from trainnr_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
@@ -352,7 +352,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         if args.no_recorder
         else {
             "rerun": RerunRecorderCfg(
-                app_id=f"trainnr-walk-{args.agent}",
+                app_id=f"{TRAINING_APP_PREFIX}{args.agent}",
                 every=every,
                 frame_every=args.frame_every,
                 file=str(viewer_file(log_dir, TRAIN_STREAM)) if log_dir else None,

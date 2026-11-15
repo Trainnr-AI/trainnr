@@ -51,6 +51,20 @@ class OneProcessOneProject(_Home):
         with mock.patch.object(locate, "_session_root", None):
             self.assertEqual(locate.current_project().root, theirs.root)
 
+    def test_a_session_that_never_chose_keeps_the_project_it_started_on(
+        self,
+    ) -> None:
+        """Issue #104: a session on `.current`'s project, never having
+        chosen, moved when another session created its own project."""
+        first = locate.create_project(locate.projects_home() / "first", "first")
+        locate.remember_project(first.root)
+        with mock.patch.object(locate, "_session_root", None):
+            self.assertEqual(locate.current_project().root, first.root.absolute())
+            other = locate.projects_home() / "other"
+            locate.create_project(other, "other")
+            (locate.projects_home() / locate.CURRENT_FILE).write_text(str(other))
+            self.assertEqual(locate.current_project().root, first.root.absolute())
+
 
 class TheProjectsHome(_Home):
     def test_the_home_is_the_user_data_root_unless_named(self) -> None:
