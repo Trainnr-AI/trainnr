@@ -23,10 +23,11 @@ record's numbers, command and artifacts stand on their own.
 `projects/…` paths are local project directories, untracked by
 design; where a copy ships it is named first.
 
-## Index (59 records, newest first)
+## Index (60 records, newest first)
 
 | record | date | claim |
 |---|---|---|
+| [video-to-g1-on-a-24gb-card-2026-11-15](#video-to-g1-on-a-24gb-card-2026-11-15) | 2026-11-15 | A 22-second dance video becomes a Unitree G1 reference motion on one 24 GB RTX 3090 Ti in about 7 minutes… |
 | [gr00t-n17-on-a-24gb-card-2026-11-02](#gr00t-n17-on-a-24gb-card-2026-11-02) | 2026-11-02 | GR00T N1.7 fine-tunes on one 24 GB RTX 3090 Ti: NVIDIA's own settings fit only with the DiT action head… |
 | [quickstart-150-iterations-2026-10-05](#quickstart-150-iterations-2026-10-05) | 2026-10-05 | The README's GPU quickstart trains the Go2 walk for 150 iterations so the session ends in minutes, and 150… |
 | [go2-fit-delay-margin-replicated-2026-09-26](#go2-fit-delay-margin-replicated-2026-09-26) | 2026-09-26 | The delay margin a measured joints fit buys the Go2 holds across seeds, and it is specific to the world each… |
@@ -86,6 +87,108 @@ design; where a copy ships it is named first.
 | [multiplication-basin-2026-08-31](#multiplication-basin-2026-08-31) | 2026-08-31 | Open-loop replay of a kept kitting episode from a jittered start survives inside a measured basin: 9/9 and… |
 | [t5-first-funnel-2026-08-27](#t5-first-funnel-2026-08-27) | 2026-08-27 | The T5 chain's first certificate, a 600-step ACT on four demonstrations: 0/4 on four paired starts, CP95 [0,… |
 | [audit-newton-solvermujoco-roundtrip-2026-08-27](#audit-newton-solvermujoco-roundtrip-2026-08-27) | 2026-08-27 | Newton's SolverMuJoCo import of a MuJoCo model drops sensors, keyframes and visual geoms, rewrites the root… |
+
+## video-to-g1-on-a-24gb-card-2026-11-15
+
+**A 22-second dance video becomes a Unitree G1 reference motion on one 24 GB RTX 3090 Ti in about 7 minutes through retarget_video (GEM-X 372 to 407 s at 6.5 GB peak on the card, the SOMA Retargeter 19 s), and mjlab's tracking task learns from such references only with many worlds: one world learned nothing in 600 iterations, 4,096 worlds tracked NVIDIA's mocap walk for 425 of its 453 steps after 500 iterations (1.9 s each, 4.2 GB), and the court dance from video rose from 8 to 39 steps over the same 500.**
+
+- date: 2026-11-15 · commit: `5e5afa7`
+- instrument: `NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, PCIe 4.0 x8, WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2), 31 GB of RAM in the VM, the Studio open (about 2.4 GB of the card before each run); GEM-X 4aef145 (torch 2.11.0+cu128, py-soma-x 0.3.3) and the SOMA Retargeter cbdb2b4 (warp 1.16.0, newton 1.3.0) each in its own uv env; mjlab as pinned in trainnr-mjlab's lock`
+- command: `trainnr call retarget_video {"footage": "court-dance"} python -m mjlab.scripts.train Mjlab-Tracking-Flat-Unitree-G1 --env.scene.num-envs 4096 --agent.max-iterations 500 --agent.logger tensorboard`
+- protocol: Each retarget_video run is one trainnr job from the footage folder: GEM-X motion-video with --postprocess, gem_to_bvh (level floor), the SOMA Retargeter's batch converter onto unitree_g1, the 6 Hz smoothing, mjlab's MotionLoader replay at 50 fps, a kinematic replay video. GPU memory sampled every 0.5 s by nvidia-smi. Tracking runs: mjlab's Mjlab-Tracking-Flat-Unitree-G1 config, logger tensorboard, WANDB_MODE disabled; episode length and reward read from rsl_rl's console, averaged over the iteration windows named.
+- inputs:
+  - footage: court-dance: Mixkit 51314 'Talented urban woman dancing at night on a basketball court', 1280x720 H.264, 23.976 fps, 21.938 s (Mixkit Stock Video Free License), the clip GEM-X's own demo credits
+  - gem_x_weights: nvidia/GEM-X @ b111f2dcf3ebcf57965fd53499cb645dfa5ba25c: body_s240000.ckpt, vitpose.pth, motion_native77_e774_s292175.ckpt, body_video_native77.yaml; nvidia/SOMA-X v0.3.3; YOLOX-X HumanArt sha256 8e9ea96a176bd48501eaaa77216e49ee30794d2f8ba80c7b9862beca4ea972da
+  - control_motion: the SOMA Retargeter's sample Neutral_walk_forward_002__A057.bvh (NVIDIA Sample Data Evaluation License; 1,103 frames at 120 fps), retargeted to the G1 the same way
+- outcome:
+  - retarget_video:
+    - runs:
+      - 1:
+        - name: court-dance-g1
+        - gem_x_s: 407
+        - to_bvh_s: 7
+        - retarget_s: 19
+        - motion_s: 8
+        - replay_s: 25
+        - total_s: 469
+        - note: stage times from the job log
+      - 2:
+        - name: court-dance-g1-live
+        - gem_x_s: 372.4
+        - to_bvh_s: 5.4
+        - retarget_s: 18.9
+        - motion_s: 8.6
+        - replay_s: 23.5
+        - total_s: 434
+        - note: the recording's census
+    - gem_x_peak_mib: 6529
+    - card_before_mib: 2429
+    - gem_x_rss_kb: 5423240
+    - reference:
+      - frames: 1095
+      - fps: 50
+      - seconds: 21.9
+    - retarget_note: the same retarget took 35 s on the CPU and 105 s on the GPU when run by hand (warp chose by whether it found the CUDA driver); the job's 19 s ran on the GPU
+  - floor:
+    - tilt_deg: 12.77
+    - hips_cm_before: 88.2, 163.2
+    - hips_cm_after: 70.5, 107.1
+    - lift_m: -0.095, 0.098
+    - note: GEM-X's world floor leaned 12.8 degrees: over 22 s the hips rose 70 cm; a plane fitted to each frame's lowest foot, turned level, and a 1 s floor under the feet bring the hips to a dancer's range
+  - smoothing:
+    - filter: zero-phase Butterworth, 4th order, 6 Hz
+    - joint_speed_rad_s:
+      - raw_p99: 7.78
+      - raw_max: 31.5
+      - smoothed_p99: 7.53
+      - smoothed_max: 18.3
+    - body_spin_rad_s:
+      - raw_p99: 14.0
+      - raw_max: 47.8
+      - smoothed_p99: 13.4
+      - smoothed_max: 27.5
+  - tracking:
+    - one_world:
+      - iterations: 600
+      - s_per_iteration: 0.58
+      - card_mib: 2871
+      - episode_steps_first50: 27.4
+      - episode_steps_last50: 25.0
+      - note: mjlab's scripts/train.py trains one world unless --env.scene.num-envs is given; the NVIDIA walk did not learn (the dance alike over 600 iterations, reward -1.35 to -1.84)
+    - zero_action_survival_steps:
+      - walk: 26.7
+      - dance: 9.0
+    - walk_4096:
+      - iterations: 500
+      - s_per_iteration: 1.91
+      - card_mib: 4229
+      - episode_steps:
+        - first30: 19.2
+        - iterations_140_160: 35.3
+        - last20: 425.4
+      - reward:
+        - first30: -1.82
+        - last20: 20.0
+      - error_body_pos_m_last20: 0.116
+      - motion_steps: 453
+    - dance_4096:
+      - iterations: 500
+      - episode_steps:
+        - first30: 8.0
+        - last20: 39.4
+      - reward:
+        - first30: -0.74
+        - last20: 1.1
+      - motion_steps: 1095
+      - note: the smoothed court-dance reference; learning, more slowly than the walk
+- artifacts:
+  - recordings/court-dance-g1: the reference retarget_video wrote in the g1-dance test project: recording.json, signals.npz, raw/ (gem-x.pt, soma.bvh, retargeted.csv, motion.npz, replay.mp4)
+  - recordings/court-dance-g1-live: the second run, with its live stream kept as raw/stream.rrd
+- caveats:
+  - One clip, one machine: GEM-X's time scales with the clip and its memory was not searched for a ceiling.
+  - The tracking numbers are 500 iterations; mjlab's tracking config allows 30,000. Whether the dance is tracked to its end is not measured yet, nor any evaluation with an interval.
+  - The floor levelling assumes one foot near the floor most of the time; a clip of jumps or a person lying down needs another rule.
+  - The reference is kinematic: it was never on a robot, and its basis is unknown.
 
 ## gr00t-n17-on-a-24gb-card-2026-11-02
 

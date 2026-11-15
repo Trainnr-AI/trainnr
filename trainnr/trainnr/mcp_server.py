@@ -541,6 +541,91 @@ def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each r
     }
 
 
+def retarget_video(footage: str, name: str | None = None) -> dict[str, Any] | Refusal:
+    """Turn footage of a person into a Unitree G1 reference motion (docs/86
+    §5.1), as a job: GEM-X estimates the person's motion, the SOMA
+    Retargeter maps it onto the G1, and the result lands as a recording
+    (collection `video`) holding the G1's joints and root over time, the
+    motion mjlab's tracking task reads, and the motion replayed beside the
+    video. Each stage shows in the Studio. Refused by name: no project, no
+    such footage, a name taken, GEM-X or the retargeter not installed
+    (tools/video-setup.sh)."""
+    from trainnr.mcp_actions import Actions  # noqa: PLC0415
+    from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+    from trainnr.project.kinds import Kind  # noqa: PLC0415
+    from trainnr.project.locate import plain_name  # noqa: PLC0415
+    from trainnr.video.nvidia import missing  # noqa: PLC0415
+
+    try:
+        project, found = _project_artifact(footage, Kind.FOOTAGE.value)
+        label = name or f"{found.stamp.split('@', 1)[0]}-g1"
+        plain_name(label, "recording name")
+    except (KeyError, ValueError, FileNotFoundError) as why:
+        return refusal(_reason(why))
+    out = project.recordings / label
+    if out.exists():
+        return refusal(f"recording {label!r} already exists; choose another name")
+    why_not = missing()
+    if why_not:
+        return refusal(why_not)
+    handle = Actions(JobManager(_jobs_root)).retarget_video(
+        str(project.root / found.path), str(out), str(project.root)
+    )
+    return {
+        **handle,
+        "status": "started",
+        "recording": label,
+        "next": f"describe_job(job_id, wait_s=300) until done, then "
+        f"train_tracking(reference={label!r})",
+    }
+
+
+def train_tracking(
+    reference: str,
+    name: str | None = None,
+    iterations: int | None = None,
+    envs: int | None = None,
+) -> dict[str, Any] | Refusal:
+    """Train the G1 to track a reference motion from `retarget_video`, in
+    mjlab's tracking task (4096 worlds, 6000 iterations unless set: hours
+    on a GPU), as experiment `name`; streamed live into the Studio."""
+    from trainnr.mcp_actions import Actions  # noqa: PLC0415
+    from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+    from trainnr.project.kinds import Kind  # noqa: PLC0415
+
+    for count, value in (("envs", envs), ("iterations", iterations)):
+        if value is not None and value < 1:
+            return refusal(f"{count} must be at least 1, got {value}")
+    try:
+        project, found = _project_artifact(reference, Kind.RECORDING.value)
+        folder = project.root / found.path
+        if not (folder / "raw" / "motion.npz").is_file():
+            return refusal(
+                f"{found.stamp} holds no tracking motion (raw/motion.npz): a reference "
+                "comes from retarget_video"
+            )
+        label = name or f"{found.stamp.split('@', 1)[0]}-tracking"
+        log_dir = _run_dir(project.root, label)
+    except (KeyError, ValueError, FileNotFoundError) as why:
+        return refusal(_reason(why))
+    if log_dir is None or Path(log_dir).exists():
+        return refusal(f"experiment {label!r} already exists; choose another name")
+    handle = Actions(JobManager(_jobs_root)).train_tracking(
+        reference=str(folder),
+        reference_stamp=found.stamp,
+        log_dir=log_dir,
+        project=str(project.root),
+        envs=envs,
+        iterations=iterations,
+    )
+    return {
+        **handle,
+        "status": "started",
+        "experiment": label,
+        "next": "describe_job(job_id, wait_s=300); the Studio shows it live",
+    }
+
+
 def _training_arguments_refusal(
     recipe: str, envs: int | None, iterations: int | None, name: str | None
 ) -> str:
@@ -3662,6 +3747,14 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "The first step from video to robot training data."
     )(ingest_video)
     server.tool(
+        description="Footage of a person to a Unitree G1 reference motion (GEM-X, "
+        "SOMA Retargeter), as a recording. Job."
+    )(retarget_video)
+    server.tool(
+        description="Train the G1 to track a retarget_video reference (mjlab; "
+        "hours on a GPU), live in the Studio. Job."
+    )(train_tracking)
+    server.tool(
         description="Every protocol a live capture listens on (udp, dds), its "
         "options, and whether it runs on this machine."
     )(list_capture_sources)
@@ -3708,10 +3801,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "(both by version); writes the fit record with intervals and verdicts."
     )(identify_system)
     server.tool(
-        description="The saved viewer streams an artifact carries (a headless run "
-        "leaves the same picture a window shows): each file's entity paths, "
-        "timelines, components and size; with the viz-query extra, the scalar "
-        "series' count, min, max and last value."
+        description="The saved viewer streams an artifact carries: each file's "
+        "entities, timelines, components and size; with the viz-query extra, each "
+        "series' count, min, max, last."
     )(describe_viewer_stream)
     server.tool(
         description="Bring a captured scene folder into the project: the Gaussian "
@@ -3726,10 +3818,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "hour."
     )(capture_scene)
     server.tool(
-        description="A captured scene's record: source, capture, the tool chain with "
-        "licences, the splat and proxy facts, the alignment, the gap's four numbers, "
-        "and every physics parameter with its basis (measured with an interval, or "
-        "declared with a span)."
+        description="A captured scene's record: source, capture, tool chain with "
+        "licences, splat and proxy, alignment, the gap's numbers, each physics "
+        "parameter with its basis."
     )(describe_scene)
     server.tool(
         description="Copy a deployment onto a captured scene as a new deployment: the "
@@ -3738,12 +3829,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "there."
     )(stage_deployment)
     server.tool(
-        description=(
-            "Measure how an exported deployment tolerates scene error: it is staged "
-            "on `scene` nine times (nominal, ±20 mm per axis, ±5° turned) as new "
-            "deployments named <deployment>-on-<scene>…, each gated at one seed; "
-            "the drop in success is reported. A job."
-        ),
+        description="How an exported deployment tolerates scene error: staged on "
+        "`scene` nine times (nominal, ±20 mm per axis, ±5° turned) as "
+        "<deployment>-on-<scene>… deployments, each gated once; reports the drop. "
+        "Job."
     )(assay_deployment)
     server.tool(
         description="Find which parameter breaks a policy first: a passing gate is "
@@ -3762,10 +3851,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "answers with a soft stop (gains blended to damping, never cut)."
     )(stop_deployment)
     server.tool(
-        description="Drift monitoring: identify fresh telemetry (a recording, by "
-        "version) without writing a fit record and judge every parameter against "
-        "the robot's identified intervals; writes a drift record naming what left "
-        "and recommending re-identification."
+        description="Drift monitoring: identify fresh telemetry (a recording) "
+        "without writing a fit and judge each parameter against the robot's "
+        "identified intervals; writes a drift record."
     )(check_drift)
     server.tool(
         description="A robot's fit records: each parameter's estimate and interval, "
@@ -3802,12 +3890,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "viewer recording and time cursor, presenter; with alive/heartbeat."
     )(describe_studio)
     server.tool(
-        description=(
-            "Open the Studio on the current project and wait for it to start. "
-            "Without a local build, the first launch downloads the prebuilt Studio "
-            "(about 72 MB) from the project's GitHub release. Refused when one "
-            "already runs."
-        ),
+        description="Open the Studio on the current project (moving one open "
+        "elsewhere) and wait for it. Without a local build, the first launch "
+        "downloads the prebuilt Studio (about 72 MB) from the project's GitHub "
+        "release."
     )(launch_studio)
     server.tool(
         description="Close the Studio window: it is asked to quit, then its "
@@ -3818,10 +3904,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "(its drawer opens), a table of it by title (the modal), or another project."
     )(open_in_studio)
     server.tool(
-        description="To the front of the viewer, exactly one of: an artifact "
-        "streamed as itself (3D robot, recording, experiment curves, evaluation "
-        "funnel), or a stream already playing by its application id (the Sources "
-        "name: the viewport twin, a run, a gate)."
+        description="To the viewer's front, one of: an artifact streamed as itself "
+        "(robot, recording, experiment, evaluation), or a stream already playing by "
+        "its Sources name (the twin, a run, a gate)."
     )(show_in_studio)
     server.tool(
         description="Two artifacts side by side in the viewer, a left and b right."
@@ -3839,12 +3924,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "and the card pictures follow, and the choice is kept."
     )(set_studio_theme)
     server.tool(
-        description=(
-            "Play a scene live in the Studio's MuJoCo view (Simulator page): a "
-            "task preview (kitting, lift, duck), `walk` (the newest trained walk) "
-            "or `deploy:<deployment>` (drivable; add `:gate:<runtime>:<trial>` or "
-            "`:preflight:<segment>` to replay). No scene stops it."
-        ),
+        description="Play a scene live in the Studio's Simulator: a task preview "
+        "(kitting, lift, duck), `walk` (the newest walk) or `deploy:<deployment>` "
+        "(add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No "
+        "scene stops it."
     )(run_simulation)
     server.tool(
         description=(
@@ -3888,10 +3971,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "A job."
     )(export_deployment)
     server.tool(
-        description="The sim-to-sim gate: drive the exported policy through its "
-        "manifest alone by a registered runtime (plain MuJoCo, or Unitree's "
-        "simulator over DDS), judge it the evaluation's way, pass within a stated "
-        "tolerance of the cited evaluation. Job handle."
+        description="The sim-to-sim gate: the exported policy driven by its "
+        "manifest alone (plain MuJoCo, or Unitree's simulator over DDS), judged the "
+        "evaluation's way against the cited evaluation. Job."
     )(gate_deployment)
     server.tool(
         description="Every runtime the sim-to-sim gate can drive a policy through, "
@@ -3924,10 +4006,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train a walk policy (a declared task, or robot go1/go2/"
-        "microduck). recipe=smoke checks the stack in minutes and saves nothing; "
-        "recipe=full trains (8000 iterations unless set, hours on a GPU) and "
-        "saves experiment `name`, never over an existing one."
+        description="Train a walk (a declared task, or robot go1/go2/microduck). "
+        "recipe=smoke checks the stack in minutes, saving nothing; recipe=full "
+        "trains (8000 iterations unless set, hours on a GPU) as experiment `name`, "
+        "never over one."
     )(train_walk)
     server.tool(
         description="Evaluate a walk policy: paired episodes, exact confidence "
@@ -3935,11 +4017,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "project's one declared walk. Job handle."
     )(evaluate_walk)
     server.tool(
-        description=(
-            "Open a checkpoint of an experiment in mjlab's own viewer (viser in the "
-            "browser on this machine, or native), the same rollout streamed into "
-            "the Studio's Simulator page. A job; the viewer lives until closed."
-        ),
+        description="Open an experiment's checkpoint in mjlab's own viewer (viser "
+        "in the browser, or native), the rollout also streamed into the Studio's "
+        "Simulator. A job; it lives until closed."
     )(play_walk)
     server.tool(
         description="See the reward before training: roll the declared walk for "

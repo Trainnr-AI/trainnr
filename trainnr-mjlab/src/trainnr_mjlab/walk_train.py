@@ -347,12 +347,17 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     if args.agent == "g3":
         log_dir = args.log_dir or log_root / datetime.now().strftime("%Y%m%d-%H%M%S")
         log_dir.mkdir(parents=True, exist_ok=True)
+    stream = f"{TRAINING_APP_PREFIX}{args.agent}" + (
+        f"-{log_dir.name}" if log_dir is not None else ""
+    )
     cfg.recorders = (
         {}
         if args.no_recorder
         else {
             "rerun": RerunRecorderCfg(
-                app_id=f"{TRAINING_APP_PREFIX}{args.agent}",
+                # one name per run: the viewer turns to an application's
+                # earliest recording, so a shared name showed an older run
+                app_id=stream,
                 every=every,
                 frame_every=args.frame_every,
                 file=str(viewer_file(log_dir, TRAIN_STREAM)) if log_dir else None,
@@ -379,6 +384,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         name=log_dir.name if log_dir is not None else f"{args.robot} {tag}",
         viewport=VIEWPORT_WALK,
         viewer="" if log_dir is None else str(viewer_file(log_dir, TRAIN_STREAM)),
+        stream="" if args.no_recorder else stream,
     ) as run:
         run.stage(f"building {envs} {args.robot} worlds on {device}")
         env = ManagerBasedRlEnv(cfg, device=device)

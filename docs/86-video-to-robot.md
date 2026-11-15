@@ -189,10 +189,17 @@ defaults, not requirements.
 Verb first, as GOVERNANCE.md asks; long ones are jobs:
 
 - `ingest_video(path, name)` → footage
-- `estimate_motion(footage, name, estimator="gem-x")` → motion (job)
-- `retarget_motion(motion, robot, name, retargeter="soma")` → reference (job)
+- `retarget_video(footage, name)` → reference (job; built 2026-11-15): the
+  estimate and the retarget as one job, GEM-X then the SOMA Retargeter, so
+  the person's motion and its BVH are kept in the reference's `raw/`
+  rather than as an artifact of their own (the MCP surface's budget had
+  room for two tools, and nothing yet reads a motion without its
+  retarget). An `estimator` and a `retargeter` argument come with the
+  second implementation of either
 - `create_task(...)` gains the tracking family, naming a reference
-- `train_tracking(task, ...)` → run (job, mjlab)
+- `train_tracking(reference, ...)` → run (job, mjlab; built 2026-11-15:
+  the reference directly, until a tracking task family declares the
+  success criterion)
 - `replay_references(task, references, ...)` → batch (job)
 - `export_dataset(batch, format="lerobot-v3" | "gr00t")` → dataset (the
   missing "make a dataset" tool the map found)
@@ -228,8 +235,8 @@ it keeps it fed:
 
 | Stage | On the card | What we know |
 |---|---|---|
-| GEM-X (estimate) | inference, frame batches; its motion-cache mode keeps features so a re-run skips the image model | no published memory figure: measured on the first clip |
-| SOMA Retargeter | Warp IK, small | measured on the first clip |
+| GEM-X (estimate) | inference, frame batches; its motion-cache mode keeps features so a re-run skips the image model | measured 2026-11-15 ([record](findings/video-to-g1-on-a-24gb-card-2026-11-15.json)): a 22 s clip in 372 to 407 s at 6.5 GB peak on the card, the Studio open |
+| SOMA Retargeter | Warp IK, small | measured: 19 s for the same clip, 0.65 GB of RAM |
 | mjlab tracking (G1) | 4096 environments | the Go2 walk on this card ran 8000 iterations in 2 h 24 min (docs/77 §5); the G1 has more joints and contacts, and mjlab's tracking config allows 30,000 iterations, so expect a night, not hours |
 | Replay with success filtering | CPU MuJoCo across the 24 cores, so the card stays free for training | three rendering shards is this machine's ceiling under WSL (docs/34) |
 | GR00T N1.7 fine-tune | backbones frozen (NVIDIA's default), the DiT trained, with three savers NVIDIA's launcher does not expose: the frozen backbone in bf16, the DiT's activations recomputed, AdamW state in 8 bits (`tools/gr00t-fit.py`) | measured 2026-11-02 ([record](findings/gr00t-n17-on-a-24gb-card-2026-11-02.json)): NVIDIA's own settings do not fit with the DiT trained (about 32 GB before a single activation) and fit at batch 8 with it frozen; with the savers, the full default fine-tune (1.62B trainable parameters) fits at batch 58, 24.4 samples/s. Whether the savers change what a fine-tune learns is not measured yet (phase 4) |
@@ -294,7 +301,13 @@ The first three, NVIDIA's stack by default:
    Recordings page showing a video's first frame and length, and the
    viewer playing it on its own timeline.
 3. **Whole body, end to end on a G1**: GEM-X, SOMA, the tracking task,
-   `train_tracking` through mjlab, an evaluation with intervals. Measured
+   `train_tracking` through mjlab, an evaluation with intervals. Built
+   2026-11-15 up to training: `retarget_video` (footage to a G1 reference
+   in about 7 minutes, live in the Studio) and `train_tracking` (mjlab's
+   tracking task as a trainnr job, live in the Studio); GEM-X's tilted
+   floor levelled and its jitter smoothed on the way. Left: the tracking
+   task family with its success criterion, the long training run, and the
+   evaluation. Measured
    as a record in `docs/findings/` before any claim.
 4. **Manipulation on the SO-101**: hand pose, the retarget feed, success filtering,
    `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on
