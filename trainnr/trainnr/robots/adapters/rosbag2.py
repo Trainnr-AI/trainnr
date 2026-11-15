@@ -93,6 +93,8 @@ from trainnr.robots.ros_layouts import (
     ROS_IMU,
     STANDARD_LAYOUTS,
     TWIST_WITH_COVARIANCE,
+    imu_not_provided_note,
+    imu_provided,
 )
 
 NAME = "rosbag2"
@@ -340,6 +342,16 @@ def _wxyz(*path: str) -> Any:
     return take
 
 
+def _provided(field_name: str, take: Any) -> Any:
+    """An `Imu` field, NaN where the publisher marks it not provided (REP-145)."""
+
+    def provided(m: dict[str, Any]) -> list[float]:
+        row: list[float] = take(m)
+        return row if imu_provided(m, field_name) else [np.nan] * len(row)
+
+    return provided
+
+
 def _pose(m: dict[str, Any]) -> list[float]:
     pose = m["pose"]["pose"]
     return _xyz("position")(pose) + _wxyz("orientation")(pose)
@@ -414,12 +426,13 @@ CHANNELS: dict[str, tuple[Extract, ...]] = {
         Extract(BASE_TWIST, "m/s, rad/s", TWIST_COMPONENTS, _twist),
         Extract(FOOT_CONTACT, "bool", GO2_MENAGERIE_FEET, _bools("foot_contact")),
     ),
-    ROS_IMU: (
-        Extract(
-            IMU_ORIENTATION, QUATERNION_UNIT, QUATERNION_WXYZ, _wxyz("orientation")
-        ),
-        Extract(IMU_ANGULAR_VELOCITY, "rad/s", XYZ, _xyz("angular_velocity")),
-        Extract(IMU_LINEAR_ACCELERATION, "m/s^2", XYZ, _xyz("linear_acceleration")),
+    ROS_IMU: tuple(
+        Extract(channel, unit, components, _provided(name, take(name)))
+        for channel, unit, components, name, take in (
+            (IMU_ORIENTATION, QUATERNION_UNIT, QUATERNION_WXYZ, "orientation", _wxyz),
+            (IMU_ANGULAR_VELOCITY, "rad/s", XYZ, "angular_velocity", _xyz),
+            (IMU_LINEAR_ACCELERATION, "m/s^2", XYZ, "linear_acceleration", _xyz),
+        )
     ),
 }  # fmt: skip
 NOTES: dict[str, tuple[str, ...]] = {
@@ -562,6 +575,13 @@ class Rosbag2Adapter:
                 )
                 continue
             decoded, dropped = _channels(kind, topic, msgs)
+            if kind == ROS_IMU:
+                for channel in [
+                    c for c, v in decoded.items() if np.isnan(v.values).all()
+                ]:
+                    del decoded[channel]
+                    field_name = channel.split(".", 1)[1]  # imu.<the Imu field>
+                    notes.append(imu_not_provided_note(topic, field_name))
             channels.update(decoded)
             census_topics[topic]["dropped"] = dropped
             if dropped:

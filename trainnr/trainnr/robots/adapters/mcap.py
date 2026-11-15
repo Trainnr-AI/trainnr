@@ -47,10 +47,13 @@ from trainnr.robots.recording import (
 )
 from trainnr.robots.ros_layouts import (
     CLOCK_HEADER_ELSE_LOG,
+    IMU_FIELDS,
     ROS_IMU,
     ROS_JOINT_STATE,
     STANDARD_LAYOUTS,
     header_seconds,
+    imu_not_provided_note,
+    imu_provided,
 )
 
 NAME = "mcap"
@@ -139,7 +142,7 @@ class McapAdapter:
             if kind == JOINT_STATE:
                 channels.update(_joint_state_channels(channel.topic, msgs, notes))
             elif kind == IMU:
-                channels.update(_imu_channels(channel.topic, msgs))
+                channels.update(_imu_channels(channel.topic, msgs, notes))
         if not channels:
             raise ValueError(
                 f"{source}: no {JOINT_STATE} or {IMU} messages decoded; topics: "
@@ -324,45 +327,45 @@ def _joint_state_channels(
     return out
 
 
-def _imu_channels(topic: str, msgs: list[tuple[int, bytes]]) -> dict[str, Channel]:
+def _imu_channels(
+    topic: str, msgs: list[tuple[int, bytes]], notes: list[str]
+) -> dict[str, Channel]:
+    """The three `Imu` fields as channels; a field the publisher marks not
+    provided (REP-145) is NaN in that message, and left out when no
+    message provides it."""
     times: list[float] = []
-    quat: list[list[float]] = []
-    gyro: list[list[float]] = []
-    accel: list[list[float]] = []
+    rows: dict[str, list[list[float]]] = {f: [] for f in IMU_FIELDS}
     for log_time, data in msgs:
         message = Reader(data).decode(IMU, STANDARD_LAYOUTS)
         stamp = header_seconds(message)
         times.append(stamp if stamp > 0 else log_time / NS_PER_S)
-        q = message["orientation"]
-        quat.append([q["w"], q["x"], q["y"], q["z"]])  # w first, MuJoCo's
-        w, a = message["angular_velocity"], message["linear_acceleration"]
-        gyro.append([w["x"], w["y"], w["z"]])
-        accel.append([a["x"], a["y"], a["z"]])
+        for name in IMU_FIELDS:
+            v = message[name]
+            # w first, MuJoCo's
+            row = (
+                [v["w"], v["x"], v["y"], v["z"]]
+                if "w" in v
+                else [v["x"], v["y"], v["z"]]
+            )
+            rows[name].append(
+                row if imu_provided(message, name) else [np.nan] * len(row)
+            )
     times_arr, keep = monotone(np.asarray(times, dtype=np.float64))
     prefix = "" if topic in ("/imu", "imu", "/imu/data") else f"{topic.strip('/')}."
-    return {
-        f"{prefix}{IMU_ORIENTATION}": Channel(
-            f"{prefix}{IMU_ORIENTATION}",
-            times_arr,
-            np.asarray(quat)[keep],
-            unit="quaternion",
-            components=QUATERNION_WXYZ,
-        ),
-        f"{prefix}{IMU_ANGULAR_VELOCITY}": Channel(
-            f"{prefix}{IMU_ANGULAR_VELOCITY}",
-            times_arr,
-            np.asarray(gyro)[keep],
-            unit="rad/s",
-            components=XYZ,
-        ),
-        f"{prefix}{IMU_LINEAR_ACCELERATION}": Channel(
-            f"{prefix}{IMU_LINEAR_ACCELERATION}",
-            times_arr,
-            np.asarray(accel)[keep],
-            unit="m/s^2",
-            components=XYZ,
-        ),
-    }
+    out: dict[str, Channel] = {}
+    for name, channel, unit, components in (
+        ("orientation", IMU_ORIENTATION, "quaternion", QUATERNION_WXYZ),
+        ("angular_velocity", IMU_ANGULAR_VELOCITY, "rad/s", XYZ),
+        ("linear_acceleration", IMU_LINEAR_ACCELERATION, "m/s^2", XYZ),
+    ):
+        values = np.asarray(rows[name], dtype=np.float64)[keep]
+        if np.all(np.isnan(values)):
+            notes.append(imu_not_provided_note(topic, name))
+            continue
+        out[f"{prefix}{channel}"] = Channel(
+            f"{prefix}{channel}", times_arr, values, unit=unit, components=components
+        )
+    return out
 
 
 def _pad(values: list[float], width: int) -> list[float]:

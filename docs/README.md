@@ -32,6 +32,7 @@ not in this repository.
 | [84 mjsim](84-mjsim.md) | The plan to cut the Studio's simulator window into its own module | planned, not started, 2026-10-03 |
 | [85 The desktop app](85-the-desktop-app.md) | The app people download and use on their own, which an agent can also drive over MCP: the evidence from Paper and Spline, the architecture, the phases | phases 1 to 5 built on feat/desktop-app, 2026-10-11; signing and the Mac and Windows checks left |
 | [86 From video to robot training data](86-video-to-robot.md) | Raw video to robot training data on NVIDIA's stack: video gives the motion, physics gives the contact; the core modules, and the project templates that start a project on it | proposed 2026-11-01; phase 1 (templates) on feat/video-to-robot |
+| [87 The deployment manifest](87-the-deployment-manifest.md) | `deploy.json` (`trainnr-deploy/1`) for runtimes outside trainnr: one control tick, every key, each observation source's definition and units, and the servo groups | written 2026-11-15 (issue #106) |
 
 ## Research
 

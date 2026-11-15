@@ -535,6 +535,20 @@ class OneAdapterManyProfiles(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "which is the robot's"):
                 rosbag2.Rosbag2Adapter().read(bag)
 
+    def test_an_imu_field_marked_not_provided_reads_as_nan(self) -> None:
+        """REP-145: covariance[0] = -1 says the field is not provided; its
+        zeros are no measurement."""
+        message = {
+            name: {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}
+            for name in ("orientation", "angular_velocity", "linear_acceleration")
+        }
+        for name in list(message):
+            message[f"{name}_covariance"] = [0.0] * 9
+        message["linear_acceleration_covariance"] = [-1.0] + [0.0] * 8
+        taken = {e.channel: e.take(message) for e in rosbag2.CHANNELS[rosbag2.ROS_IMU]}
+        self.assertTrue(np.isnan(taken["imu.linear_acceleration"]).all())
+        self.assertEqual(taken["imu.angular_velocity"], [0.0, 0.0, 0.0])
+
     def test_a_file_that_is_no_bag_is_not_claimed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             junk = Path(tmp) / "x.db3"

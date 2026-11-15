@@ -129,21 +129,21 @@ def joint_state_cdr(
     return bytes(w.buf)
 
 
-def imu_cdr(t: float, gyro: list[float]) -> bytes:
+def imu_cdr(t: float, gyro: list[float], *, accel: bool = True) -> bytes:
+    """An Imu message; `accel=False` marks linear acceleration not provided
+    (covariance[0] = -1, REP-145) with zeros in its place."""
     w = _CdrWriter()
     w.header(t)
-    for v in (0.0, 0.0, 0.0, 1.0):
-        w.f64(v)
-    for _ in range(9):
-        w.f64(0.0)
-    for v in gyro:
-        w.f64(v)
-    for _ in range(9):
-        w.f64(0.0)
-    for v in (0.0, 0.0, 9.81):
-        w.f64(v)
-    for _ in range(9):
-        w.f64(0.0)
+    for values, covariance in (
+        ((0.0, 0.0, 0.0, 1.0), 0.0),
+        (gyro, 0.0),
+        ((0.0, 0.0, 9.81) if accel else (0.0, 0.0, 0.0), 0.0 if accel else -1.0),
+    ):
+        for v in values:
+            w.f64(v)
+        w.f64(covariance)
+        for _ in range(8):
+            w.f64(0.0)
     return bytes(w.buf)
 
 
@@ -151,7 +151,9 @@ def _record(op: int, body: bytes) -> bytes:
     return bytes([op]) + struct.pack("<Q", len(body)) + body
 
 
-def make_mcap(path: Path, *, chunked: bool = False, compression: str = "") -> Path:
+def make_mcap(
+    path: Path, *, chunked: bool = False, compression: str = "", accel: bool = True
+) -> Path:
     """A bag with /joint_states (3 msgs) and /imu (2 msgs), uncompressed."""
     schema_js = _record(
         mcap_mod.OP_SCHEMA,
@@ -190,7 +192,7 @@ def make_mcap(path: Path, *, chunked: bool = False, compression: str = "") -> Pa
             struct.pack("<HIQQ", 1, i, int(t * 1e9), int(t * 1e9)) + data,
         )
     for i, t in enumerate((10.0, 10.02)):
-        data = imu_cdr(t, [0.01, 0.02, 0.03])
+        data = imu_cdr(t, [0.01, 0.02, 0.03], accel=accel)
         msgs += _record(
             mcap_mod.OP_MESSAGE,
             struct.pack("<HIQQ", 2, i, int(t * 1e9), int(t * 1e9)) + data,
@@ -354,6 +356,17 @@ class Mcap(unittest.TestCase):
                 rec.census["topics"]["/joint_states"]["type"], mcap_mod.JOINT_STATE
             )
             self.assertEqual(rec.census["topics"]["/imu"]["messages"], 2)
+
+    def test_an_imu_field_marked_not_provided_is_left_out_and_said(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bag = make_mcap(Path(tmp) / "no-accel.mcap", accel=False)
+            rec = resolve("mcap").build().read(bag)
+            self.assertNotIn("imu.linear_acceleration", rec.channels)
+            self.assertIn("imu.angular_velocity", rec.channels)
+            self.assertTrue(
+                any("linear_acceleration marked not provided" in n for n in rec.notes),
+                rec.notes,
+            )
 
     def test_an_uncompressed_chunk_reads_and_a_compressed_one_is_refused_by_name(
         self,

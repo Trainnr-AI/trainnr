@@ -98,6 +98,21 @@ class TheManifest(unittest.TestCase):
 
 
 class TheGate(unittest.TestCase):
+    def test_the_schema_document_names_every_key_and_source(self) -> None:
+        """docs/87 is the contract third-party runtimes implement (issue
+        #106): a key or source the loader knows and the page does not is
+        a format change nobody wrote down."""
+        from trainnr.deploy import manifest as m  # noqa: PLC0415
+
+        page = (
+            Path(__file__).resolve().parents[2]
+            / "docs"
+            / "87-the-deployment-manifest.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(m.MANIFEST_SCHEMA, page)
+        for name in (*m.KNOWN_KEYS, *m.KNOWN_SOURCES, *m.TERM_KEYS, m.SERVOS):
+            self.assertIn(f"`{name}`", page, name)
+
     def test_the_criterion_is_the_certificates(self) -> None:
         ok = Trial(
             command=[0.5, 0, 0], steps=100, fell=False, mean_err=0.1, mean_cmd=0.5

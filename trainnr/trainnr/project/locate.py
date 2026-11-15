@@ -259,7 +259,8 @@ def session_project() -> Path | None:
 
 def remember_project(root: Path) -> None:
     """Make `root` the current project for every later call in this
-    process that names none, and the starting project of later sessions."""
+    process that names none, and the starting project of new sessions;
+    a running session keeps its own."""
     global _session_root  # noqa: PLW0603 - the one per-process choice
     _session_root = Path(root).absolute()
     home = projects_home()
@@ -309,7 +310,13 @@ def current_project() -> Project:
                 "a directory that is not a project; create it with `create_project`"
             )
         return Project(root).use()
-    chosen = session_project() or remembered_project()
+    chosen = session_project()
+    if chosen is None and (chosen := remembered_project()) is not None:
+        # The shared file seeds this process once: a session that never
+        # chose followed it live, so another session's create_project moved
+        # its work into the other project (issue #104).
+        global _session_root  # noqa: PLW0603 - the one per-process choice
+        _session_root = chosen.absolute()
     if chosen is not None:
         return Project(chosen).use()
     in_checkout = checkout_projects()
@@ -319,8 +326,9 @@ def current_project() -> Project:
 
 
 def use_project(target: str | Path) -> Project:
-    """Choose the current project by name or path; remembered for later
-    calls and later sessions. Refused when the target is not a project."""
+    """Choose the current project by name or path; remembered for this
+    process's later calls and as new sessions' start. Refused when the
+    target is not a project."""
     root = resolve_project_path(target)
     if not _is_project(root):
         raise FileNotFoundError(

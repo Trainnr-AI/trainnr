@@ -273,6 +273,24 @@ class TheWelcomePage(unittest.TestCase):
         sent = sorted(commands_dir(welcome).glob("*-open.json"))
         self.assertEqual(json.loads(sent[-1].read_text())["project"], str(project.root))
 
+    def test_a_studio_launched_on_another_project_is_found_and_moved(self) -> None:
+        """Issue #103: a Studio open on A, the current project a new B: every
+        door under B said no Studio ran, and launch was refused on the
+        viewer's port."""
+        a = create_project(self.home / "a", "a")
+        b = create_project(self.home / "b", "b")
+        _write_state(a, section="robots")
+        found = state(b)
+        self.assertTrue(found["alive"])
+        self.assertTrue(found["elsewhere"])
+        self.assertEqual((found["project"], found["asked"]), (str(a.root), str(b.root)))
+        answer = command(b, "show", artifact="x@000000000000")
+        self.assertIn(f"open on {a.root}", answer["reason"])
+        answer = launch(b)
+        self.assertEqual(answer["switched_from"], str(a.root))
+        sent = sorted(commands_dir(a).glob("*-open.json"))
+        self.assertEqual(json.loads(sent[-1].read_text())["project"], str(b.root))
+
     def test_a_project_a_studio_has_run_on_is_judged_on_its_own(self) -> None:
         _write_state(control.welcome_root())
         project = create_project(self.home / "mine", "mine")

@@ -31,6 +31,10 @@ MIRROR_HZ = 20
 # feed and recorder connects to (the Rust shell binds the same port;
 # crates/trainnr-studio/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
+# A training run's stream, named `<prefix><agent>`: the Studio adds it to
+# its sources without taking the view someone is reading (issue #105);
+# crates/trainnr-studio/src/main.rs mirrors it (test_studio_mirrors).
+TRAINING_APP_PREFIX = "trainnr-train-"
 
 # What rerun 0.36 lets an application id (an "entry name") contain: ASCII
 # letters and digits, and these. A stamp's `@` is not among them, and the

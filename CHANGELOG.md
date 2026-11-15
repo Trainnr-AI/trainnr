@@ -10,10 +10,19 @@ All notable changes to trainnr. The format follows
 
 - Project templates: New project can start from a plan instead of a blank project. Three come first, on NVIDIA's stack: Humanoid motion from video (GEM-X, the SOMA Retargeter and mjlab's tracking task, on a Unitree G1), Manipulation from human video and More from your own demonstrations (GR00T N1.7 and Cosmos Transfer, on an SO-101). A project made from one shows its plan on the Overview, each step marked done, with its button, or planned. `create_project` takes `template`, and `list_templates` lists them. The design is docs/86.
 - GR00T N1.7 fine-tunes on one 24 GB card (an RTX 3090 Ti): `tools/gr00t-batch-search.sh` sets up NVIDIA's Isaac-GR00T in its own environment and finds the largest batch each configuration fits, and `tools/gr00t-fit.py` adds three memory savers NVIDIA's launcher does not expose. NVIDIA's settings fit only with the action head frozen, at batch 8; with the savers, the full default fine-tune fits at batch 58 (the record `gr00t-n17-on-a-24gb-card-2026-11-02`).
+- docs/87 writes down the deployment manifest, `deploy.json` (`trainnr-deploy/1`), for runtimes outside trainnr: one control tick, every key, and each observation source's definition, frame and units, including that a term is scaled before it is clipped and that `last_action` is the clipped, unscaled action (#106).
 
 ### Changed
 
+- The gate passes a deployment only when its cited evaluation demonstrated a success (a lower bound above zero): a policy that fell in 0/4 and falls again agreed with its evaluation and read `passed`. The record says `agrees` and `demonstrated` apart, and the card says "failed: nothing demonstrated" (#108).
+- A deployment of a robot on position servos (BAM actuators, like the microduck's XL330s) exports no PD gains for their joints: `stiffness`, `damping` and `effort_limit` are null there, and `joints.servos` names the actuator bundle and the supply voltage and position gain its law assumes, which the robot's servos must be set to. Pre-flight reports them instead of comparing a simulated motor's gains (#107).
+- A training run started by the agent no longer takes over the Studio's view: its stream (now `trainnr-train-<agent>`) joins Sources, and a note names it (#105).
+- An agent session keeps its current project when another session creates or chooses one; the last choice only seeds new sessions. A Studio open on another project is found from any project: `describe_studio` names it, `launch_studio` and `open_in_studio(project=...)` move it, and `open_in_studio` takes a bare project name as `use_project` does (#103, #104).
 - The Go2 walk sample is Apache-2.0, as trainnr is: its NOTICE said FSL-1.1-ALv2. The Hugging Face dataset's card and LICENSE say Apache-2.0 too. The sample's files are the same; its prebuilt index uses today's wording, and the deployment's card picture no longer has a black band.
+
+### Fixed
+
+- The ROS 2 readers (MCAP and rosbag2) leave out an `Imu` field its publisher marks as not provided (covariance[0] = -1, REP-145), and say so in the recording's notes: a robot without an accelerometer got a channel of zeros in m/s^2 (#102).
 
 ### Security
 

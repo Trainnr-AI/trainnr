@@ -1899,7 +1899,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Choose the current project by name or path; later calls and later sessions act on it.",
+    "description": "Choose this session's current project by name or path; other sessions keep theirs, new ones start from it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

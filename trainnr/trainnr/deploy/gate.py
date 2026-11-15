@@ -415,14 +415,37 @@ def _verdict(
     ck, cn = certificate.get("successes"), certificate.get("trials")
     cert_rate = (ck / cn) if (ck is not None and cn) else None
     rate = k / trials
-    return {
-        "passed": cert_rate is not None and rate >= cert_rate - tolerance,
+    agrees = cert_rate is not None and rate >= cert_rate - tolerance
+    # Agreeing with an evaluation that demonstrated nothing is no reason to
+    # deploy: a policy that fell in 0/4 and falls in the runtime agrees.
+    ci95 = certificate.get("ci95")
+    cert_lower: float | None = None
+    if ci95:
+        cert_lower = float(ci95[0])
+    elif ck is not None and cn:
+        cert_lower = clopper_pearson(int(ck), int(cn))[0]
+    demonstrated = cert_lower is not None and cert_lower > 0
+    verdict: dict[str, Any] = {
+        "passed": agrees and demonstrated,
+        "agrees": agrees,
+        "demonstrated": demonstrated,
         "tolerance": tolerance,
         "rule": "the gate's success rate is at least the evaluation's minus the "
-        "tolerance",
+        "tolerance, and the evaluation's lower bound is above zero",
         "gate_rate": rate,
         "certificate_rate": cert_rate,
+        "certificate_lower": cert_lower,
     }
+    if agrees and not demonstrated:
+        verdict["why"] = NOTHING_DEMONSTRATED.format(k=ck, n=cn)
+    return verdict
+
+
+NOTHING_DEMONSTRATED = (
+    "the exported policy agrees with its evaluation, but the evaluation "
+    "demonstrated nothing ({k}/{n}, lower bound 0): there is no success to "
+    "transfer, so the gate does not pass it"
+)
 
 
 # Where the task touched: the sites' file beside the record, and the
