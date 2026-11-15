@@ -99,7 +99,7 @@ mcp = ["mcp~=2.1", "psutil>=5.9"]
 # supplies mujoco-warp, this one supplies the reader; COMPATIBLE-RELEASE
 # PINNED to the Newton release measured against our engine, and moving
 # either pin is one deliberate event.
-usd = ["newton[importers]~=1.6.0"]
+usd = ["newton[importers]>=1.6,<1.8"]
 
 # The task registry's plugin door (trainnr/tasks/registry.py): a third
 # party lists its task module here under its own name and `lerobot-eval
