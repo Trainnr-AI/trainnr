@@ -13,6 +13,7 @@ document that defines it.
 | datasheet | The provenance sheet beside a generated dataset: what produced it, under which draws, kept by which criterion | [e2e-research/60](e2e-research/60-the-data-press.md) |
 | manifest | The deployment's description read from the built environment: joint and actuator orders, gains, home pose, action scale, observations, control rate | [77 §6](77-the-unitree-loop.md) |
 | footage | A video brought into a project as it is: the file, its first frame, and ffprobe's numbers, stamped; motion is estimated from it, and it proves no loop state alone | [86 §5.1](86-video-to-robot.md) |
+| reference | A robot's motion to track, made from footage: GEM-X's estimate of the person, retargeted onto the robot (the G1) and smoothed; a recording (collection `video`) whose `raw/motion.npz` is what mjlab's tracking task reads | [86 §5.1](86-video-to-robot.md) |
 
 ## Measuring
 

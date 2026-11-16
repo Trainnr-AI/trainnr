@@ -338,7 +338,7 @@ FRAMES_FPS = 15
 FRAMES_WIDTH = 640
 
 
-def _log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
+def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
     import rerun as rr  # noqa: PLC0415
 
     from trainnr.video.footage import tool  # noqa: PLC0415
@@ -397,7 +397,7 @@ def _present_footage(
     ]
     with _AsDefault(rr_):
         try:
-            view = _log_frames(rr_, f"{root}/video", folder / record.video)
+            view = log_frames(rr_, f"{root}/video", folder / record.video)
         except Exception as why:  # the still, and the reason beside it
             rr_.log(
                 f"{root}/video", rr.EncodedImage(path=folder / FIRST_FRAME), static=True

@@ -250,6 +250,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 seen_recording: false,
                 activated_shown: None,
                 last_active: None,
+                asked_stream: None,
                 seen_active: std::collections::HashMap::new(),
                 viewport_full: false,
                 closing: false,
@@ -298,6 +299,9 @@ struct StudioShell {
     /// is sent to the background while it settles, never a later click on
     /// it (issue #105).
     last_active: Option<re_viewer::external::re_log_types::StoreId>,
+    /// The stream a person asked to watch (Running now's watch live):
+    /// never sent back behind the view.
+    asked_stream: Option<String>,
     seen_active:
         std::collections::HashMap<re_viewer::external::re_log_types::StoreId, std::time::Instant>,
     /// The viewport alone on the Live page: no rail, no viewer panels,
@@ -400,6 +404,18 @@ impl eframe::App for StudioShell {
                     },
                 ));
             self.shell.show_requested = true;
+        }
+        // A running job's live stream, asked for from Running now: the
+        // viewer turns to it (a training run arrives in the background).
+        if let Some(stream) = self.shell.live_request.take() {
+            use re_viewer::external::re_log_types::ApplicationId;
+            use re_viewer::external::re_viewer_context::{SystemCommand, SystemCommandSender as _};
+            if let Ok(app) = ApplicationId::try_new(control::entry_name(&stream)) {
+                self.asked_stream = Some(app.to_string());
+                self.rerun_app
+                    .command_sender
+                    .send_system(SystemCommand::ActivateApp(app));
+            }
         }
         let full = self.viewport_full && self.shell.section == Section::Live;
         // The Welcome page has no rail: no project, nothing to list.
@@ -673,7 +689,9 @@ impl StudioShell {
                 .seen_active
                 .entry(now.clone())
                 .or_insert_with(std::time::Instant::now);
-            if app.starts_with(TRAINING_APP_PREFIX) && arrived.elapsed() < TRAINING_SETTLE {
+            let asked = self.asked_stream.as_deref() == Some(app.as_str());
+            if app.starts_with(TRAINING_APP_PREFIX) && arrived.elapsed() < TRAINING_SETTLE && !asked
+            {
                 if first {
                     // The viewer toasts only Rerun's own log targets.
                     re_log::info!(

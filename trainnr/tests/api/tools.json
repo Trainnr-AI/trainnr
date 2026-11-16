@@ -4,7 +4,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Measure how an exported deployment tolerates scene error: it is staged on `scene` nine times (nominal, ±20 mm per axis, ±5° turned) as new deployments named <deployment>-on-<scene>…, each gated at one seed; the drop in success is reported. A job.",
+    "description": "How an exported deployment tolerates scene error: staged on `scene` nine times (nominal, ±20 mm per axis, ±5° turned) as <deployment>-on-<scene>… deployments, each gated once; reports the drop. Job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -131,7 +131,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Drift monitoring: identify fresh telemetry (a recording, by version) without writing a fit record and judge every parameter against the robot's identified intervals; writes a drift record naming what left and recommending re-identification.",
+    "description": "Drift monitoring: identify fresh telemetry (a recording) without writing a fit and judge each parameter against the robot's identified intervals; writes a drift record.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -518,7 +518,7 @@
       "destructiveHint": false,
       "readOnlyHint": true
     },
-    "description": "A captured scene's record: source, capture, the tool chain with licences, the splat and proxy facts, the alignment, the gap's four numbers, and every physics parameter with its basis (measured with an interval, or declared with a span).",
+    "description": "A captured scene's record: source, capture, tool chain with licences, splat and proxy, alignment, the gap's numbers, each physics parameter with its basis.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -571,7 +571,7 @@
       "destructiveHint": false,
       "readOnlyHint": true
     },
-    "description": "The saved viewer streams an artifact carries (a headless run leaves the same picture a window shows): each file's entity paths, timelines, components and size; with the viz-query extra, the scalar series' count, min, max and last value.",
+    "description": "The saved viewer streams an artifact carries: each file's entities, timelines, components and size; with the viz-query extra, each series' count, min, max, last.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -705,7 +705,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "The sim-to-sim gate: drive the exported policy through its manifest alone by a registered runtime (plain MuJoCo, or Unitree's simulator over DDS), judge it the evaluation's way, pass within a stated tolerance of the cited evaluation. Job handle.",
+    "description": "The sim-to-sim gate: the exported policy driven by its manifest alone (plain MuJoCo, or Unitree's simulator over DDS), judged the evaluation's way against the cited evaluation. Job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1031,7 +1031,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Open the Studio on the current project and wait for it to start. Without a local build, the first launch downloads the prebuilt Studio (about 72 MB) from the project's GitHub release. Refused when one already runs.",
+    "description": "Open the Studio on the current project (moving one open elsewhere) and wait for it. Without a local build, the first launch downloads the prebuilt Studio (about 72 MB) from the project's GitHub release.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -1397,7 +1397,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Open a checkpoint of an experiment in mjlab's own viewer (viser in the browser on this machine, or native), the same rollout streamed into the Studio's Simulator page. A job; the viewer lives until closed.",
+    "description": "Open an experiment's checkpoint in mjlab's own viewer (viser in the browser, or native), the rollout also streamed into the Studio's Simulator. A job; it lives until closed.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1526,6 +1526,29 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
+    "description": "Footage of a person to a Unitree G1 reference motion (GEM-X, SOMA Retargeter), as a recording. Job.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "footage": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "footage"
+      ],
+      "type": "object"
+    },
+    "name": "retarget_video"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
     "description": "The whole chain: generate -> dataset -> train -> paired evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle.",
     "inputSchema": {
       "additionalProperties": false,
@@ -1560,7 +1583,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Play a scene live in the Studio's MuJoCo view (Simulator page): a task preview (kitting, lift, duck), `walk` (the newest trained walk) or `deploy:<deployment>` (drivable; add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No scene stops it.",
+    "description": "Play a scene live in the Studio's Simulator: a task preview (kitting, lift, duck), `walk` (the newest walk) or `deploy:<deployment>` (add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No scene stops it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1744,7 +1767,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "To the front of the viewer, exactly one of: an artifact streamed as itself (3D robot, recording, experiment curves, evaluation funnel), or a stream already playing by its application id (the Sources name: the viewport twin, a run, a gate).",
+    "description": "To the viewer's front, one of: an artifact streamed as itself (robot, recording, experiment, evaluation), or a stream already playing by its Sources name (the twin, a run, a gate).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1875,7 +1898,36 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Train a walk policy (a declared task, or robot go1/go2/microduck). recipe=smoke checks the stack in minutes and saves nothing; recipe=full trains (8000 iterations unless set, hours on a GPU) and saves experiment `name`, never over an existing one.",
+    "description": "Train the G1 to track a retarget_video reference (mjlab; hours on a GPU), live in the Studio. Job.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "envs": {
+          "type": "integer"
+        },
+        "iterations": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference"
+      ],
+      "type": "object"
+    },
+    "name": "train_tracking"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Train a walk (a declared task, or robot go1/go2/microduck). recipe=smoke checks the stack in minutes, saving nothing; recipe=full trains (8000 iterations unless set, hours on a GPU) as experiment `name`, never over one.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

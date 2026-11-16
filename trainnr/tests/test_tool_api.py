@@ -33,7 +33,8 @@ VERBS = frozenset(
         "assay", "attribute", "cancel", "capture", "check", "compare", "control",
         "create", "describe", "evaluate", "export", "gate", "generate", "identify",
         "import", "ingest", "launch", "list", "multiply", "onboard", "open", "play",
-        "preflight", "preview", "quit", "read", "run", "screenshot", "set", "show",
+        "preflight", "preview", "quit", "read", "retarget", "run", "screenshot", "set",
+        "show",
         "stage", "start", "stop", "train", "use",
     }
 )  # fmt: skip

@@ -97,6 +97,9 @@ pub struct Shell {
     /// A run's viewer file to load into the viewer, taken by the frame
     /// loop that owns the viewer.
     pub viewer_request: Option<std::path::PathBuf>,
+    /// A running job's live stream (its application id), asked for from
+    /// Running now: brought to the viewer, and the page turns to it.
+    pub live_request: Option<String>,
     /// A button's `trainnr` command while it runs (a sample opening, a
     /// new project): its key, the process, and the log its errors go to.
     action_job: Option<ActionJob>,
@@ -177,6 +180,7 @@ impl Shell {
             runs_listed: false,
             stop_note: None,
             viewer_request: None,
+            live_request: None,
             action_job: None,
             action_out: std::path::PathBuf::new(),
             actions: ActionState::default(),
@@ -1422,6 +1426,10 @@ impl Shell {
                         path.display()
                     );
                 }
+            }
+            RowAction::Live => {
+                self.live_request = Some(job.stream.clone());
+                self.show_requested = true;
             }
             RowAction::Viewport => self.scene_request = Some(job.viewport.clone()),
             RowAction::ArmStop => self.stop_armed = Some(job.id.clone()),

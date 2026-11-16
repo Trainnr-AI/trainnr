@@ -218,7 +218,7 @@
    "tool": "train_walk",
    "page": "experiments",
    "label": "Train",
-   "summary": "Train a walk policy (a declared task, or robot go1/go2/microduck).",
+   "summary": "Train a walk (a declared task, or robot go1/go2/microduck).",
    "fields": [
     {
      "name": "task",
@@ -246,6 +246,70 @@
       "smoke",
       "full"
      ]
+    },
+    {
+     "name": "iterations",
+     "label": "Iterations",
+     "type": "integer",
+     "required": false,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "retarget_video",
+   "page": "recordings",
+   "label": "Turn video into motion",
+   "summary": "Footage of a person to a Unitree G1 reference motion (GEM-X, SOMA Retargeter), as a recording.",
+   "fields": [
+    {
+     "name": "footage",
+     "label": "Video",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "footage",
+     "files": [],
+     "folder": false,
+     "choices": []
+    },
+    {
+     "name": "name",
+     "label": "Name",
+     "type": "string",
+     "required": false,
+     "default": null,
+     "description": "",
+     "kind": null,
+     "files": [],
+     "folder": false,
+     "choices": []
+    }
+   ]
+  },
+  {
+   "tool": "train_tracking",
+   "page": "experiments",
+   "label": "Train tracking",
+   "summary": "Train the G1 to track a retarget_video reference (mjlab; hours on a GPU), live in the Studio.",
+   "fields": [
+    {
+     "name": "reference",
+     "label": "Reference",
+     "type": "string",
+     "required": true,
+     "default": null,
+     "description": "",
+     "kind": "recording",
+     "files": [],
+     "folder": false,
+     "choices": []
     },
     {
      "name": "iterations",
@@ -341,7 +405,7 @@
    "tool": "gate_deployment",
    "page": "deployments",
    "label": "Run gate",
-   "summary": "The sim-to-sim gate: drive the exported policy through its manifest alone by a registered runtime (plain MuJoCo, or Unitree's simulator over DDS), judge it the evaluation's way, pass within a stated tolerance of the cited evaluation.",
+   "summary": "The sim-to-sim gate: the exported policy driven by its manifest alone (plain MuJoCo, or Unitree's simulator over DDS), judged the evaluation's way against the cited evaluation.",
    "fields": [
     {
      "name": "deployment",
@@ -423,7 +487,7 @@
    "tool": "check_drift",
    "page": "monitoring",
    "label": "Check for drift",
-   "summary": "Drift monitoring: identify fresh telemetry (a recording, by version) without writing a fit record and judge every parameter against the robot's identified intervals; writes a drift record naming what left and recommending re-identification.",
+   "summary": "Drift monitoring: identify fresh telemetry (a recording) without writing a fit and judge each parameter against the robot's identified intervals; writes a drift record.",
    "fields": [
     {
      "name": "robot",

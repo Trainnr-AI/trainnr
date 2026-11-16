@@ -131,6 +131,20 @@ FORMS: tuple[Form, ...] = (
         },
     ),
     Form(
+        "retarget_video",
+        "recordings",
+        "Turn video into motion",
+        ("footage", "name"),
+        {"footage": Hint(kind=Kind.FOOTAGE, label="Video")},
+    ),
+    Form(
+        "train_tracking",
+        "experiments",
+        "Train tracking",
+        ("reference", "iterations"),
+        {"reference": Hint(kind=Kind.RECORDING, label="Reference")},
+    ),
+    Form(
         "evaluate_walk",
         "evaluations",
         "Evaluate",

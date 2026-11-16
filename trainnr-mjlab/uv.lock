@@ -1780,6 +1780,7 @@ dependencies = [
     { name = "mjlab" },
     { name = "onnx" },
     { name = "onnxruntime" },
+    { name = "scipy" },
     { name = "trainnr" },
 ]
 
@@ -1798,6 +1799,7 @@ requires-dist = [
     { name = "onnx", specifier = ">=1.22.0" },
     { name = "onnxruntime", specifier = ">=1.30.0" },
     { name = "rerun-sdk", marker = "extra == 'viz'", specifier = "==0.36.*" },
+    { name = "scipy", specifier = ">=1.15" },
     { name = "trainnr", editable = "../trainnr" },
 ]
 provides-extras = ["bam", "viz"]

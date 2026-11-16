@@ -408,6 +408,49 @@ class Actions:
         )
         return self.jobs.start("train-walk", argv, TRAINNR_MJLAB_DIR)
 
+    def retarget_video(self, footage: str, out: str, project: str) -> JobHandle:
+        """Footage to a G1 reference motion (trainnr_mjlab.video_reference):
+        GEM-X, then the SOMA Retargeter, then the motion mjlab's tracking
+        task reads, written as a recording at `out`."""
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.video_reference",
+            footage,
+            out,
+            "--project",
+            project,
+        ]
+        return self.jobs.start("retarget-video", argv, TRAINNR_MJLAB_DIR)
+
+    def train_tracking(  # noqa: PLR0913 - the trainer's own knobs, each named
+        self,
+        *,
+        reference: str,
+        reference_stamp: str,
+        log_dir: str,
+        project: str,
+        envs: int | None = None,
+        iterations: int | None = None,
+    ) -> JobHandle:
+        """The G1 learns to track a reference motion (mjlab's tracking task,
+        trainnr_mjlab.tracking_train), streamed into the Studio."""
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.tracking_train",
+            reference,
+            "--reference-stamp",
+            reference_stamp,
+            "--log-dir",
+            log_dir,
+            "--project",
+            project,
+            *_given("--envs", envs),
+            *_given("--iterations", iterations),
+        ]
+        return self.jobs.start("train-tracking", argv, TRAINNR_MJLAB_DIR)
+
     def evaluate_walk(  # noqa: PLR0913 - the evaluation's knobs, each named
         self,
         checkpoint: str,

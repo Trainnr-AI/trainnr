@@ -93,6 +93,7 @@ TEMPLATES: dict[str, Template] = {
                     "GEM-X estimates the person's 3D motion from one camera; the SOMA "
                     "Retargeter maps it onto the G1's joints.",
                     NVIDIA_GPU,
+                    tool="retarget_video",
                     model="GEM-X, SOMA Retargeter",
                 ),
                 Step(
@@ -107,6 +108,7 @@ TEMPLATES: dict[str, Template] = {
                     "Reinforcement learning in mjlab's tracking task: the actions come "
                     "from simulated physics, the video only says what the motion is.",
                     NVIDIA_GPU,
+                    tool="train_tracking",
                     model="mjlab",
                 ),
                 Step(

@@ -196,6 +196,10 @@ class JobRecord(JsonRecord):
     # writes; empty when it has none.
     viewport: str = ""
     viewer: str = ""
+    # The live viewer stream's application id while the job runs (a
+    # training run's `trainnr-train-<agent>`): the Studio's Running now
+    # brings it to the viewer (watch live). Empty when it streams nothing.
+    stream: str = ""
     # The process's start time as the OS reports it (psutil), so a cancel
     # can tell the job's process from a later one that reused its pid.
     create_time: float = 0.0
@@ -717,6 +721,7 @@ def track(  # noqa: PLR0913 - a job's identity, each field named
     argv: Sequence[str] | None = None,
     viewport: str = "",
     viewer: str = "",
+    stream: str = "",
 ) -> Iterator[Tracker]:
     """This process's work, in the project's job table while it runs.
 
@@ -733,7 +738,11 @@ def track(  # noqa: PLR0913 - a job's identity, each field named
     if adopted is not None:
         record = JobRecord.read(adopted)
         replace(
-            record, name=name or record.name, viewport=viewport, viewer=viewer
+            record,
+            name=name or record.name,
+            viewport=viewport,
+            viewer=viewer,
+            stream=stream,
         ).write(adopted)
         yield Tracker(jobs_dir, record.id)
         return
@@ -757,6 +766,7 @@ def track(  # noqa: PLR0913 - a job's identity, each field named
         name=name,
         viewport=viewport,
         viewer=viewer,
+        stream=stream,
     ).write(jobs_dir / f"{job_id}.json")
     error: BaseException | None = None
     try:

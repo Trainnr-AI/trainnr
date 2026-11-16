@@ -108,6 +108,10 @@ pub struct Job {
     pub viewport: String,
     #[serde(default)]
     pub viewer: String,
+    /// The live viewer stream's application id while it runs
+    /// (`mcp_jobs.JobRecord.stream`): watch live brings it to the viewer.
+    #[serde(default)]
+    pub stream: String,
     /// When the job's process started, by the OS clock, as the runner read
     /// it at spawn (`mcp_jobs.process_create_time`): Stop signals a pid
     /// only when its process started then (`stop`).
@@ -597,6 +601,8 @@ pub enum RowAction {
     Log,
     /// Load the run's viewer file into the viewer and turn to it.
     Viewer,
+    /// Bring the running job's live stream to the viewer and turn to it.
+    Live,
     /// Run the row's scene in the viewport.
     Viewport,
     /// First click on stop: arm it (the confirmation).
@@ -857,7 +863,16 @@ pub fn row(
         if ui.small_button(log_word).clicked() {
             action = Some(RowAction::Log);
         }
-        if !job.viewer.is_empty()
+        if job.running()
+            && !job.stream.is_empty()
+            && ui
+                .small_button("watch live")
+                .on_hover_text("the run's plots and picture as they happen, in the viewer")
+                .clicked()
+        {
+            action = Some(RowAction::Live);
+        } else if !job.viewer.is_empty()
+            && !job.running()
             && ui
                 .small_button("show in viewer")
                 .on_hover_text(&job.viewer)
