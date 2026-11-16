@@ -1300,6 +1300,7 @@ impl Shell {
         let mut chosen: Option<(crate::running::Job, RowAction)> = None;
         let mut strip_click: Option<StripClick> = None;
         egui::Panel::top("running-now")
+            .resizable(false)
             .frame(
                 egui::Frame::new()
                     .fill(crate::theme::palette(ui).bar)
@@ -1349,8 +1350,14 @@ impl Shell {
                         .collect()
                 };
                 if !detail.is_empty() {
+                    // The panel offers last frame's height and the scroll
+                    // area took no more, so a run under a progress bar kept
+                    // its buttons out of sight (2026-11-16): content that
+                    // does not fit takes up to the cap, and the panel grows.
+                    let cap = ui.ctx().content_rect().height() * 0.5;
                     egui::ScrollArea::vertical()
-                        .max_height(ui.ctx().content_rect().height() * 0.5)
+                        .max_height(cap)
+                        .min_scrolled_height(cap)
                         .show(ui, |ui| {
                             for job in &detail {
                                 ui.separator();

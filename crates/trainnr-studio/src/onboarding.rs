@@ -432,20 +432,31 @@ pub fn plan_card(
                                 .strong()
                                 .color(palette.text),
                         );
-                        if step.done {
+                        // what happens now first: a step done by an earlier
+                        // run reads running while its next one trains
+                        if step.running.is_some() {
+                            tag(ui, "running");
+                        } else if step.done {
                             tag(ui, "done");
                         } else if step.tool.is_none() {
                             tag(ui, "planned");
                         }
                     });
                     crate::widgets::body(ui, &step.body, palette.text);
+                    if let Some(running) = &step.running {
+                        crate::widgets::weak_body(ui, format!("Running now: {running}"));
+                    }
+                    if let Some(proof) = &step.proved_by {
+                        crate::widgets::weak_body(ui, format!("Done by {proof}"));
+                    }
                     let runs = match &step.model {
                         Some(model) => format!("Runs on {} · {model}", step.runs_on),
                         None => format!("Runs on {}", step.runs_on),
                     };
                     crate::widgets::weak_body(ui, runs);
                     let form = step.tool.as_deref().and_then(|t| forms.form(t));
-                    if let (false, Some(form)) = (step.done, form) {
+                    // No second start while one runs: a run of hours.
+                    if let (false, None, Some(form)) = (step.done, &step.running, form) {
                         ui.add_space(6.0);
                         let missing = crate::forms::missing_input(form, count);
                         let hover = missing.clone().unwrap_or_else(|| form.summary.clone());

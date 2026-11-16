@@ -26,6 +26,11 @@ NVIDIA_GPU = "an NVIDIA GPU"
 GPU_24GB = "an NVIDIA GPU, 24 GB"
 
 
+# mjlab's tracking task, as a tracking run's identity names it
+# (trainnr_mjlab.tracking_train).
+TRACKING_TASK = "Mjlab-Tracking-Flat-Unitree-G1"
+
+
 @dataclass(frozen=True)
 class Step:
     # The loop state the step proves (`project/index.py`, STATES).
@@ -37,6 +42,11 @@ class Step:
     tool: str | None = None
     # The model or program the step runs, when it is someone else's.
     model: str | None = None
+    # The artifact that proves this step, beyond its stage: a kind and one
+    # summary field's value (`project/index.py`, `_plan`). Without it any
+    # artifact of the stage does: a CSV recording passed for "Turn a video
+    # into motion" until 2026-11-16.
+    proof: tuple[str, str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +105,7 @@ TEMPLATES: dict[str, Template] = {
                     NVIDIA_GPU,
                     tool="retarget_video",
                     model="GEM-X, SOMA Retargeter",
+                    proof=("recording", "collection", "video"),
                 ),
                 Step(
                     "environment defined",
@@ -110,6 +121,7 @@ TEMPLATES: dict[str, Template] = {
                     NVIDIA_GPU,
                     tool="train_tracking",
                     model="mjlab",
+                    proof=("run", "task", TRACKING_TASK),
                 ),
                 Step(
                     "policy evaluated",

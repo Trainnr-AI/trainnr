@@ -31,7 +31,10 @@ const SOURCE_DOOR: &str = JOB_SOURCES[0];
 /// How long an ended run stays in the panel with its exit code.
 pub const FINISHED_KEPT: Duration = Duration::from_secs(300);
 /// How much of a run's log the panel shows when opened.
-pub const LOG_TAIL_LINES: usize = 12;
+pub const LOG_TAIL_LINES: usize = 400;
+/// The distinct lines the log panel shows, newest last: about one
+/// training iteration's report, its repeated warnings folded.
+pub const LOG_SHOWN: usize = 40;
 /// How often the thread re-reads the table.
 const POLL_EVERY: Duration = Duration::from_secs(1);
 
@@ -912,19 +915,126 @@ pub fn row(
 
 /// A log tail, monospace, in a bounded scroll.
 pub fn log_tail(ui: &mut egui::Ui, lines: &[String]) {
-    egui::ScrollArea::vertical()
-        .max_height(160.0)
-        .stick_to_bottom(true)
+    let palette = crate::theme::palette(ui);
+    let mut folded = fold_repeats(lines);
+    folded.drain(..folded.len().saturating_sub(LOG_SHOWN));
+    egui::Frame::new()
+        .fill(palette.surface_alt)
+        .stroke(egui::Stroke::new(1.0, palette.hairline))
+        .corner_radius(6.0)
+        .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
-            for line in lines {
-                ui.label(egui::RichText::new(line).monospace().small());
+            ui.set_width(ui.available_width());
+            if folded.is_empty() {
+                ui.weak("Nothing in the log yet.");
+                return;
             }
+            egui::ScrollArea::vertical()
+                .max_height(LOG_HEIGHT)
+                .stick_to_bottom(true)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for (line, count) in &folded {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(
+                                egui::RichText::new(line)
+                                    .monospace()
+                                    .size(LOG_TEXT)
+                                    .color(palette.text),
+                            );
+                            if *count > 1 {
+                                ui.label(
+                                    egui::RichText::new(format!("×{count}"))
+                                        .monospace()
+                                        .size(LOG_TEXT)
+                                        .color(palette.muted),
+                                );
+                            }
+                        });
+                    }
+                });
         });
+}
+
+/// The log panel's height and its text's size.
+const LOG_HEIGHT: f32 = 220.0;
+const LOG_TEXT: f32 = 12.0;
+
+/// A log's lines as a person reads them: blank lines and terminal colour
+/// codes gone, and a line the tail repeats shown once, where it last
+/// appears, with how often (a training run's log was mostly one warning
+/// pair, printed every step: 2026-11-16).
+pub fn fold_repeats(lines: &[String]) -> Vec<(String, usize)> {
+    let clean: Vec<String> = lines
+        .iter()
+        .map(|l| strip_escapes(l).trim_end().to_owned())
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    let mut counts: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for line in &clean {
+        *counts.entry(line.as_str()).or_default() += 1;
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<(String, usize)> = clean
+        .iter()
+        .rev()
+        .filter(|l| seen.insert(l.as_str()))
+        .map(|l| (l.clone(), counts[l.as_str()]))
+        .collect();
+    out.reverse();
+    out
+}
+
+/// A line without ANSI escape sequences (rsl_rl bolds its banners).
+fn strip_escapes(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for d in chars.by_ref() {
+                    if d.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_repeated_line_shows_once_with_its_count_where_it_last_appears() {
+        let lines: Vec<String> = [
+            "\u{1b}[1m Learning iteration 1/10 \u{1b}[0m",
+            "linesearch limit",
+            "",
+            "disable the warning",
+            "linesearch limit",
+            "disable the warning",
+            "Mean reward: 1.0",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let folded = fold_repeats(&lines);
+        assert_eq!(
+            folded,
+            vec![
+                (" Learning iteration 1/10".to_owned(), 1),
+                ("linesearch limit".to_owned(), 2),
+                ("disable the warning".to_owned(), 2),
+                ("Mean reward: 1.0".to_owned(), 1),
+            ]
+        );
+    }
 
     #[test]
     fn stop_refuses_pid_one_and_a_reused_pid() {

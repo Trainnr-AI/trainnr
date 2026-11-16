@@ -25,6 +25,9 @@ All notable changes to trainnr. The format follows
 
 ### Fixed
 
+- The Studio's Running now panel no longer cuts off a run's buttons under its progress bar, and its log is a framed panel that shows a line repeated in the tail once with its count. A tracking run no longer offers a Simulator scene it does not have.
+- A template step is done when its own artifact exists, not any result of its stage: "Turn a video into motion" needs a recording made from video, and "Train it to track the motion" a finished tracking run. A step with a run still training reads running with its progress, and a done step names what proved it.
+- `train_tracking` stops MuJoCo-Warp printing its solver and line-search limit warnings from the GPU: with 4,096 G1 worlds they wrote 9.3 GB of job log in 400 iterations. The solver's limits are mjlab's as before.
 - The ROS 2 readers (MCAP and rosbag2) leave out an `Imu` field its publisher marks as not provided (covariance[0] = -1, REP-145), and say so in the recording's notes: a robot without an accelerometer got a channel of zeros in m/s^2 (#102).
 
 ### Security

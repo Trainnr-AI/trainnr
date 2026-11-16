@@ -336,6 +336,13 @@ pub struct PlanStep {
     pub model: Option<String>,
     #[serde(default)]
     pub done: bool,
+    /// What proved it, when its template names the artifact: the stamp,
+    /// and a run's iterations (`index.py`, `_plan`).
+    #[serde(default)]
+    pub proved_by: Option<String>,
+    /// A run of it still training: its progress (`113 of 6000 iterations`).
+    #[serde(default)]
+    pub running: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
