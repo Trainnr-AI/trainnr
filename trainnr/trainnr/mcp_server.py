@@ -1498,7 +1498,7 @@ def list_gate_runtimes() -> list[dict[str, Any]]:
     ]
 
 
-def play_walk(
+def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     experiment: str,
     checkpoint: str,
     envs: int = 9,
@@ -1530,7 +1530,11 @@ def play_walk(
         if not path.is_file():
             held = ", ".join(_checkpoints_in(run_dir)) or "none"
             return refusal(f"no checkpoint {checkpoint!r} in {run!r}; it holds {held}")
-        robot = _walk_of_run(index_project(project).artifacts, run_dir)
+        artifacts = index_project(project).artifacts
+        tracking = _tracking_play(project, artifacts, run_dir, path)
+        if tracking is not None:
+            return tracking
+        robot = _walk_of_run(artifacts, run_dir)
         if robot is None:
             return refusal(f"run {run!r} names no walk")
         return Actions(JobManager(_jobs_root)).play_walk(
@@ -1543,6 +1547,40 @@ def play_walk(
         )
     except ValueError as why:
         return refusal(str(why))
+
+
+def _tracking_play(
+    project: Any, artifacts: list[Any], run_dir: Path, checkpoint: Path
+) -> JobHandle | Refusal | None:
+    """A tracking run's checkpoint played once on its reference, filmed
+    beside the footage it came from (trainnr_mjlab.tracking_play); None
+    when the run is not a tracking run."""
+    import json  # noqa: PLC0415
+
+    from trainnr.mcp_actions import Actions  # noqa: PLC0415
+    from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+    from trainnr.templates import TRACKING_TASK  # noqa: PLC0415
+
+    identity = run_dir / "identity.json"
+    ident = json.loads(identity.read_text()) if identity.is_file() else {}
+    if ident.get("task") != TRACKING_TASK:
+        return None
+    try:
+        reference = pick_artifact(
+            artifacts, str(ident.get("reference")), "recording", str(project.root)
+        )
+    except KeyError as why:
+        return refusal(_reason(why))
+    footage = project.footage / str(ident.get("footage"))
+    if not footage.is_dir():
+        return refusal(f"the footage {ident.get('footage')!r} the run cites is gone")
+    return Actions(JobManager(_jobs_root)).play_tracking(
+        str(checkpoint),
+        reference=str(project.root / reference.path),
+        footage=str(footage),
+        out=str(run_dir / f"play-{checkpoint.stem}"),
+        project=str(project.root),
+    )
 
 
 def preview_rewards(
@@ -4017,9 +4055,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "project's one declared walk. Job handle."
     )(evaluate_walk)
     server.tool(
-        description="Open an experiment's checkpoint in mjlab's own viewer (viser "
-        "in the browser, or native), the rollout also streamed into the Studio's "
-        "Simulator. A job; it lives until closed."
+        description="Open an experiment's checkpoint in mjlab's viewer (viser or "
+        "native), streamed into the Studio's Simulator; a tracking run plays its "
+        "clip once, filmed. A job."
     )(play_walk)
     server.tool(
         description="See the reward before training: roll the declared walk for "

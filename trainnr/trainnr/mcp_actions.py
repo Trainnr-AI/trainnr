@@ -542,6 +542,28 @@ class Actions:
             argv += ["--scene", scene]
         return self.jobs.start("play-walk", argv, TRAINNR_MJLAB_DIR)
 
+    def play_tracking(
+        self, checkpoint: str, *, reference: str, footage: str, out: str, project: str
+    ) -> JobHandle:
+        """A tracking checkpoint dancing its reference once in physics
+        (trainnr_mjlab.tracking_play): streamed to the Studio, filmed beside
+        the video, its falls and errors written to `out`."""
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.tracking_play",
+            checkpoint,
+            "--reference",
+            reference,
+            "--footage",
+            footage,
+            "--out",
+            out,
+            "--project",
+            project,
+        ]
+        return self.jobs.start("play-tracking", argv, TRAINNR_MJLAB_DIR)
+
     def preview_rewards(  # noqa: PLR0913 - the preview's knobs, each named
         self,
         *,
