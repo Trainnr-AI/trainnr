@@ -1210,9 +1210,17 @@ def _certificate(project: Project, root: Path, artifact: Artifact) -> list[Secti
                 ("trials", protocol.get("trials")),
                 ("seed", protocol.get("seed")),
                 ("success criterion", protocol.get("criterion")),
-                ("error floor (m/s)", protocol.get("err_floor_mps")),
-                ("domain randomization", protocol.get("dr_basis")),
-                ("judged at", protocol.get("judged_at")),
+                # a walk's own terms, shown when its protocol has them (a
+                # tracking evaluation has none of the three)
+                *[
+                    (label, protocol[key])
+                    for label, key in (
+                        ("error floor (m/s)", "err_floor_mps"),
+                        ("domain randomization", "dr_basis"),
+                        ("judged at", "judged_at"),
+                    )
+                    if key in protocol
+                ],
                 *[
                     (
                         k2.replace("_", " "),

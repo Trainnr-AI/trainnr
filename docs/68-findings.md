@@ -23,11 +23,12 @@ record's numbers, command and artifacts stand on their own.
 `projects/…` paths are local project directories, untracked by
 design; where a copy ships it is named first.
 
-## Index (62 records, newest first)
+## Index (63 records, newest first)
 
 | record | date | claim |
 |---|---|---|
 | [g1-court-dance-tracked-2026-11-17](#g1-court-dance-tracked-2026-11-17) | 2026-11-17 | A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video… |
+| [g1-court-dance-evaluated-2026-11-17](#g1-court-dance-evaluated-2026-11-17) | 2026-11-17 | The court-dance tracking policy (court-dance-g1-16k, model_1999), judged on 40 paired trials under its… |
 | [g1-tracking-worlds-on-a-24gb-card-2026-11-16](#g1-tracking-worlds-on-a-24gb-card-2026-11-16) | 2026-11-16 | mjlab's G1 tracking task moves 1.8 times the samples per second with 16,384 worlds as with mjlab's 4,096 on… |
 | [video-to-g1-on-a-24gb-card-2026-11-15](#video-to-g1-on-a-24gb-card-2026-11-15) | 2026-11-15 | A 22-second dance video becomes a Unitree G1 reference motion on one 24 GB RTX 3090 Ti in about 7 minutes… |
 | [gr00t-n17-on-a-24gb-card-2026-11-02](#gr00t-n17-on-a-24gb-card-2026-11-02) | 2026-11-02 | GR00T N1.7 fine-tunes on one 24 GB RTX 3090 Ti: NVIDIA's own settings fit only with the DiT action head… |
@@ -130,6 +131,46 @@ design; where a copy ships it is named first.
 - caveats:
   - One seed, one rollout, no pushes: not the tracking task's evaluation (paired trials with an interval, pushes and delays), which is the next step.
   - The reference is the person's motion as GEM-X estimated it, levelled and smoothed: the policy tracks that, and how faithful it is to the dancer is judged by eye in play.mp4.
+  - Simulation only: no G1 to deploy to (docs/86 §9).
+
+## g1-court-dance-evaluated-2026-11-17
+
+**The court-dance tracking policy (court-dance-g1-16k, model_1999), judged on 40 paired trials under its tracking task (pushes as in training, observation noise, the start pose drawn as in training, a command lag drawn per trial in [0, 20] ms), danced the whole 21.9 s clip in 18 of 40 trials, exact 95% interval [0.29, 0.62]. The lag decides it: with no lag 17 of 19 trials succeeded, with one 20 ms control tick of lag 1 of 21. mjlab's tracking task does not randomize action delay in training, and this policy does not tolerate one tick of it.**
+
+- date: 2026-11-17 · commit: `3bda0a3`
+- instrument: `NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2); mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda through trainnr_mjlab.tracking_verdict (the feat/tracking-evaluation branch over 3bda0a3), the Studio open and receiving world 0`
+- command: `trainnr call create_task {"family": "g1-tracking", "name": "court-dance-tracking", "settings": {"reference": "court-dance-g1", "lag_ms": 20}} trainnr call check_task {"task": "court-dance-tracking"} trainnr call evaluate_walk {"checkpoint": "court-dance-g1-16k/model_1999"}`
+- protocol: mjlab's play mode for the whole clip from frame 0 (no time limit), with training's conditions put back: observation noise on, the start pose and velocity drawn in training's ranges, mjlab's push_robot event. 40 worlds, seed 1000, one trial per world. Each trial's lag is drawn uniformly over whole control ticks in [0, round(20 ms x 50 Hz)] = {0, 1} from the seed; the policy's action reaches the robot that many ticks late. Success: the clip played to its end with no termination (mjlab's tracking terminations: the anchor's height and orientation, the end effectors' height, against the reference). Interval: exact Clopper-Pearson.
+- inputs:
+  - policy: court-dance-g1-16k-model_1999@163008272be4, the checkpoint of the record g1-court-dance-tracked-2026-11-17
+  - task: court-dance-tracking = g1-tracking@49b188d532d9 (accepted: 64 worlds, 2 PPO iterations on the reference)
+  - reference: court-dance-g1@99743ed23aee, 1,095 frames at 50 fps (21.9 s)
+- outcome:
+  - successes: 18
+  - trials: 40
+  - ci95: 0.2926, 0.6151
+  - by_lag:
+    - 0_ms:
+      - successes: 17
+      - trials: 19
+      - failed_at_steps: 24, 29
+      - median_body_pos_error_m_of_successes: 0.0689
+      - median_joint_error_rad_of_successes: 0.1455
+    - 20_ms:
+      - successes: 1
+      - trials: 21
+      - failed_at_steps: 16, 40, 40, 40, 46, 50, 54, 55, 72, 83, 109, 111, 130, 243, 293, 392, 508, 530, 548, 835
+      - median_body_pos_error_m_of_successes: 0.0873
+      - median_joint_error_rad_of_successes: 0.1759
+  - median_body_pos_error_m: 0.0799
+  - wall_s: 30
+- artifacts:
+  - runs/court-dance-g1-16k/verdict: walk-verdict-tracking-push-lag20-cuda.json, records-tracking-push-lag20-cuda.jsonl (one EpisodeRecord per trial), evaluation.rrd (world 0) in the g1-dance test project
+  - certificates/court-dance-g1-16k-model_1999-tracking-push-lag20-cuda-seed1000-n40-pdb2315: the evaluation as the project imported it, citing the policy, the task and the run
+- caveats:
+  - One policy, one seed for the trials, one reference: a measurement of this checkpoint, not of the method.
+  - The lag split is 19 against 21 trials drawn by the seed, not a designed pair; the gap (17/19 against 1/21) is wide enough to read, the exact numbers are not.
+  - Lag is whole 20 ms ticks: 1 to 19 ms of delay are not modelled.
   - Simulation only: no G1 to deploy to (docs/86 §9).
 
 ## g1-tracking-worlds-on-a-24gb-card-2026-11-16

@@ -330,8 +330,18 @@ def _plan(
         state: dict[str, Any] = {"done": bool(finished)}
         if finished:
             last = max(finished, key=lambda a: a.updated or "")
-            how = last.summary.get("iterations")
-            state["proved_by"] = last.stamp + (f", {how} iterations" if how else "")
+            iterations, success = (
+                last.summary.get("iterations"),
+                last.summary.get("success"),
+            )
+            how = (
+                f", {iterations} iterations"
+                if iterations
+                else f", {success} succeeded"
+                if success
+                else ""
+            )
+            state["proved_by"] = last.stamp + how
         if running:
             state["running"] = running[0].summary.get("progress") or "running"
         steps.append(step | state)
@@ -722,7 +732,14 @@ def _summary_certificate(path: Path) -> dict[str, Any]:
     # envelope is what tells two judgments of one checkpoint apart.
     protocol = c.get("protocol") or {}
     judged = protocol.get("judged_at")
-    out["condition"] = condition_label(judged, path.name, protocol.get("delay"))
+    out["condition"] = (
+        tracking_condition(protocol)
+        if "lag_ms" in protocol
+        else condition_label(judged, path.name, protocol.get("delay"))
+    )
+    task = str(c.get("task") or "")
+    if "@" in task:  # the environment it was judged in, by family name
+        out["environment"] = task.split("@", 1)[0]
     if "successes" in c and "trials" in c:
         out["success"] = ratio_of(c)
         out["trials"] = c["trials"]
@@ -733,6 +750,13 @@ def _summary_certificate(path: Path) -> dict[str, Any]:
     if commands:
         out["commands"] = commands
     return out
+
+
+def tracking_condition(protocol: dict[str, Any]) -> str:
+    """A tracking evaluation's conditions in a few words: `pushes · lag ≤ 20 ms`."""
+    lag = float(protocol.get("lag_ms") or 0)
+    pushes = "pushes" if protocol.get("pushes") else "no pushes"
+    return f"{pushes} · lag ≤ {lag:g} ms" if lag else f"{pushes} · no lag"
 
 
 # What a judgment's condition says on a card, a column and the matrix's

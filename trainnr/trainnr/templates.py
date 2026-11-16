@@ -133,6 +133,8 @@ TEMPLATES: dict[str, Template] = {
                     "Evaluate it with pushes and delays",
                     "Paired trials with an interval on the success rate.",
                     NVIDIA_GPU,
+                    tool="evaluate_walk",
+                    proof=("certificate", "environment", TRACKING_FAMILY),
                 ),
                 Step(
                     "deployment exported",

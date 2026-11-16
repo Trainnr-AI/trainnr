@@ -146,6 +146,28 @@ class AProjectFromATemplate(unittest.TestCase):
         self.assertTrue(task["done"])
         self.assertTrue(task["proved_by"].startswith("dance-tracking@"))
 
+        # an evaluation proves its step when judged in the tracking task
+        def evaluation(name: str, task: str) -> None:
+            folder = project.certificates / name
+            folder.mkdir(parents=True)
+            (folder / "certificate.json").write_text(
+                json.dumps(
+                    {
+                        "task": task,
+                        "successes": 18,
+                        "trials": 40,
+                        "protocol": {"lag_ms": 20, "pushes": True},
+                    }
+                )
+            )
+
+        evaluation("walked", "go2-walk@" + "0" * 12)
+        self.assertFalse(steps()["Evaluate it with pushes and delays"]["done"])
+        evaluation("danced", "g1-tracking@" + "0" * 12)
+        judged = steps()["Evaluate it with pushes and delays"]
+        self.assertTrue(judged["done"])
+        self.assertIn(", 18 / 40 succeeded", judged["proved_by"])
+
     def test_refuses_a_loop_the_template_does_not_have(self) -> None:
         with self.assertRaisesRegex(ValueError, "reinforcement loop"):
             create_project(

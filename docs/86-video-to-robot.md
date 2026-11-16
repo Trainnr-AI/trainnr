@@ -203,6 +203,14 @@ Verb first, as GOVERNANCE.md asks; long ones are jobs:
 - `train_tracking(reference, ...)` → run (job, mjlab; built 2026-11-15).
   `reference` is a tracking task, whose run then cites it, or a reference
   directly
+- `evaluate_walk(checkpoint)` on a tracking run → evaluation (job, mjlab;
+  built 2026-11-17, `trainnr_mjlab.tracking_verdict`): paired trials
+  through the reference from its first frame, with training's
+  observation noise and start draw, pushes and a per-trial command lag as
+  the tracking task says, and an exact interval. The task is the one the
+  run cites, else the project's one tracking task over its reference
+  (two such and none cited is refused). No new tool: the surface's
+  budget is spent, and the route is the one `play_walk` takes
 - `replay_references(task, references, ...)` → batch (job)
 - `export_dataset(batch, format="lerobot-v3" | "gr00t")` → dataset (the
   missing "make a dataset" tool the map found)
@@ -309,10 +317,15 @@ The first three, NVIDIA's stack by default:
    in about 7 minutes, live in the Studio) and `train_tracking` (mjlab's
    tracking task as a trainnr job, live in the Studio); GEM-X's tilted
    floor levelled and its jitter smoothed on the way. The tracking task
-   family with its success criterion came 2026-11-17. Left: the
-   evaluation and the export. On 2026-11-17 the court dance trained (16,384 worlds, 2,000
-   iterations, about 2 h) and played through its 21.9 s without falling
-   ([record](findings/g1-court-dance-tracked-2026-11-17.json)). Measured
+   family with its success criterion and its evaluation came 2026-11-17.
+   Left: the export. On 2026-11-17 the court dance trained (16,384 worlds,
+   2,000 iterations, about 2 h) and played through its 21.9 s without
+   falling ([record](findings/g1-court-dance-tracked-2026-11-17.json));
+   judged on 40 paired trials with pushes and up to 20 ms of lag it
+   succeeded in 18 of 40, and the lag decides it: 17 of 19 with none, 1 of
+   21 with one control tick
+   ([record](findings/g1-court-dance-evaluated-2026-11-17.json)). mjlab's
+   tracking task does not randomize action delay in training. Measured
    as a record in `docs/findings/` before any claim.
 4. **Manipulation on the SO-101**: hand pose, the retarget feed, success filtering,
    `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on
