@@ -1,0 +1,53 @@
+{
+ "id": "g1-court-dance-tracked-2026-11-17",
+ "claim": "A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video (retarget_video) dances the whole clip in physics without falling: 16,384 worlds for 2,000 iterations (1 h 58 min on one RTX 3090 Ti), then one play-mode rollout of the final checkpoint with 0 falls over 21.9 s, a mean body position error of 6.6 cm and a mean joint error of 0.14 rad against the reference. One seed and one rollout: a look, with no interval.",
+ "date": "2026-11-17",
+ "repo_commit": "0cde747",
+ "argv": [
+  "trainnr call train_tracking {\"reference\": \"court-dance-g1\", \"name\": \"court-dance-g1-16k\", \"iterations\": 2000, \"envs\": 16384}",
+  "trainnr call play_walk {\"experiment\": \"court-dance-g1-16k\", \"checkpoint\": \"model_1999\"}"
+ ],
+ "instrument": "NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2), the Studio open and receiving the stream; mjlab's Mjlab-Tracking-Flat-Unitree-G1 config through trainnr_mjlab.tracking_train (MuJoCo-Warp's ITERATIONS warning still printed in this run; LS_ITERATIONS not)",
+ "inputs": {
+  "reference": "court-dance-g1@99743ed23aee (record video-to-g1-on-a-24gb-card-2026-11-15): the court-dance footage through GEM-X and the SOMA Retargeter, floor levelled, 6 Hz smoothing; 1,095 frames at 50 fps"
+ },
+ "outcome": {
+  "training": {
+   "envs": 16384,
+   "iterations": 2000,
+   "wall_s": 7059,
+   "s_per_iteration": 3.5,
+   "samples": 786432000,
+   "last20": {
+    "episode_length_steps": 479.5,
+    "reward": 25.78,
+    "error_body_pos_m": 0.077,
+    "error_joint_pos": 1.096
+   },
+   "first20": {
+    "episode_length_steps": 7.97,
+    "reward": -0.73
+   }
+  },
+  "play": {
+   "checkpoint": "model_1999.pt",
+   "steps": 1095,
+   "seconds": 21.9,
+   "falls": 0,
+   "steps_alive": 1095,
+   "mean_body_pos_error_m": 0.0658,
+   "mean_joint_error_rad": 0.1403
+  }
+ },
+ "artifacts": {
+  "runs/court-dance-g1-16k": "the run in the g1-dance test project: identity.json, train.log, model_500/1000/1500/1999.pt, the saved stream",
+  "runs/court-dance-g1-16k/play-model_1999": "play.json, play.mp4 (the policy beside the footage), stream.rrd",
+  "footage/court-dance-g1-dances": "play.mp4 brought into the project to watch"
+ },
+ "protocol": "Training: train_tracking with the counts above; the last-20 and first-20 numbers are the means of rsl_rl's console over those iterations. Play: mjlab's play mode (the motion from frame 0, no pushes, no observation noise, no time limit), one world, the final checkpoint's actor, 1,095 control steps; a fall is an episode that ended before the clip did; errors are the tracking command's own body and joint differences averaged over the steps.",
+ "caveats": [
+  "One seed, one rollout, no pushes: not the tracking task's evaluation (paired trials with an interval, pushes and delays), which is the next step.",
+  "The reference is the person's motion as GEM-X estimated it, levelled and smoothed: the policy tracks that, and how faithful it is to the dancer is judged by eye in play.mp4.",
+  "Simulation only: no G1 to deploy to (docs/86 §9)."
+ ]
+}

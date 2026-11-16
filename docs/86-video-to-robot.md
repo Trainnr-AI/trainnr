@@ -307,7 +307,9 @@ The first three, NVIDIA's stack by default:
    tracking task as a trainnr job, live in the Studio); GEM-X's tilted
    floor levelled and its jitter smoothed on the way. Left: the tracking
    task family with its success criterion, the long training run, and the
-   evaluation. Measured
+   evaluation. On 2026-11-17 the court dance trained (16,384 worlds, 2,000
+   iterations, about 2 h) and played through its 21.9 s without falling
+   ([record](findings/g1-court-dance-tracked-2026-11-17.json)). Measured
    as a record in `docs/findings/` before any claim.
 4. **Manipulation on the SO-101**: hand pose, the retarget feed, success filtering,
    `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on

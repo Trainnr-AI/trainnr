@@ -23,10 +23,11 @@ record's numbers, command and artifacts stand on their own.
 `projects/…` paths are local project directories, untracked by
 design; where a copy ships it is named first.
 
-## Index (61 records, newest first)
+## Index (62 records, newest first)
 
 | record | date | claim |
 |---|---|---|
+| [g1-court-dance-tracked-2026-11-17](#g1-court-dance-tracked-2026-11-17) | 2026-11-17 | A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video… |
 | [g1-tracking-worlds-on-a-24gb-card-2026-11-16](#g1-tracking-worlds-on-a-24gb-card-2026-11-16) | 2026-11-16 | mjlab's G1 tracking task moves 1.8 times the samples per second with 16,384 worlds as with mjlab's 4,096 on… |
 | [video-to-g1-on-a-24gb-card-2026-11-15](#video-to-g1-on-a-24gb-card-2026-11-15) | 2026-11-15 | A 22-second dance video becomes a Unitree G1 reference motion on one 24 GB RTX 3090 Ti in about 7 minutes… |
 | [gr00t-n17-on-a-24gb-card-2026-11-02](#gr00t-n17-on-a-24gb-card-2026-11-02) | 2026-11-02 | GR00T N1.7 fine-tunes on one 24 GB RTX 3090 Ti: NVIDIA's own settings fit only with the DiT action head… |
@@ -88,6 +89,48 @@ design; where a copy ships it is named first.
 | [multiplication-basin-2026-08-31](#multiplication-basin-2026-08-31) | 2026-08-31 | Open-loop replay of a kept kitting episode from a jittered start survives inside a measured basin: 9/9 and… |
 | [t5-first-funnel-2026-08-27](#t5-first-funnel-2026-08-27) | 2026-08-27 | The T5 chain's first certificate, a 600-step ACT on four demonstrations: 0/4 on four paired starts, CP95 [0,… |
 | [audit-newton-solvermujoco-roundtrip-2026-08-27](#audit-newton-solvermujoco-roundtrip-2026-08-27) | 2026-08-27 | Newton's SolverMuJoCo import of a MuJoCo model drops sensors, keyframes and visual geoms, rewrites the root… |
+
+## g1-court-dance-tracked-2026-11-17
+
+**A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video (retarget_video) dances the whole clip in physics without falling: 16,384 worlds for 2,000 iterations (1 h 58 min on one RTX 3090 Ti), then one play-mode rollout of the final checkpoint with 0 falls over 21.9 s, a mean body position error of 6.6 cm and a mean joint error of 0.14 rad against the reference. One seed and one rollout: a look, with no interval.**
+
+- date: 2026-11-17 · commit: `0cde747`
+- instrument: `NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2), the Studio open and receiving the stream; mjlab's Mjlab-Tracking-Flat-Unitree-G1 config through trainnr_mjlab.tracking_train (MuJoCo-Warp's ITERATIONS warning still printed in this run; LS_ITERATIONS not)`
+- command: `trainnr call train_tracking {"reference": "court-dance-g1", "name": "court-dance-g1-16k", "iterations": 2000, "envs": 16384} trainnr call play_walk {"experiment": "court-dance-g1-16k", "checkpoint": "model_1999"}`
+- protocol: Training: train_tracking with the counts above; the last-20 and first-20 numbers are the means of rsl_rl's console over those iterations. Play: mjlab's play mode (the motion from frame 0, no pushes, no observation noise, no time limit), one world, the final checkpoint's actor, 1,095 control steps; a fall is an episode that ended before the clip did; errors are the tracking command's own body and joint differences averaged over the steps.
+- inputs:
+  - reference: court-dance-g1@99743ed23aee (record video-to-g1-on-a-24gb-card-2026-11-15): the court-dance footage through GEM-X and the SOMA Retargeter, floor levelled, 6 Hz smoothing; 1,095 frames at 50 fps
+- outcome:
+  - training:
+    - envs: 16384
+    - iterations: 2000
+    - wall_s: 7059
+    - s_per_iteration: 3.5
+    - samples: 786432000
+    - last20:
+      - episode_length_steps: 479.5
+      - reward: 25.78
+      - error_body_pos_m: 0.077
+      - error_joint_pos: 1.096
+    - first20:
+      - episode_length_steps: 7.97
+      - reward: -0.73
+  - play:
+    - checkpoint: model_1999.pt
+    - steps: 1095
+    - seconds: 21.9
+    - falls: 0
+    - steps_alive: 1095
+    - mean_body_pos_error_m: 0.0658
+    - mean_joint_error_rad: 0.1403
+- artifacts:
+  - runs/court-dance-g1-16k: the run in the g1-dance test project: identity.json, train.log, model_500/1000/1500/1999.pt, the saved stream
+  - runs/court-dance-g1-16k/play-model_1999: play.json, play.mp4 (the policy beside the footage), stream.rrd
+  - footage/court-dance-g1-dances: play.mp4 brought into the project to watch
+- caveats:
+  - One seed, one rollout, no pushes: not the tracking task's evaluation (paired trials with an interval, pushes and delays), which is the next step.
+  - The reference is the person's motion as GEM-X estimated it, levelled and smoothed: the policy tracks that, and how faithful it is to the dancer is judged by eye in play.mp4.
+  - Simulation only: no G1 to deploy to (docs/86 §9).
 
 ## g1-tracking-worlds-on-a-24gb-card-2026-11-16
 

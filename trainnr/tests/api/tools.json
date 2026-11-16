@@ -1397,7 +1397,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Open an experiment's checkpoint in mjlab's own viewer (viser in the browser, or native), the rollout also streamed into the Studio's Simulator. A job; it lives until closed.",
+    "description": "Open an experiment's checkpoint in mjlab's viewer (viser or native), streamed into the Studio's Simulator; a tracking run plays its clip once, filmed. A job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
