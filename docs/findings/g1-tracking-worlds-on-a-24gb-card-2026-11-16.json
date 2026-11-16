@@ -1,0 +1,56 @@
+{
+ "id": "g1-tracking-worlds-on-a-24gb-card-2026-11-16",
+ "claim": "mjlab's G1 tracking task moves 1.8 times the samples per second with 16,384 worlds as with mjlab's 4,096 on one RTX 3090 Ti (113k against 63k, 24 steps per world per iteration), the card busy 81% of the time against 60%, in 9.4 GB; and at 4,096 worlds MuJoCo-Warp's line-search warning wrote 9.3 GB of job log in 400 iterations until its print was turned off.",
+ "date": "2026-11-16",
+ "repo_commit": "55009ad",
+ "argv": [
+  "trainnr call train_tracking {\"reference\": \"court-dance-g1\", \"name\": \"util-<envs>\", \"iterations\": 40, \"envs\": <envs>}"
+ ],
+ "instrument": "NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, PCIe 4.0 x8, WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2), the Studio open with the training streamed into it; trainnr_mjlab.tracking_train on mjlab's Mjlab-Tracking-Flat-Unitree-G1 config (PPO, 24 steps per world per iteration)",
+ "inputs": {
+  "reference": "court-dance-g1 (record video-to-g1-on-a-24gb-card-2026-11-15): 1,095 frames at 50 fps"
+ },
+ "outcome": {
+  "worlds": [
+   {
+    "envs": 4096,
+    "s_per_iteration": 1.55,
+    "samples_per_s": 63422,
+    "gpu_util_mean_pct": 60,
+    "gpu_util_p90_pct": 76,
+    "peak_mib": 5583
+   },
+   {
+    "envs": 8192,
+    "s_per_iteration": 2.21,
+    "samples_per_s": 88963,
+    "gpu_util_mean_pct": 69,
+    "gpu_util_p90_pct": 82,
+    "peak_mib": 6881
+   },
+   {
+    "envs": 16384,
+    "s_per_iteration": 3.48,
+    "samples_per_s": 112993,
+    "gpu_util_mean_pct": 81,
+    "gpu_util_p90_pct": 91,
+    "peak_mib": 9429
+   }
+  ],
+  "log_flood": {
+   "envs": 4096,
+   "iterations": 407,
+   "job_log_bytes": 9355016286,
+   "job_log_lines": 106346804,
+   "note": "MuJoCo-Warp's 'linesearch iterations limit reached' pair, printed from the GPU; mjlab's own scripts/train.py wrote 12.5 GB and 14.9 GB for 500 iterations on the dance and the walk. With LS_ITERATIONS and ITERATIONS cleared in warn_overflow (printing only) a 30-iteration run's log was 0.8 MB"
+  }
+ },
+ "artifacts": {
+  "runs/util-4096, runs/util-8192, runs/util-16384": "the three 40-iteration runs in the g1-dance test project, train.log with each iteration's time"
+ },
+ "protocol": "Each world count: one 40-iteration train_tracking job on the same reference, one at a time; iteration time averaged over the last 20 iterations from rsl_rl's console; the card's utilization and memory sampled every 0.5 s by nvidia-smi over the same span. samples per second = worlds x 24 / seconds per iteration.",
+ "caveats": [
+  "Throughput, not learning: whether 16,384 worlds for fewer iterations learns the dance as well as mjlab's 4,096 for more is what the long run measures.",
+  "The Studio was open and receiving the stream; its share of the card is in every row."
+ ]
+}

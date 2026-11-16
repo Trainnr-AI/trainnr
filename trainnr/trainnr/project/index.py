@@ -47,7 +47,12 @@ from trainnr.deploy.preflight import (
 from trainnr.deploy.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from trainnr.deploy.viewport_source import VIEWPORT_KEY, scenes_of
 from trainnr.envs.lerobot_train_log import RUN_MANIFEST_FILE
-from trainnr.envs.rsl_rl_log import COL_REWARD, STATUS_RUNNING, TRAINING_FILE
+from trainnr.envs.rsl_rl_log import (
+    COL_REWARD,
+    STATUS_DONE,
+    STATUS_RUNNING,
+    TRAINING_FILE,
+)
 from trainnr.evaluate.commands import describe_twist
 from trainnr.fleet.drift import verdict_word
 from trainnr.project.files import read_json, write_json, write_text
@@ -280,13 +285,19 @@ def index_project(project: Project) -> ProjectIndex:
         next_move=(missing[0].note or NEXT_MOVE[missing[0].name]) if missing else None,
         refused=refused,
         in_progress=in_progress + _live_capture(project),
-        template=_plan(manifest.template, states),
+        template=_plan(manifest.template, states, artifacts),
     )
 
 
-def _plan(name: str, states: list[State]) -> dict[str, Any] | None:
-    """The template's plan with each step's state: done when its stage
-    is proved. A name this version does not know keeps its name alone."""
+def _plan(
+    name: str, states: list[State], artifacts: list[Artifact]
+) -> dict[str, Any] | None:
+    """The template's plan with each step's state. A step that names its
+    proof (`templates.Step.proof`) is done when such an artifact exists
+    and, for a run, has finished; one still training is `running`, with
+    its progress. Any other step is done when its stage is proved. A
+    done step says what proved it. A name this version does not know
+    keeps its name alone."""
     from trainnr.templates import TEMPLATES, describe  # noqa: PLC0415
 
     if not name:
@@ -295,7 +306,32 @@ def _plan(name: str, states: list[State]) -> dict[str, Any] | None:
         return {"name": name, "title": name, "steps": []}
     proved = {s.name for s in states if s.present}
     plan = describe(TEMPLATES[name])
-    plan["steps"] = [step | {"done": step["stage"] in proved} for step in plan["steps"]]
+    steps = []
+    for step in plan["steps"]:
+        proof = step.pop("proof", None)
+        if proof is None:
+            steps.append(step | {"done": step["stage"] in proved})
+            continue
+        kind, field, value = proof
+        made = [
+            a for a in artifacts if a.kind == kind and a.summary.get(field) == value
+        ]
+        # A run counts once it finished; one stopped part-way (its log no
+        # longer growing, `unrecorded`) proves nothing. Other kinds carry
+        # no status and count as they land.
+        finished = [
+            a for a in made if a.summary.get("status", STATUS_DONE) == STATUS_DONE
+        ]
+        running = [a for a in made if a.summary.get("status") == STATUS_RUNNING]
+        state: dict[str, Any] = {"done": bool(finished)}
+        if finished:
+            last = max(finished, key=lambda a: a.updated or "")
+            how = last.summary.get("iterations")
+            state["proved_by"] = last.stamp + (f", {how} iterations" if how else "")
+        if running:
+            state["running"] = running[0].summary.get("progress") or "running"
+        steps.append(step | state)
+    plan["steps"] = steps
     return plan
 
 
@@ -589,6 +625,8 @@ def _summary_run(path: Path) -> dict[str, Any]:
             logged = training.get("iterations_logged")
             if status == STATUS_RUNNING and planned and logged is not None:
                 out["progress"] = f"{logged} of {planned} iterations"
+    if ident.get("task"):
+        out["task"] = ident["task"]
     basis = ident.get("dr_basis") or ""
     if basis:
         out["randomization"] = randomization_label(basis)

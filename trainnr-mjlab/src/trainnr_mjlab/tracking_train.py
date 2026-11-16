@@ -29,7 +29,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from trainnr.mcp_jobs import VIEWPORT_WALK, default_jobs_root, jobs_dir_of, track
+from trainnr.mcp_jobs import default_jobs_root, jobs_dir_of, track
 from trainnr.project.kinds import IDENTITY_FILE
 from trainnr.robots.recording import MANIFEST_FILE as RECORDING_FILE
 
@@ -44,6 +44,38 @@ TRAIN_KIND = "train-tracking"
 ENVS = 4096  # mjlab's tracking recipe; one world learns nothing
 ITERATIONS = 6000
 EVERY = 100
+
+
+# MuJoCo-Warp prints "linesearch iterations limit reached" (and "solver
+# iterations limit reached") from the GPU each time a world's solver hits
+# mjlab's limits (20 line-search steps, 10 iterations): with 4096 G1
+# worlds that was 100 million lines, 9.3 GB of job log in 400 iterations
+# (2026-11-16). The prints alone are turned off; the solver, its limits
+# and every other warning stay as mjlab sets them.
+QUIET_WARNINGS = ("LS_ITERATIONS", "ITERATIONS")
+
+
+def quiet_line_search(sim_cfg: Any) -> Any:
+    """`sim_cfg` as a SimulationCfg that also clears the warning's bit, in
+    mjlab's own hook for MuJoCo-Warp options (`apply_wp_opt`, after the
+    model is built and before its CUDA graphs are captured; the built
+    model is read-only)."""
+    from dataclasses import fields  # noqa: PLC0415
+
+    import mujoco_warp as mjw  # noqa: PLC0415
+    from mjlab.sim.sim import SimulationCfg  # noqa: PLC0415
+
+    class QuietSimulationCfg(SimulationCfg):
+        def apply_wp_opt(self, wp_opt: Any) -> None:
+            super().apply_wp_opt(wp_opt)
+            for name in QUIET_WARNINGS:
+                wp_opt.warn_overflow = int(wp_opt.warn_overflow) & ~int(
+                    getattr(mjw.OverflowType, name)
+                )
+
+    return QuietSimulationCfg(
+        **{f.name: getattr(sim_cfg, f.name) for f in fields(sim_cfg)}
+    )
 
 
 def main() -> None:  # noqa: PLR0915 - one trainer, each step named
@@ -84,6 +116,10 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
     cfg.scene.num_envs = args.envs
     if args.seed is not None:
         cfg.seed = args.seed
+    cfg.sim = quiet_line_search(cfg.sim)
+    print(
+        f"[tracking] MuJoCo-Warp's {', '.join(QUIET_WARNINGS)} warnings are not printed"
+    )
     agent = load_rl_cfg(TASK_ID)
     agent.max_iterations = args.iterations
     agent.logger = "tensorboard"  # mjlab's default is Weights & Biases: a network call
@@ -104,6 +140,7 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
         Identity.SEED: cfg.seed,
         "reference": args.reference_stamp or reference.name,
         "footage": record.get("census", {}).get("footage"),
+        "quiet_warnings": list(QUIET_WARNINGS),
     }
     (log_dir / IDENTITY_FILE).write_text(json.dumps(identity, indent=1))
     sys.stdout = Tee(sys.stdout, log_dir / "train.log")
@@ -115,7 +152,6 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
         TRAIN_KIND,
         jobs_dir=jobs_dir_of(args.project or default_jobs_root()),
         name=log_dir.name,
-        viewport=VIEWPORT_WALK,
         viewer=str(viewer_file(log_dir, TRAIN_STREAM)),
         stream=f"{TRAINING_APP_PREFIX}tracking-{log_dir.name}",
     ) as run:

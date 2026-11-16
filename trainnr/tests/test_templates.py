@@ -69,6 +69,71 @@ class AProjectFromATemplate(unittest.TestCase):
         self.assertEqual(titles, [s.title for s in template.steps])
         self.assertFalse(any(s["done"] for s in plan["steps"]))
 
+    def test_a_step_is_done_by_its_own_artifact_not_by_its_stage(self) -> None:
+        """A plain recording proves Telemetry but not "Turn a video into
+        motion"; a tracking run proves its step once finished, and reads
+        running while it trains (2026-11-16)."""
+        import json  # noqa: PLC0415
+
+        from trainnr.templates import TRACKING_TASK  # noqa: PLC0415
+
+        project = create_project(
+            self.home / "g1", "g1", template="humanoid-motion-from-video"
+        )
+
+        def recording(name: str, collection: str) -> None:
+            folder = project.recordings / name
+            folder.mkdir(parents=True)
+            (folder / "recording.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "trainnr-recording/1",
+                        "source": name,
+                        "adapter": "x",
+                        "duration_s": 1.0,
+                        "channels": [],
+                        "collection": collection,
+                    }
+                )
+            )
+
+        def run(name: str, status: str, iterations: int) -> None:
+            folder = project.root / "runs" / name
+            folder.mkdir(parents=True)
+            (folder / "identity.json").write_text(json.dumps({"task": TRACKING_TASK}))
+            (folder / "training.json").write_text(
+                json.dumps(
+                    {
+                        "status": status,
+                        "iterations": 2000,
+                        "iterations_logged": iterations,
+                    }
+                )
+            )
+
+        def steps() -> dict[str, dict]:
+            plan = index_project(Project(project.root)).template
+            assert plan is not None
+            return {s["title"]: s for s in plan["steps"]}
+
+        recording("telemetry", "teleop")
+        self.assertFalse(steps()["Turn a video into motion"]["done"])
+        recording("dance", "video")
+        video = steps()["Turn a video into motion"]
+        self.assertTrue(video["done"])
+        self.assertTrue(video["proved_by"].startswith("dance@"))
+
+        run("long", "running", 113)
+        training = steps()["Train it to track the motion"]
+        self.assertFalse(training["done"])
+        self.assertEqual(training["running"], "113 of 2000 iterations")
+        run("stopped", "unrecorded", 281)
+        self.assertFalse(steps()["Train it to track the motion"]["done"])
+        run("check", "done", 30)
+        training = steps()["Train it to track the motion"]
+        self.assertTrue(training["done"])
+        self.assertIn(", 30 iterations", training["proved_by"])
+
     def test_refuses_a_loop_the_template_does_not_have(self) -> None:
         with self.assertRaisesRegex(ValueError, "reinforcement loop"):
             create_project(
