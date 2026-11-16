@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from trainnr.tasks.tracking import FAMILY, MJLAB_TASK
+
 # What a step runs on, in the words the Overview shows.
 THIS_MACHINE = "this machine"
 NVIDIA_GPU = "an NVIDIA GPU"
@@ -26,9 +28,10 @@ NVIDIA_GPU = "an NVIDIA GPU"
 GPU_24GB = "an NVIDIA GPU, 24 GB"
 
 
-# mjlab's tracking task, as a tracking run's identity names it
-# (trainnr_mjlab.tracking_train).
-TRACKING_TASK = "Mjlab-Tracking-Flat-Unitree-G1"
+# mjlab's tracking task, as a tracking run's identity names it, and the
+# family a project declares it as: the family's own names.
+TRACKING_TASK = MJLAB_TASK
+TRACKING_FAMILY = FAMILY
 
 
 @dataclass(frozen=True)
@@ -112,6 +115,8 @@ TEMPLATES: dict[str, Template] = {
                     "Make the tracking task",
                     "Success is tracking the whole clip without falling.",
                     THIS_MACHINE,
+                    tool="create_task",
+                    proof=("task", "template", TRACKING_FAMILY),
                 ),
                 Step(
                     "policy trained",

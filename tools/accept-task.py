@@ -21,6 +21,7 @@ import contextlib
 import json
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,7 +33,11 @@ bootstrap()
 
 import mujoco  # noqa: E402
 from trainnr.envs.gymnasium_env import bundle_source  # noqa: E402
-from trainnr.mcp_actions import TRAINNR_MJLAB_DIR, walk_train_argv  # noqa: E402
+from trainnr.mcp_actions import (  # noqa: E402
+    TRAINNR_MJLAB_DIR,
+    tracking_train_argv,
+    walk_train_argv,
+)
 from trainnr.mcp_jobs import prepare_uv  # noqa: E402
 from trainnr.physics.backend import instrument_stamp  # noqa: E402
 from trainnr.project import index_project, write_index  # noqa: E402
@@ -48,6 +53,7 @@ from trainnr.project.task_ref import (  # noqa: E402
 from trainnr.tasks.acceptance import accept  # noqa: E402
 from trainnr.tasks.experts import expert_for, experts  # noqa: E402
 from trainnr.tasks.overlay import build_from_reference, build_variant  # noqa: E402
+from trainnr.tasks.tracking import is_tracking  # noqa: E402
 from trainnr.tasks.walks import (  # noqa: E402
     bundle_walk_shape_missing,
     walk_robot,
@@ -181,6 +187,111 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
     return accepted
 
 
+TRACKING_SMOKE_ENVS = 64
+TRACKING_DONE_MARK = "[tracking] done"  # trainnr_mjlab.tracking_train's last line
+TRACKING_MOTION = "raw/motion.npz"
+VIDEO_COLLECTION = "video"
+
+
+def tracking_reference_problems(
+    project: Project, stamp: str
+) -> tuple[Path | None, str, list[str]]:
+    """The reference a tracking task names, in the project, and why it
+    cannot be tracked: missing, not made from video, or holding no motion
+    for mjlab's tracking task."""
+    if not stamp:
+        return None, stamp, ["the task names no reference"]
+    match = [
+        a
+        for a in index_project(project).artifacts
+        if a.kind == "recording"
+        and (a.stamp == stamp or a.stamp.split("@", 1)[0] == stamp)
+    ]
+    if not match:
+        return (
+            None,
+            stamp,
+            [f"no recording {stamp!r} in the project: retarget_video makes one"],
+        )
+    folder = project.root / match[0].path
+    problems = []
+    if match[0].summary.get("collection") != VIDEO_COLLECTION:
+        problems.append(f"{match[0].stamp} was not made from video (retarget_video)")
+    if not (folder / TRACKING_MOTION).is_file():
+        problems.append(f"{match[0].stamp} holds no {TRACKING_MOTION}")
+    return folder, match[0].stamp, problems
+
+
+def review_tracking(
+    project: Project,
+    folder: Path,
+    ref: TaskReference,
+    *,
+    run: Runner = subprocess.run,
+    prepare: Callable[[Sequence[str], Path], None] = prepare_uv,
+) -> bool:
+    """A tracking task's acceptance: its reference is a reference (made
+    from video, holding the motion mjlab reads), then learnability, a few
+    PPO iterations on it through the SAME command line train_tracking
+    spawns, as a walk's smoke."""
+    stamp = str(ref.spec.get("reference", ""))
+    reference, stamp, problems = tracking_reference_problems(project, stamp)
+    if problems or reference is None:
+        _write_walk_verdict(
+            project, folder, ref, accepted=False,
+            gate="the reference, before the learnability smoke",
+            reasons=problems, identity={}, log=None,
+        )  # fmt: skip
+        print(f"REJECTED: {ref.stamp} — {'; '.join(problems)}", flush=True)
+        return False
+    log_path = folder / ACCEPTANCE_LOG
+    # the smoke's run folder is thrown away: its identity.json would read
+    # as an experiment of the project
+    scratch = tempfile.TemporaryDirectory(prefix="trainnr-accept-")
+    run_dir = Path(scratch.name) / "run"
+    argv = tracking_train_argv(
+        reference=str(reference),
+        reference_stamp=stamp,
+        log_dir=str(run_dir),
+        project=str(project.root),
+        envs=TRACKING_SMOKE_ENVS,
+        iterations=SMOKE_ITERATIONS,
+        task_stamp=ref.stamp,
+        recorder=False,
+    )
+    prepare(argv, TRAINNR_MJLAB_DIR)
+    with log_path.open("w") as log:
+        result = run(
+            argv,
+            cwd=TRAINNR_MJLAB_DIR,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    scratch.cleanup()
+    lines = log_path.read_text(errors="replace").splitlines()
+    identity: dict = {}
+    for line in lines:
+        if "identity:" in line:
+            with contextlib.suppress(ValueError, SyntaxError):
+                identity = ast.literal_eval(line.split("identity:", 1)[1].strip())
+    accepted = result.returncode == 0 and any(
+        TRACKING_DONE_MARK in line for line in lines
+    )
+    _write_walk_verdict(
+        project, folder, ref, accepted=accepted,
+        gate=(
+            f"learnability smoke: {TRACKING_SMOKE_ENVS} worlds, "
+            f"{SMOKE_ITERATIONS} PPO iterations on the reference"
+        ),
+        reasons=[] if accepted else [
+            f"the learnability smoke exited {result.returncode}; see acceptance.log"
+        ],
+        identity=identity, log=log_path.name,
+    )  # fmt: skip
+    return accepted
+
+
 def _write_walk_verdict(  # noqa: PLR0913 - the verdict's fields, each named
     project: Project,
     folder: Path,
@@ -225,6 +336,8 @@ def review_declared(project_root: Path, name: str) -> bool:
     robot = walk_robot(ref.task_id)
     if robot is not None:
         return review_walk(project, ref.folder, ref, robot)
+    if is_tracking(ref.task_id):
+        return review_tracking(project, ref.folder, ref)
     task = build_from_reference({"task_id": ref.task_id, "spec": ref.spec})
     expert = expert_for(ref.task_id)
     spec = task.task_spec

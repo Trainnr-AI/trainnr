@@ -174,7 +174,7 @@ tooling; nothing below it imports it):
 | `video/quality` | the checks every motion and reference passes: confidence, jitter, foot skate, limits, self-collision; each check a named pass or fail in the record |
 | `video/augment` | the `Augmenter` protocol and registry (`trainnr.augmenters`); writes a new batch citing the old one, its actions untouched and checked equal |
 | `video/nvidia/` | the default implementations: `gem_x` (estimator), `soma` (retargeter), `cosmos_transfer` (augmenter). Each runs the NVIDIA tool **as an external program in its own environment**, found or installed the way `scenes/tooling.py` finds COLMAP, never as a trainnr dependency |
-| `tasks/tracking` | the tracking task family: a reference, a robot, a success criterion (tracking error under a bound for the whole clip, never fallen) |
+| `tasks/tracking` | the tracking task family `g1-tracking` (built 2026-11-17): a reference, the robot, the success criterion (the clip played to its end with no termination; mjlab's terminations are the tracking bounds, so no second threshold), and the evaluation's conditions (paired trials, pushes, a command lag) |
 | `collect/retarget_feed` | the expert that replays a reference's end-effector path, so a manipulation batch is filtered for success like any other |
 | `collect/gr00t_export` | a dataset in GR00T's LeRobot v2 flavour with `meta/modality.json`, written from the same episodes as the v3 export, with the same provenance |
 | `trainnr_mjlab/tracking` | the bridge to mjlab's tracking task: reference → motion `.npz` (its `csv_to_npz`) → train; the run records the reference's stamp |
@@ -196,10 +196,13 @@ Verb first, as GOVERNANCE.md asks; long ones are jobs:
   room for two tools, and nothing yet reads a motion without its
   retarget). An `estimator` and a `retargeter` argument come with the
   second implementation of either
-- `create_task(...)` gains the tracking family, naming a reference
-- `train_tracking(reference, ...)` → run (job, mjlab; built 2026-11-15:
-  the reference directly, until a tracking task family declares the
-  success criterion)
+- `create_task(family="g1-tracking", settings={"reference": ...})` → a
+  tracking task (built 2026-11-17); `check_task` accepts it when the
+  reference was made from video, holds mjlab's motion, and two PPO
+  iterations run on it
+- `train_tracking(reference, ...)` → run (job, mjlab; built 2026-11-15).
+  `reference` is a tracking task, whose run then cites it, or a reference
+  directly
 - `replay_references(task, references, ...)` → batch (job)
 - `export_dataset(batch, format="lerobot-v3" | "gr00t")` → dataset (the
   missing "make a dataset" tool the map found)
@@ -305,9 +308,9 @@ The first three, NVIDIA's stack by default:
    2026-11-15 up to training: `retarget_video` (footage to a G1 reference
    in about 7 minutes, live in the Studio) and `train_tracking` (mjlab's
    tracking task as a trainnr job, live in the Studio); GEM-X's tilted
-   floor levelled and its jitter smoothed on the way. Left: the tracking
-   task family with its success criterion, the long training run, and the
-   evaluation. On 2026-11-17 the court dance trained (16,384 worlds, 2,000
+   floor levelled and its jitter smoothed on the way. The tracking task
+   family with its success criterion came 2026-11-17. Left: the
+   evaluation and the export. On 2026-11-17 the court dance trained (16,384 worlds, 2,000
    iterations, about 2 h) and played through its 21.9 s without falling
    ([record](findings/g1-court-dance-tracked-2026-11-17.json)). Measured
    as a record in `docs/findings/` before any claim.

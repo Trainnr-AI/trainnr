@@ -84,6 +84,7 @@ from trainnr.tasks.overlay import jsonable as _plain_jsonable
 
 if TYPE_CHECKING:
     from trainnr.tasks.task import Task
+    from trainnr.tasks.tracking import TrackingTask
 
 DETAILS_DIR = "details"
 # /6 (2026-09-22): a gate's trials in its protocol's shape (a course gate's
@@ -630,8 +631,9 @@ def _acceptance(a: dict[str, Any]) -> dict[str, Any]:
         "Acceptance",
         rows,
         note=(
-            "A walk is accepted when its environment builds from the project's "
-            "robot and PPO iterations run: learnability, not a scripted expert."
+            "A walk or tracking task is accepted when its environment builds "
+            "(from the robot, or the reference) and PPO iterations run: "
+            "learnability, not a scripted expert."
             if gate
             else "The scripted policy must succeed on every paired trial and the "
             "floor policy (holding home) on none."
@@ -784,12 +786,36 @@ def _describe_walk(task: Task) -> Rows:
     ]
 
 
+def _is_tracking(task: Any) -> bool:
+    from trainnr.tasks.tracking import TrackingTask  # noqa: PLC0415
+
+    return isinstance(task, TrackingTask)
+
+
+def _describe_tracking(task: TrackingTask) -> Rows:
+    spec = task.task_spec
+    return [
+        ("robot", task.robot),
+        ("reference", spec.reference),
+        ("control rate (Hz)", task.control_hz),
+        ("success", task.success),
+        ("paired trials per evaluation", spec.trials),
+        ("pushes in evaluation", "yes, as in training" if spec.pushes else "no"),
+        (
+            "command lag in evaluation (ms)",
+            f"0 to {spec.lag_ms:g}" if spec.lag_ms else "none",
+        ),
+        ("instruction", task.instruction),
+    ]
+
+
 def _describe_other(task: Task) -> Rows:
     return _episode_common(task, None, None)
 
 
 _TASK_DESCRIBERS: tuple[tuple[Callable[[Any], bool], Callable[[Any], Rows]], ...] = (
     (_is_manipulation, _describe_manipulation),
+    (_is_tracking, _describe_tracking),
     (_is_walk, _describe_walk),
     (lambda _task: True, _describe_other),
 )

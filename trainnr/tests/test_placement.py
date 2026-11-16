@@ -66,11 +66,12 @@ class TheGate(unittest.TestCase):
         from trainnr.physics.mujoco_backend import MuJoCoBackend  # noqa: PLC0415
         from trainnr.physics.placement import start_verdicts  # noqa: PLC0415
         from trainnr.tasks.registry import tasks  # noqa: PLC0415
+        from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
         from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
 
         for task_id, entry in tasks().items():
-            if walk_robot(task_id) is not None:
-                continue  # a walk has no placements to admit
+            if walk_robot(task_id) is not None or is_tracking(task_id):
+                continue  # a walk or a tracking task has no placements to admit
             task = entry.build()
             if not task.protocol.placements:
                 continue

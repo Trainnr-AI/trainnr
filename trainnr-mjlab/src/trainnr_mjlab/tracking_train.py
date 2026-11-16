@@ -32,11 +32,12 @@ from typing import Any
 from trainnr.mcp_jobs import default_jobs_root, jobs_dir_of, track
 from trainnr.project.kinds import IDENTITY_FILE
 from trainnr.robots.recording import MANIFEST_FILE as RECORDING_FILE
+from trainnr.tasks.tracking import MJLAB_TASK
 
 from trainnr_mjlab.walk_train import TRAIN_STREAM, Tee, TrainingTicker
 from trainnr_mjlab.walks import Identity, use_project
 
-TASK_ID = "Mjlab-Tracking-Flat-Unitree-G1"
+TASK_ID = MJLAB_TASK
 ROBOT = "unitree_g1"
 MOTION_FILE = "raw/motion.npz"
 # The job table's word, the door's own (`train_tracking`).
@@ -82,6 +83,8 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     parser.add_argument("reference", type=Path, help="the reference recording")
     parser.add_argument("--reference-stamp", default=None)
+    parser.add_argument("--task-stamp", default=None, help="the declared tracking task")
+    parser.add_argument("--no-recorder", action="store_true")
     parser.add_argument("--log-dir", type=Path, required=True)
     parser.add_argument("--project", default=None)
     parser.add_argument("--envs", type=int, default=ENVS)
@@ -126,17 +129,22 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
 
     log_dir = args.log_dir.resolve()
     log_dir.mkdir(parents=True, exist_ok=True)
-    cfg.recorders = {
-        "rerun": RerunRecorderCfg(
-            app_id=f"{TRAINING_APP_PREFIX}tracking-{log_dir.name}",
-            every=args.every,
-            frame_every=args.frame_every,
-            file=str(viewer_file(log_dir, TRAIN_STREAM)),
-        )
-    }
+    cfg.recorders = (
+        {}
+        if args.no_recorder
+        else {
+            "rerun": RerunRecorderCfg(
+                app_id=f"{TRAINING_APP_PREFIX}tracking-{log_dir.name}",
+                every=args.every,
+                frame_every=args.frame_every,
+                file=str(viewer_file(log_dir, TRAIN_STREAM)),
+            )
+        }
+    )
     identity = {
         Identity.ROBOT: record.get("census", {}).get("robot", ROBOT),
         Identity.TASK: TASK_ID,
+        "tracking_task": args.task_stamp,
         Identity.SEED: cfg.seed,
         "reference": args.reference_stamp or reference.name,
         "footage": record.get("census", {}).get("footage"),

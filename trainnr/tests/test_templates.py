@@ -72,7 +72,7 @@ class AProjectFromATemplate(unittest.TestCase):
     def test_a_step_is_done_by_its_own_artifact_not_by_its_stage(self) -> None:
         """A plain recording proves Telemetry but not "Turn a video into
         motion"; a tracking run proves its step once finished, and reads
-        running while it trains (2026-11-16)."""
+        running while it trains (2026-11-16); a tracking task once accepted."""
         import json  # noqa: PLC0415
 
         from trainnr.templates import TRACKING_TASK  # noqa: PLC0415
@@ -133,6 +133,18 @@ class AProjectFromATemplate(unittest.TestCase):
         training = steps()["Train it to track the motion"]
         self.assertTrue(training["done"])
         self.assertIn(", 30 iterations", training["proved_by"])
+
+        # a tracking task proves its step once accepted, not once declared
+        from trainnr.project.task_ref import declare_task  # noqa: PLC0415
+
+        declare_task(project, "g1-tracking", "dance-tracking", {"reference": "dance"})
+        self.assertFalse(steps()["Make the tracking task"]["done"])
+        (project.root / "tasks" / "dance-tracking" / "acceptance.json").write_text(
+            json.dumps({"accepted": True})
+        )
+        task = steps()["Make the tracking task"]
+        self.assertTrue(task["done"])
+        self.assertTrue(task["proved_by"].startswith("dance-tracking@"))
 
     def test_refuses_a_loop_the_template_does_not_have(self) -> None:
         with self.assertRaisesRegex(ValueError, "reinforcement loop"):
