@@ -172,6 +172,7 @@
      "files": [],
      "folder": false,
      "choices": [
+      "trainnr/g1-tracking",
       "trainnr/go1-walk",
       "trainnr/go2-walk",
       "trainnr/gripper-pick",
@@ -198,7 +199,7 @@
    "tool": "check_task",
    "page": "environments",
    "label": "Check environment",
-   "summary": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk: two training iterations run).",
+   "summary": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk, tracking: two training iterations run).",
    "fields": [
     {
      "name": "task",
@@ -297,7 +298,7 @@
    "tool": "train_tracking",
    "page": "experiments",
    "label": "Train tracking",
-   "summary": "Train the G1 to track a retarget_video reference (mjlab; hours on a GPU), live in the Studio.",
+   "summary": "Train the G1 on a tracking task or retarget_video reference (mjlab; hours on a GPU), live in the Studio.",
    "fields": [
     {
      "name": "reference",

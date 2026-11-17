@@ -174,6 +174,41 @@ def require_walk_robot(robot: str | None) -> str:
     return robot
 
 
+def tracking_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
+    *,
+    reference: str,
+    reference_stamp: str,
+    log_dir: str,
+    project: str,
+    envs: int | None = None,
+    iterations: int | None = None,
+    task_stamp: str | None = None,
+    recorder: bool = True,
+    env_file: Path | None = ENV_FILE,
+) -> list[str]:
+    """The one command line that trains a tracking policy through
+    trainnr_mjlab, for train_tracking and for a tracking task's acceptance
+    alike, with the launch environment the trainer needs on this machine."""
+    argv = [
+        *_uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS, env_file=env_file),
+        "-m",
+        "trainnr_mjlab.tracking_train",
+        reference,
+        "--reference-stamp",
+        reference_stamp,
+        "--log-dir",
+        log_dir,
+        "--project",
+        project,
+    ]
+    argv += _given("--envs", envs)
+    argv += _given("--iterations", iterations)
+    argv += _given("--task-stamp", task_stamp)
+    if not recorder:
+        argv.append("--no-recorder")
+    return argv
+
+
 def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
     *,
     agent: str,
@@ -432,23 +467,20 @@ class Actions:
         project: str,
         envs: int | None = None,
         iterations: int | None = None,
+        task_stamp: str | None = None,
     ) -> JobHandle:
         """The G1 learns to track a reference motion (mjlab's tracking task,
         trainnr_mjlab.tracking_train), streamed into the Studio."""
-        argv = [
-            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
-            "-m",
-            "trainnr_mjlab.tracking_train",
-            reference,
-            "--reference-stamp",
-            reference_stamp,
-            "--log-dir",
-            log_dir,
-            "--project",
-            project,
-            *_given("--envs", envs),
-            *_given("--iterations", iterations),
-        ]
+        argv = tracking_train_argv(
+            reference=reference,
+            reference_stamp=reference_stamp,
+            log_dir=log_dir,
+            project=project,
+            envs=envs,
+            iterations=iterations,
+            task_stamp=task_stamp,
+            env_file=self.env_file,
+        )
         return self.jobs.start("train-tracking", argv, TRAINNR_MJLAB_DIR)
 
     def evaluate_walk(  # noqa: PLR0913 - the evaluation's knobs, each named

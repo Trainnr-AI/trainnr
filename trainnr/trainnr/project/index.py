@@ -320,7 +320,11 @@ def _plan(
         # longer growing, `unrecorded`) proves nothing. Other kinds carry
         # no status and count as they land.
         finished = [
-            a for a in made if a.summary.get("status", STATUS_DONE) == STATUS_DONE
+            a
+            for a in made
+            if a.summary.get("status", STATUS_DONE) == STATUS_DONE
+            # a task counts once accepted, as its stage does
+            and (a.kind != Kind.TASK.value or a.summary.get("acceptance") == ACCEPTED)
         ]
         running = [a for a in made if a.summary.get("status") == STATUS_RUNNING]
         state: dict[str, Any] = {"done": bool(finished)}

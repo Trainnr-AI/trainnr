@@ -586,17 +586,31 @@ def train_tracking(
     iterations: int | None = None,
     envs: int | None = None,
 ) -> dict[str, Any] | Refusal:
-    """Train the G1 to track a reference motion from `retarget_video`, in
-    mjlab's tracking task (4096 worlds, 6000 iterations unless set: hours
-    on a GPU), as experiment `name`; streamed live into the Studio."""
+    """Train the G1 to track a reference motion in mjlab's tracking task
+    (4096 worlds, 6000 iterations unless set: hours on a GPU), as
+    experiment `name`; streamed live into the Studio. `reference` is a
+    declared tracking task (create_task, family g1-tracking), whose run
+    then cites it, or a `retarget_video` recording directly."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+    from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.kinds import Kind  # noqa: PLC0415
+    from trainnr.project.locate import TASKS_FOLDER  # noqa: PLC0415
+    from trainnr.project.task_ref import read_task_reference  # noqa: PLC0415
+    from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
 
     for count, value in (("envs", envs), ("iterations", iterations)):
         if value is not None and value < 1:
             return refusal(f"{count} must be at least 1, got {value}")
+    task_stamp = None
     try:
+        here = current_project()
+        task_name = reference.split("@", 1)[0]
+        if (here.folder(TASKS_FOLDER) / task_name).is_dir():
+            ref = read_task_reference(here, task_name)
+            if not is_tracking(ref.task_id):
+                return refusal(f"task {reference!r} is not a tracking task")
+            task_stamp, reference = ref.stamp, str(ref.spec.get("reference", ""))
         project, found = _project_artifact(reference, Kind.RECORDING.value)
         folder = project.root / found.path
         if not (folder / "raw" / "motion.npz").is_file():
@@ -617,6 +631,7 @@ def train_tracking(
         project=str(project.root),
         envs=envs,
         iterations=iterations,
+        task_stamp=task_stamp,
     )
     return {
         **handle,
@@ -1620,9 +1635,9 @@ def preview_rewards(
 def check_task(task: str) -> JobHandle | Refusal:
     """Check a declared environment is doable: for an arm task the
     scripted policy must succeed on every paired trial and the floor
-    policy on none; for a walk, two training iterations must run (the
-    learnability check). Minutes of simulation: returns a job handle; the
-    verdict, counts, funnel and reasons land beside the task as
+    policy on none; for a walk or tracking task, two training iterations
+    must run (the learnability check). Minutes of simulation: returns a job
+    handle; the verdict, counts, funnel and reasons land beside the task as
     acceptance.json and in its Studio drawer. Refuses a name the project
     does not hold, or a family with no scripted expert."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
@@ -1630,12 +1645,13 @@ def check_task(task: str) -> JobHandle | Refusal:
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.task_ref import read_task_reference  # noqa: PLC0415
     from trainnr.tasks.experts import expert_for  # noqa: PLC0415
+    from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
     from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
 
     project = current_project()
     try:
         ref = read_task_reference(project, task)
-        if walk_robot(ref.task_id) is None:
+        if walk_robot(ref.task_id) is None and not is_tracking(ref.task_id):
             expert_for(ref.task_id)
     except (FileNotFoundError, KeyError, ValueError) as why:
         return refusal(_reason(why))
@@ -3789,8 +3805,8 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "SOMA Retargeter), as a recording. Job."
     )(retarget_video)
     server.tool(
-        description="Train the G1 to track a retarget_video reference (mjlab; "
-        "hours on a GPU), live in the Studio. Job."
+        description="Train the G1 on a tracking task or retarget_video "
+        "reference (mjlab; hours on a GPU), live in the Studio. Job."
     )(train_tracking)
     server.tool(
         description="Every protocol a live capture listens on (udp, dds), its "
@@ -4027,8 +4043,8 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     )(create_task)
     server.tool(
         description="Check a declared environment is doable (arm: scripted policy "
-        "every trial, floor policy none; walk: two training iterations run). Job "
-        "handle; the verdict lands beside the task."
+        "every trial, floor policy none; walk, tracking: two training iterations "
+        "run). Job; the verdict lands beside the task."
     )(check_task)
     server.tool(
         description="Generate kitting demonstrations with the scripted policy; only "

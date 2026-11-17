@@ -164,7 +164,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk: two training iterations run). Job handle; the verdict lands beside the task.",
+    "description": "Check a declared environment is doable (arm: scripted policy every trial, floor policy none; walk, tracking: two training iterations run). Job; the verdict lands beside the task.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1898,7 +1898,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Train the G1 to track a retarget_video reference (mjlab; hours on a GPU), live in the Studio. Job.",
+    "description": "Train the G1 on a tracking task or retarget_video reference (mjlab; hours on a GPU), live in the Studio. Job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

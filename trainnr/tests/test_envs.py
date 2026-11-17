@@ -279,6 +279,7 @@ class GymnasiumContract(unittest.TestCase):
 
         from trainnr.envs.contract import gym_id  # noqa: PLC0415
         from trainnr.tasks.registry import tasks  # noqa: PLC0415
+        from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
         from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
 
         registry = tasks()
@@ -286,8 +287,8 @@ class GymnasiumContract(unittest.TestCase):
             gym_id("trainnr/kitting"), "trainnr/kitting-v0"
         )  # the one literal pin
         for task_id, entry in registry.items():
-            if walk_robot(task_id) is not None:
-                continue  # walks are not gymnasium environments
+            if walk_robot(task_id) is not None or is_tracking(task_id):
+                continue  # walks and tracking are mjlab's, not gymnasium's
             env = gym.make(gym_id(task_id))
             try:
                 self.assertEqual(env.unwrapped.task, entry.name)

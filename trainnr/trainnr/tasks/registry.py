@@ -32,6 +32,7 @@ BUILTIN_MODULES = (
     "trainnr.tasks.aloha2",
     "trainnr.tasks.gripper_pick",
     "trainnr.tasks.so101",
+    "trainnr.tasks.tracking",
     "trainnr.tasks.walks",
 )
 

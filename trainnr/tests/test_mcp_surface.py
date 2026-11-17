@@ -162,10 +162,17 @@ class Registries(unittest.TestCase):
         # has content to hash, and a code-only task saying "no stamp" is
         # the honest answer, not a gap. Both kinds must exist and both
         # must round-trip through the window unchanged.
+        from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
         from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
 
         details = []
         for t in list_tasks():
+            if is_tracking(t["task"]):
+                # the family has no default reference: it is described
+                # once declared over one, and refuses by name before
+                with self.assertRaisesRegex(ValueError, "needs a reference"):
+                    describe_task(t["task"])
+                continue
             try:
                 details.append(describe_task(t["task"]))
             except FileNotFoundError as why:
