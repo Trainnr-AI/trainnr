@@ -202,7 +202,11 @@ Verb first, as GOVERNANCE.md asks; long ones are jobs:
   iterations run on it
 - `train_tracking(reference, ...)` → run (job, mjlab; built 2026-11-15).
   `reference` is a tracking task, whose run then cites it, or a reference
-  directly
+  directly. Since 2026-11-17 it draws a command lag of 0 to 40 ms in
+  training (`trainnr_mjlab.lag_dr`, recorded in the run's identity):
+  mjlab's tracking task draws none, and the first court-dance policy fell
+  one 20 ms tick late
+  ([record](findings/g1-court-dance-evaluated-2026-11-17.json))
 - `evaluate_walk(checkpoint)` on a tracking run → evaluation (job, mjlab;
   built 2026-11-17, `trainnr_mjlab.tracking_verdict`): paired trials
   through the reference from its first frame, with training's

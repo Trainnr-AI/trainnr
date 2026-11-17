@@ -34,10 +34,18 @@ from trainnr.project.kinds import IDENTITY_FILE
 from trainnr.robots.recording import MANIFEST_FILE as RECORDING_FILE
 from trainnr.tasks.tracking import MJLAB_TASK
 
+from trainnr_mjlab.lag_dr import with_command_lag
 from trainnr_mjlab.walk_train import TRAIN_STREAM, Tee, TrainingTicker
 from trainnr_mjlab.walks import Identity, use_project
 
 TASK_ID = MJLAB_TASK
+# The command lag drawn in training: two 20 ms control ticks, the margin
+# the walks' cliff grid found a policy needs (trainnr_mjlab.lag_dr).
+LAG_DR_MS = 40.0
+# What mjlab's tracking config randomizes on its own.
+TRACKING_DR = (
+    "mjlab's tracking events (pushes, centre of mass, encoder bias, foot friction)"
+)
 ROBOT = "unitree_g1"
 MOTION_FILE = "raw/motion.npz"
 # The job table's word, the door's own (`train_tracking`).
@@ -92,6 +100,12 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--every", type=int, default=EVERY)
     parser.add_argument("--frame-every", type=int, default=400)
+    parser.add_argument(
+        "--lag-dr-ms",
+        type=float,
+        default=LAG_DR_MS,
+        help="command lag drawn in training, 0..this many ms (trainnr_mjlab.lag_dr)",
+    )
     args = parser.parse_args()
 
     reference = args.reference.resolve()
@@ -149,7 +163,12 @@ def main() -> None:  # noqa: PLR0915 - one trainer, each step named
         "reference": args.reference_stamp or reference.name,
         "footage": record.get("census", {}).get("footage"),
         "quiet_warnings": list(QUIET_WARNINGS),
+        Identity.DR_BASIS: TRACKING_DR,
     }
+    # A command lag in training by default: mjlab's tracking task draws
+    # none, and its policy fell in 20 of 21 trials one 20 ms tick late
+    # (g1-court-dance-evaluated-2026-11-17). Every robot is late.
+    identity = with_command_lag(cfg, identity, args.lag_dr_ms)
     (log_dir / IDENTITY_FILE).write_text(json.dumps(identity, indent=1))
     sys.stdout = Tee(sys.stdout, log_dir / "train.log")
     sys.stderr = Tee(sys.stderr, log_dir / "train.log")
