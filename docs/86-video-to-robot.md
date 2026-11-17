@@ -202,7 +202,14 @@ Verb first, as GOVERNANCE.md asks; long ones are jobs:
   iterations run on it
 - `train_tracking(reference, ...)` → run (job, mjlab; built 2026-11-15).
   `reference` is a tracking task, whose run then cites it, or a reference
-  directly
+  directly. Since 2026-11-17 it draws a command lag of 0 to 40 ms in
+  training (`trainnr_mjlab.lag_dr`, recorded in the run's identity):
+  mjlab's tracking task draws none, and the first court-dance policy fell
+  one 20 ms tick late
+  ([record](findings/g1-court-dance-evaluated-2026-11-17.json)); retrained
+  with it, 30 of 40 instead of 18 of 40 under the same evaluation, at
+  about 1.6 times the training time
+  ([record](findings/g1-court-dance-lag-trained-2026-11-17.json))
 - `evaluate_walk(checkpoint)` on a tracking run → evaluation (job, mjlab;
   built 2026-11-17, `trainnr_mjlab.tracking_verdict`): paired trials
   through the reference from its first frame, with training's
@@ -325,7 +332,10 @@ The first three, NVIDIA's stack by default:
    succeeded in 18 of 40, and the lag decides it: 17 of 19 with none, 1 of
    21 with one control tick
    ([record](findings/g1-court-dance-evaluated-2026-11-17.json)). mjlab's
-   tracking task does not randomize action delay in training. Measured
+   tracking task does not randomize action delay in training, so
+   `train_tracking` now does by default; retrained with it, the policy
+   succeeded in 30 of 40
+   ([record](findings/g1-court-dance-lag-trained-2026-11-17.json)). Measured
    as a record in `docs/findings/` before any claim.
 4. **Manipulation on the SO-101**: hand pose, the retarget feed, success filtering,
    `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on
