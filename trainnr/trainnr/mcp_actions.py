@@ -596,6 +596,46 @@ class Actions:
         ]
         return self.jobs.start("play-tracking", argv, TRAINNR_MJLAB_DIR)
 
+    def evaluate_tracking(  # noqa: PLR0913 - the evaluation's knobs, each named
+        self,
+        checkpoint: str,
+        *,
+        reference: str,
+        reference_stamp: str,
+        task_stamp: str | None,
+        trials: int,
+        seed: int,
+        pushes: bool,
+        lag_ms: float,
+        device: str | None,
+        project: str,
+    ) -> JobHandle:
+        """A tracking checkpoint judged on paired trials through its
+        reference, pushed and lagged as its task declares
+        (trainnr_mjlab.tracking_verdict); the verdict lands beside it."""
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.tracking_verdict",
+            checkpoint,
+            "--reference",
+            reference,
+            "--reference-stamp",
+            reference_stamp,
+            "--trials",
+            str(trials),
+            "--seed",
+            str(seed),
+            "--pushes" if pushes else "--no-pushes",
+            "--lag-ms",
+            f"{lag_ms:g}",
+            "--project",
+            project,
+        ]
+        argv += _given("--task-stamp", task_stamp)
+        argv += _given("--device", device)
+        return self.jobs.start("evaluate-tracking", argv, TRAINNR_MJLAB_DIR)
+
     def preview_rewards(  # noqa: PLR0913 - the preview's knobs, each named
         self,
         *,

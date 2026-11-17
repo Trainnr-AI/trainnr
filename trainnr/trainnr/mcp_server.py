@@ -898,6 +898,15 @@ def evaluate_walk(  # noqa: PLR0913, PLR0917 - the evaluation's knobs, each name
     missing = checkpoint_missing(checkpoint, root)
     if missing:
         return refusal(missing)
+    if root is not None:
+        path = checkpoint_path(checkpoint, root)
+        others = {"student": student, "robot": robot, "scene": scene}
+        given = [k for k, v in {**others, "conditions": conditions}.items() if v]
+        tracking = _tracking_evaluate(
+            root, path, trials=trials, seed=seed, device=device, refused=given
+        )
+        if tracking is not None:
+            return tracking
     if robot is None and root is not None:
         # the walk the experiment trained, as export and play read it
         from trainnr.project import index_project  # noqa: PLC0415
@@ -1596,6 +1605,107 @@ def _tracking_play(
         out=str(run_dir / f"play-{checkpoint.stem}"),
         project=str(project.root),
     )
+
+
+def _tracking_task_for(project: Any, ident: dict[str, Any]) -> Any:
+    """The tracking task a run is judged under: the one its identity cites,
+    else the project's one tracking task over the run's reference, else
+    None (the family's defaults then judge it). Several over the reference
+    and none cited is refused by name: which conditions judge it is the
+    caller's choice, never a guess."""
+    from trainnr.project.task_ref import read_task_reference  # noqa: PLC0415
+    from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
+
+    tasks = project.folder("tasks")
+    refs = [
+        read_task_reference(project, f.name)
+        for f in sorted(tasks.iterdir() if tasks.is_dir() else [])
+        if (f / "task.json").is_file()
+    ]
+    refs = [r for r in refs if is_tracking(r.task_id)]
+    cited = [r for r in refs if r.stamp == ident.get("tracking_task")]
+    if cited:
+        return cited[0]
+    reference = str(ident.get("reference", ""))
+    over = [
+        r
+        for r in refs
+        if str(r.spec.get("reference")) in (reference, reference.split("@", 1)[0])
+    ]
+    if len(over) > 1:
+        names = ", ".join(r.name for r in over)
+        raise ValueError(
+            f"the tracking tasks {names} all track {reference}, and the run cites "
+            "none: train from the task (train_tracking(reference=<task>)) so its "
+            "run names the conditions it is judged under"
+        )
+    return over[0] if over else None
+
+
+def _tracking_evaluate(  # noqa: PLR0913 - the evaluation's inputs, each named
+    root: Path,
+    checkpoint: Path,
+    *,
+    trials: int,
+    seed: int,
+    device: str | None,
+    refused: list[str],
+) -> dict[str, Any] | Refusal | None:
+    """A tracking run's checkpoint judged on paired trials through its
+    reference, pushed and lagged as its tracking task says
+    (trainnr_mjlab.tracking_verdict); None when the run is not a tracking run."""
+    import json  # noqa: PLC0415
+
+    from trainnr.mcp_actions import Actions  # noqa: PLC0415
+    from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+    from trainnr.project import index_project  # noqa: PLC0415
+    from trainnr.project.locate import Project  # noqa: PLC0415
+    from trainnr.tasks.tracking import DEFAULT_TRIALS, TrackingSpec  # noqa: PLC0415
+    from trainnr.templates import TRACKING_TASK  # noqa: PLC0415
+
+    identity = checkpoint.parent / "identity.json"
+    ident = json.loads(identity.read_text()) if identity.is_file() else {}
+    if ident.get("task") != TRACKING_TASK:
+        return None
+    if refused:
+        return refusal(
+            f"a tracking evaluation does not take {', '.join(refused)}: its "
+            "pushes and lag come from its tracking task"
+        )
+    if trials < 1:
+        return refusal(f"trials must be at least 1, got {trials}")
+    project = Project(root)
+    try:
+        reference = pick_artifact(
+            index_project(project).artifacts,
+            str(ident.get("reference")),
+            "recording",
+            str(root),
+        )
+    except KeyError as why:
+        return refusal(_reason(why))
+    try:
+        task = _tracking_task_for(project, ident)
+    except ValueError as why:
+        return refusal(str(why))
+    spec = TrackingSpec(**task.spec) if task is not None else TrackingSpec()
+    handle = Actions(JobManager(_jobs_root)).evaluate_tracking(
+        str(checkpoint),
+        reference=str(root / reference.path),
+        reference_stamp=reference.stamp,
+        task_stamp=task.stamp if task is not None else None,
+        # the task's own trial count, unless the call names another
+        trials=spec.trials if trials == DEFAULT_TRIALS else trials,
+        seed=seed,
+        pushes=spec.pushes,
+        lag_ms=spec.lag_ms,
+        device=device,
+        project=str(root),
+    )
+    return {
+        **handle,
+        "next": "describe_job(job_id, wait_s=120); list_evaluations then names it",
+    }
 
 
 def preview_rewards(
@@ -4066,9 +4176,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "never over one."
     )(train_walk)
     server.tool(
-        description="Evaluate a walk policy: paired episodes, exact confidence "
-        "intervals, versions on every row; robot names the walk, else the "
-        "project's one declared walk. Job handle."
+        description="Evaluate a policy: paired episodes, exact intervals, versions "
+        "on every row; robot names the walk, else the project's one; tracking "
+        "uses its task's pushes and lag. Job."
     )(evaluate_walk)
     server.tool(
         description="Open an experiment's checkpoint in mjlab's viewer (viser or "

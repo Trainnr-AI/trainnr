@@ -595,7 +595,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Evaluate a walk policy: paired episodes, exact confidence intervals, versions on every row; robot names the walk, else the project's one declared walk. Job handle.",
+    "description": "Evaluate a policy: paired episodes, exact intervals, versions on every row; robot names the walk, else the project's one; tracking uses its task's pushes and lag. Job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

@@ -181,5 +181,75 @@ class TheTrackingTask(unittest.TestCase):
         self.assertFalse(log_dir.is_relative_to(self.project.root))
 
 
+@needs_mcp
+class TheTrackingEvaluation(unittest.TestCase):
+    """`evaluate_walk` on a tracking run judges it under its tracking task:
+    the task's pushes, lag and trials, on the run's reference."""
+
+    def setUp(self) -> None:
+        from trainnr.templates import TRACKING_TASK  # noqa: PLC0415
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.project = create_project(Path(self._tmp.name) / "p", "p")
+        env = mock.patch.dict(os.environ, {PROJECT_ENV: str(self.project.root)})
+        env.start()
+        self.addCleanup(env.stop)
+        _recording(self.project, "dance", video=True)
+        self.run_dir = self.project.root / "runs" / "dance-run"
+        self.run_dir.mkdir(parents=True)
+        (self.run_dir / "model_9.pt").touch()
+        self.identity = {"task": TRACKING_TASK, "reference": "dance"}
+        self._write_identity()
+
+    def _write_identity(self) -> None:
+        (self.run_dir / "identity.json").write_text(json.dumps(self.identity))
+
+    def _evaluate(self, **kwargs: Any) -> tuple[dict[str, Any], list[dict]]:
+        from trainnr import mcp_server  # noqa: PLC0415
+
+        calls: list[dict] = []
+
+        def fake(_self: Any, checkpoint: str, **kw: Any) -> dict[str, Any]:
+            calls.append({"checkpoint": checkpoint, **kw})
+            return {"job_id": "evaluate-tracking-x", "status": "started"}
+
+        with mock.patch("trainnr.mcp_actions.Actions.evaluate_tracking", fake):
+            answer = mcp_server.evaluate_walk("dance-run/model_9", **kwargs)
+        return answer, calls
+
+    def test_the_task_over_the_reference_sets_the_conditions(self) -> None:
+        declare_task(
+            self.project,
+            "g1-tracking",
+            "dance-tracking",
+            {"reference": "dance", "lag_ms": 40, "pushes": False, "trials": 12},
+        )
+        answer, [call] = self._evaluate()
+        self.assertEqual(answer["job_id"], "evaluate-tracking-x")
+        self.assertEqual((call["lag_ms"], call["pushes"]), (40, False))
+        self.assertEqual(call["trials"], 12)  # the task's, the call left 40
+        self.assertTrue(call["task_stamp"].startswith("g1-tracking@"))
+        self.assertTrue(call["reference_stamp"].startswith("dance@"))
+        _, [named] = self._evaluate(trials=8)
+        self.assertEqual(named["trials"], 8)
+
+    def test_walk_arguments_and_two_candidate_tasks_are_refused(self) -> None:
+        answer, calls = self._evaluate(robot="go2")
+        self.assertEqual(answer["status"], "refused")
+        self.assertIn("robot", answer["reason"])
+        for name in ("a", "b"):
+            declare_task(self.project, "g1-tracking", name, {"reference": "dance"})
+        answer, calls = self._evaluate()
+        self.assertEqual(answer["status"], "refused")
+        self.assertIn("a, b", answer["reason"])
+        self.assertEqual(calls, [])
+        # a run that cites its task is judged under it, whatever else exists
+        self.identity["tracking_task"] = read_task_reference(self.project, "b").stamp
+        self._write_identity()
+        _, [call] = self._evaluate()
+        self.assertEqual(call["task_stamp"], self.identity["tracking_task"])
+
+
 if __name__ == "__main__":
     unittest.main()
