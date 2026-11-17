@@ -53,6 +53,14 @@ ignore = [
   # with its own compact reader (`parquet_thrift.rs`), not that one. It
   # clears with the Rerun update that takes parquet 60.
   { id = "RUSTSEC-2026-0435", reason = "thrift 0.17 via parquet 58, pinned by Rerun 0.36; parquet reads with its own compact reader, not the affected binary one" },
+  # Unmaintained, not vulnerable (2026-11-17): chrono and chrono-tz reach
+  # the Studio through arrow 58 (arrow-arith, arrow-array) and humantime
+  # through object_store 0.13, both under datafusion 54, which Rerun 0.36
+  # pins for its dataframe view. No arrow or object_store release has
+  # moved off them; the Studio uses none directly.
+  { id = "RUSTSEC-2026-0542", reason = "chrono-tz, unmaintained, via arrow-array 58 under Rerun 0.36's datafusion; no advisory against its code" },
+  { id = "RUSTSEC-2026-0543", reason = "chrono, unmaintained, via arrow 58 under Rerun 0.36's datafusion; no advisory against its code" },
+  { id = "RUSTSEC-2026-0555", reason = "humantime, unmaintained, via object_store 0.13 under Rerun 0.36's datafusion; no advisory against its code" },
 ]
 
 [licenses]
