@@ -15,8 +15,14 @@ data="${CLAUDE_PLUGIN_DATA:-$root}"
 if [ ! -e "$data/.welcomed" ] && mkdir -p "$data" 2>/dev/null && : >"$data/.welcomed" 2>/dev/null; then
   printf '%s\n' "trainnr was just installed. It prepares its Python environment and downloads the Studio (the desktop app) in the background; the first tool call may wait for that. To begin, the user can say \"create a project called go2\" and follow the README's quickstart; launch_studio opens the Studio on the open project, and describe_studio says whether it runs."
 fi
+# The plugin's server is `uv run …`: without uv, Claude Code says only
+# "Connection closed" (native Windows, 2026-11-18). Say it every session
+# until uv is there, so the model can tell the user what to install.
+if ! command -v uv >/dev/null 2>&1; then
+  printf '%s\n' "trainnr's MCP server cannot start: it runs through uv, which is not on PATH. Tell the user to install uv, then restart Claude Code. macOS and Linux: curl -LsSf https://astral.sh/uv/install.sh | sh  Windows (PowerShell): powershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"  (or see https://docs.astral.sh/uv/getting-started/installation/)."
+  exit 0
+fi
 [ -n "${TRAINNR_NO_PREFETCH:-}" ] && exit 0
-command -v uv >/dev/null 2>&1 || exit 0
 # It runs from the plugin's own folder, never the one Claude Code opened:
 # `python -m` puts the working folder first on the import path, and uv
 # reads a uv.toml it finds there (security review, 2026-10-05). `-P` keeps
