@@ -33,6 +33,7 @@ All notable changes to trainnr. The format follows
 - A template step is done when its own artifact exists, not any result of its stage: "Turn a video into motion" needs a recording made from video, and "Train it to track the motion" a finished tracking run. A step with a run still training reads running with its progress, and a done step names what proved it.
 - `train_tracking` stops MuJoCo-Warp printing its solver and line-search limit warnings from the GPU: with 4,096 G1 worlds they wrote 9.3 GB of job log in 400 iterations. The solver's limits are mjlab's as before.
 - The ROS 2 readers (MCAP and rosbag2) leave out an `Imu` field its publisher marks as not provided (covariance[0] = -1, REP-145), and say so in the recording's notes: a robot without an accelerometer got a channel of zeros in m/s^2 (#102).
+- An agent connected from the Studio's Connect panel opens the installed app with `launch_studio` instead of downloading a second copy of it: the entry names the app that wrote it (`TRAINNR_STUDIO`; on Linux the AppImage). On macOS and Linux the launcher carries it and is rewritten when the panel opens, so an entry made before gets it too; on Windows the panel's Add or Update writes it.
 
 ### Security
 
