@@ -5,6 +5,7 @@ preview stands in `home` or `stand`."""
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -93,6 +94,61 @@ class TheBundle(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "outside its folder"):
                 onboard_mjcf(source / "scene.xml", "duck", Path(tmp) / "duck", {})
+
+
+@needs_sim
+class TheRevisions(unittest.TestCase):
+    """#119: the robot again under its own name is a revision, the one it
+    replaces kept and out of the lists; what changed is said in model terms."""
+
+    def test_the_same_name_again_adds_a_revision_and_keeps_the_last(self) -> None:
+        from trainnr.project import create_project, index_project  # noqa: PLC0415
+        from trainnr.project.details import robot_sections  # noqa: PLC0415
+        from trainnr.robot.onboarding import onboard  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = create_project(Path(tmp) / "p", "p")
+            source = _robot_folder(Path(tmp))
+            first = onboard(
+                source / "scene.xml", "duck", project.robots / "duck", revise=True
+            )
+            same = onboard(
+                source / "scene.xml", "duck", project.robots / "duck", revise=True
+            )
+            self.assertEqual(same["stamp"], first["stamp"])
+            self.assertIn("unchanged", same["revision"])
+            robot = (source / "robot.xml").read_text()
+            (source / "robot.xml").write_text(
+                robot.replace('range="-0.2094 0.3229"', 'range="-0.2094 0.3500"')
+            )
+            second = onboard(
+                source / "scene.xml", "duck", project.robots / "duck", revise=True
+            )
+            self.assertNotEqual(second["stamp"], first["stamp"])
+            self.assertEqual(second["replaces"], first["stamp"])
+            [change] = [c for c in second["changes"] if c.startswith("joint knee")]
+            self.assertIn("range (rad)", change)
+            self.assertIn("18.5°", change)
+            self.assertIn("20.1°", change)
+            # a run built on the first revision says so
+            run = project.root / "runs" / "walked"
+            run.mkdir(parents=True)
+            (run / "identity.json").write_text(
+                json.dumps({"robot": first["stamp"], "task": "x"})
+            )
+            index = index_project(project)
+            robots = [a for a in index.artifacts if a.kind == "robot"]
+            self.assertEqual([a.stamp for a in robots], [second["stamp"]])
+            self.assertEqual(robots[0].summary["revisions"], 2)
+            [walked] = [a for a in index.artifacts if a.kind == "run"]
+            self.assertIn(second["stamp"], walked.summary["superseded robot"])
+            page = {
+                s["title"]: s
+                for s in robot_sections(project.robots / "duck", second["stamp"])
+            }
+            rows = dict(page["Revisions"]["rows"])
+            self.assertEqual(rows["replaces"], first["stamp"])
+            self.assertIn("knee", rows["change 1"])
 
 
 @needs_sim

@@ -382,8 +382,9 @@ def onboard_robot(
     bundle removed unless `accept_changes` is true, and the record then
     says so. The reply carries the audit's one line. Into the current
     project's `robots/` when a project is open, else the library. Never
-    overwrites; refuses by name, including an option the format does
-    not take."""
+    overwrites: the name of a robot already there adds a revision (the
+    one it replaces kept, what changed listed; the same content again is
+    the same stamp). Refuses by name an option the format does not take."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
@@ -4222,9 +4223,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     )(actions.generate_planned_demos)
     server.tool(
         description="Add a robot from its MJCF file (only the files it uses) "
-        "or a USD file: a hash-stamped robot folder, compiled once to check it "
-        "loads; the reply lists the collision geoms, sites and trunk a "
-        "trainer needs."
+        "or a USD file: a hash-stamped folder, compiled once to check it "
+        "loads; the reply lists the geoms, sites and trunk a trainer needs. "
+        "Same name again: a revision."
     )(onboard_robot)
     server.tool(
         description="A job's state and log tail; `wait_s` (up to 300; 60 under "

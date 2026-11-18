@@ -1306,7 +1306,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Add a robot from its MJCF file (only the files it uses) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
+    "description": "Add a robot from its MJCF file (only the files it uses) or a USD file: a hash-stamped folder, compiled once to check it loads; the reply lists the geoms, sites and trunk a trainer needs. Same name again: a revision.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

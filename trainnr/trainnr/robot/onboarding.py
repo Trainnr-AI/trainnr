@@ -169,19 +169,35 @@ def onboard(
     name: str,
     destination: Path,
     options: Mapping[str, Any] | None = None,
+    *,
+    revise: bool = False,
 ) -> dict[str, Any]:
-    """The door: the file must exist, the bundle must not, the format
-    must be known and the options must be its; then the source writes
-    the bundle and the reply carries the stamp. The name's spelling is
-    the project layer's rule (`project.locate.plain_name`), checked by
-    the caller above this tier."""
+    """The door: the file must exist, the format must be known and the
+    options must be its; then the source writes the bundle and the reply
+    carries the stamp. With `revise` (a project's robots), a robot already
+    onboarded under the name gets a new revision (`robot.revisions`), the
+    one it replaces kept; elsewhere an existing bundle is refused. The
+    name's spelling is the project layer's rule
+    (`project.locate.plain_name`), checked by the caller above this tier."""
     source_path = Path(source_path).expanduser()
     if not source_path.is_file():
         raise FileNotFoundError(
             f"no model file at {source_path}{_where_from(source_path)}"
         )
     destination = Path(destination)
+    if destination.exists() and revise:
+        # a project's robot again under its own name: a revision, never an
+        # overwrite; the bundle it replaces is kept (#119)
+        from trainnr.robot.revisions import revise as make_revision  # noqa: PLC0415
+
+        incoming = destination.parent / f".{destination.name}.incoming"
+        shutil.rmtree(incoming, ignore_errors=True)
+        out = onboard(source_path, name, incoming, options)
+        revised = make_revision(name, destination, incoming)
+        return {**out, **revised, "path": str(destination)}
     if destination.exists():
+        # the library (and a folder outside a project) is never revised:
+        # its bundles are certified, and moving one would break the checkout
         raise FileExistsError(
             f"robots/{name} already exists (stamp: {stamp(name, destination)}) "
             "— onboarding never overwrites a bundle; pick another name or "

@@ -539,7 +539,45 @@ def robot_sections(root: Path, stamp: str) -> list[Section]:
     fits = root / FITS_DIR
     if fits.is_dir():
         sections.insert(1, _fit_table(fits))
+    revision = _revision_section(root)
+    if revision is not None:
+        sections.insert(1, revision)
     return sections
+
+
+def _revision_section(root: Path) -> Section | None:
+    """A robot onboarded again under its name: the revisions it has had
+    and what changed since the one before (#119); None for a first one."""
+    from trainnr.bundles.hashing import REVISION_FILE  # noqa: PLC0415
+    from trainnr.robot.revisions import revisions  # noqa: PLC0415
+
+    record = read_json(root / REVISION_FILE, missing_ok=True)
+    earlier = revisions(root)
+    if not record and not earlier:
+        return None
+    changed = int(record.get("changed") or 0)
+    shown = list(record.get("changes") or [])
+    return _kv(
+        "Revisions",
+        [
+            ("revisions", len(earlier) + 1),
+            ("replaces", record.get("replaces", "")),
+            *[(f"earlier {i}", r["stamp"]) for i, r in enumerate(earlier, start=1)],
+            (
+                "changed since",
+                f"{changed} value{'s' * (changed != 1)}"
+                if changed
+                else "nothing in the model",
+            ),
+            *[(f"change {i}", line) for i, line in enumerate(shown, start=1)],
+        ],
+        note=(
+            f"{changed - len(shown)} more changes not listed"
+            if changed > len(shown)
+            else "Earlier revisions are kept under robots/.revisions; every "
+            "tool uses this one."
+        ),
+    )
 
 
 HINGE = 3  # mjtJoint.mjJNT_HINGE
