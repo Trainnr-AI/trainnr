@@ -41,7 +41,7 @@ from trainnr.envs.lerobot_train_log import (  # noqa: E402
     METRIC_NAMES,
     parse_train_line,
 )
-from trainnr.viz import STUDIO_ADDRESS  # noqa: E402
+from trainnr.viz import studio_address  # noqa: E402
 
 SEEN_LINES_CAP = 20000
 
@@ -743,7 +743,7 @@ def parse_args() -> argparse.Namespace:
         help="the run's total training steps, for the card's progress and ETA",
     )
     parser.add_argument("--key", type=Path, default=Path.home() / ".ssh" / "id_ed25519")
-    parser.add_argument("--address", default=STUDIO_ADDRESS)
+    parser.add_argument("--address", default=studio_address())
     parser.add_argument(
         "--records",
         default="",
