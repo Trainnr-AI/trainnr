@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 from mjlab.managers.recorder_manager import RecorderTerm, RecorderTermCfg
 
 # One home for the Studio's ingest address (trainnr is a hard dep).
-from trainnr.viz import STUDIO_ADDRESS as DEFAULT_ADDRESS
 from trainnr.viz import VISUAL_ONLY_SKIP_GROUPS, open_stream
 
 from trainnr_mjlab.walks import TERRAIN_SCAN_GROUP
@@ -355,7 +354,7 @@ class RerunRecorderCfg(RecorderTermCfg):
     per mjlab's own contract (recorder terms are stateful)."""
 
     func: type[RerunRecorder] = RerunRecorder
-    address: str = DEFAULT_ADDRESS
+    address: str | None = None  # None: the Studio's (`viz.studio_address`)
     app_id: str = "trainnr-mjlab-train"
     # The saved stream, inside the run's folder (docs/76 §10.5); None: live only.
     file: str | None = None

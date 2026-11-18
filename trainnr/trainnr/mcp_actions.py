@@ -985,12 +985,15 @@ class Actions:
         written as a bundle); `options` are the format's own (a USD's
         variant selections and root), refused by name otherwise.
         Synchronous — seconds, and the caller wants the stamp in the reply."""
-        from trainnr.project.locate import plain_name  # noqa: PLC0415
+        from trainnr.project.locate import MANIFEST_FILE, plain_name  # noqa: PLC0415
         from trainnr.robot.onboarding import onboard  # noqa: PLC0415
 
         plain_name(name, "robot name")
         destination = (Path(into) if into else robots_dir()) / name
-        return onboard(Path(model_path), name, destination, options)
+        # a project's robot is revised under its name (#119); the library's
+        # certified bundles never are
+        in_project = into is not None and (Path(into).parent / MANIFEST_FILE).is_file()
+        return onboard(Path(model_path), name, destination, options, revise=in_project)
 
     # -- jobs ----------------------------------------------------------
 

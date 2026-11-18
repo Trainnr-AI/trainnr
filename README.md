@@ -198,7 +198,7 @@ you    Create a project called go2, onboard Unitree's Go2 from
        ~/unitree_rl_mjlab/src/assets/robots/unitree_go2/xmls/go2.xml,
        and identify it from the IIT chirp log.
 agent  create_project("go2")                        → ~/trainnr/projects/go2, now open
-       onboard_robot(".../go2.xml", "go2")          → go2@e5aa641994fc, shape checked
+       onboard_robot(".../go2.xml", "go2")          → go2@9fd00d4b4ee1, shape checked
        ingest_public_log("iit-go2-chirp")           → job ingest-public-log-…, started
        describe_job(job_id, wait_s=60)              → done · 24 s · 200 Hz · 6 channels · public log
        identify_system("go2", "iit-go2-chirp")      → 31 of 36 parameters pinned at 95 %

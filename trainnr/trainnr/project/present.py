@@ -107,7 +107,7 @@ def present(
     was shown: the kind, the entity paths logged, the view it got."""
     import rerun as rr  # noqa: PLC0415 - viz extra
 
-    from trainnr.viz import STUDIO_ADDRESS  # noqa: PLC0415
+    from trainnr.viz import studio_address  # noqa: PLC0415
 
     index = index or index_project(project)
     artifact = next((a for a in index.artifacts if a.stamp == stamp), None)
@@ -125,7 +125,7 @@ def present(
     recording = rr.RecordingStream(
         application_id=entry_name(stamp), recording_id=_recording_id(stamp)
     )
-    recording.connect_grpc(STUDIO_ADDRESS)
+    recording.connect_grpc(studio_address())
     try:
         # The saved streams first (docs/76 §10.5): each lands in the viewer
         # under its own recording id with the layout it was saved with -
@@ -156,7 +156,7 @@ def compare(
     import rerun as rr  # noqa: PLC0415 - viz extra
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    from trainnr.viz import STUDIO_ADDRESS  # noqa: PLC0415
+    from trainnr.viz import studio_address  # noqa: PLC0415
 
     index = index or index_project(project)
     halves = []
@@ -173,7 +173,7 @@ def compare(
         application_id=entry_name(f"{a} vs {b}"),
         recording_id=_recording_id(f"{a} vs {b}"),
     )
-    recording.connect_grpc(STUDIO_ADDRESS)
+    recording.connect_grpc(studio_address())
     shown = []
     try:
         for side, artifact, kind, presenter in halves:
@@ -291,9 +291,11 @@ def _present_robot(
 ) -> Shown:
     """The bundle's model as meshes in a 3D view, posed at its keyframe."""
     import mujoco  # noqa: PLC0415
+    import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
     from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
+    from trainnr.project.previews import preview_keyframe  # noqa: PLC0415
     from trainnr.viz import RigMirror  # noqa: PLC0415
 
     folder = project.root / artifact.path
@@ -302,12 +304,36 @@ def _present_robot(
         raise ValueError(f"{folder}: no MJCF to show")
     model = mujoco.MjModel.from_xml_path(str(model_file))
     data = mujoco.MjData(model)
-    if model.nkey > 0:
-        mujoco.mj_resetDataKeyframe(model, data, 0)
-    mujoco.mj_forward(model, data)
+    shown = preview_keyframe(model)
+    last = shown if shown is not None else 0  # the pose the view opens on
+    names = [
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, k) or f"#{k}"
+        for k in range(model.nkey)
+    ]
     with _AsDefault(rr_):
         mirror = RigMirror(model, model_colors=True)
-        mirror.log(data, path=root, static=True)
+        if model.nkey > 1:
+            # every keyframe a step of the `keyframe` timeline, the one the
+            # preview stands in last, so the view opens on it and the
+            # timeline chooses another (#122)
+            order = [k for k in range(model.nkey) if k != last] + [last]
+            for step, k in enumerate(order):
+                mujoco.mj_resetDataKeyframe(model, data, k)
+                mujoco.mj_forward(model, data)
+                rr_.set_time(KEYFRAME_TIMELINE, sequence=step)
+                mirror.log(data, path=root)
+                rr_.log(f"{root}/keyframe", rr.TextLog(names[k]))
+        else:
+            if shown is not None:
+                mujoco.mj_resetDataKeyframe(model, data, shown)
+            mujoco.mj_forward(model, data)
+            mirror.log(data, path=root, static=True)
+        keyframes = (
+            f"- keyframes {', '.join(names)}; the `{KEYFRAME_TIMELINE}` timeline "
+            f"steps through them, ending on `{names[last]}`\n"
+            if model.nkey > 1
+            else ""
+        )
         rr_.log(
             f"{root}/census",
             _doc(
@@ -315,6 +341,7 @@ def _present_robot(
                 f"- bodies {model.nbody} · joints {model.njnt} · actuators {model.nu} "
                 f"· sensors {model.nsensor} · geoms {model.ngeom}\n"
                 f"- model `{model_file.name}` · timestep {model.opt.timestep:g} s\n"
+                + keyframes
                 + _lineage(artifact)
             ),
             static=True,
@@ -328,6 +355,10 @@ def _present_robot(
             column_shares=[3, 1],
         ),
     }
+
+
+# The timeline a robot's keyframes are shown on, one step each.
+KEYFRAME_TIMELINE = "keyframe"
 
 
 # Footage comes as frames ffmpeg decoded, thinned and shrunk so a long clip

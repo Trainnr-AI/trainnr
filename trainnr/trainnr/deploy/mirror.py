@@ -27,7 +27,6 @@ from trainnr.viz import (
     MIRROR_HZ,
     SCENE_GROUND_PATH,
     SIM_TIMELINE,
-    STUDIO_ADDRESS,
     VISUAL_ONLY_SKIP_GROUPS,
     RigMirror,
     open_stream,
@@ -101,7 +100,7 @@ class GateMirror:
         # recording it shows, so a second gate under the same name streamed
         # unseen behind the first (2026-09-23).
         app_id = f"{APP_ID}-{runtime_name}" + (f"-{name}" if name else "")
-        open_stream(app_id, address=STUDIO_ADDRESS, file=file, rr=rr)
+        open_stream(app_id, file=file, rr=rr)
         self._layout()
         if scene_dir is not None:
             self._scene(scene_dir)

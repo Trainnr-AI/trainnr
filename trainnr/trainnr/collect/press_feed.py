@@ -5,7 +5,7 @@ Studio.
 implementation: keep counters as series on an `attempt` timeline, every
 attempt's verdict as a text log, and the latest kept episode's frames
 as images — one entity per camera. Connection is fire-and-forget
-through the Studio's one ingest address (`viz.STUDIO_ADDRESS`): the
+through the Studio's ingest address (`viz.studio_address`): the
 Studio may not be up, Rerun buffers and drops, and pressing never
 blocks on the viewer. A venv without rerun-sdk gets one loud line and
 an unwatched press, not a crash — data generation does not die of a
@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-from trainnr.viz import STUDIO_ADDRESS
 
 if TYPE_CHECKING:
     from trainnr.collect.press import DemoBatch, PressResult, Say
@@ -51,9 +49,7 @@ class StudioPressFeed:
     def __init__(self, run_name: str, file: Path | None = None) -> None:
         from trainnr.viz import open_stream  # noqa: PLC0415 - viz extra
 
-        self._rr: Any = open_stream(
-            f"{APP_ID}-{run_name}", address=STUDIO_ADDRESS, file=file
-        )
+        self._rr: Any = open_stream(f"{APP_ID}-{run_name}", file=file)
 
     @classmethod
     def connect(
