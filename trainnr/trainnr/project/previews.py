@@ -212,17 +212,21 @@ def write_previews(
 
 
 PALETTE_STAMP = ".palette"
+# Raised when a renderer draws differently, so every card is redrawn once:
+# 2 (2026-11-18) poses a robot at its `home` or `stand` keyframe (#122).
+DRAWING_VERSION = 2
 
 
 def _drop_set_if_palette_changed(
     project: Project, theme: str, palette: Palette
 ) -> None:
     """A preview is keyed by its artifact's mtime, which a palette change
-    never touches: the set's stamp names the palette it was drawn in, and
-    a different one empties the set so every card is redrawn."""
+    never touches: the set's stamp names the palette it was drawn in and
+    the drawing version, and a different one empties the set so every
+    card is redrawn."""
     folder = preview_path(project, "x", theme).parent
     stamp = folder / PALETTE_STAMP
-    want = repr(palette)
+    want = f"drawing {DRAWING_VERSION}: {palette!r}"
     if stamp.is_file() and stamp.read_text(encoding="utf-8") == want:
         return
     for old in folder.glob("*.png"):
@@ -274,17 +278,38 @@ def _render_task(
     return _render_model(model, out, SCENE_CAMERA)
 
 
+# The keyframes a robot is shown standing in, by name, before the first.
+PREVIEW_KEYFRAMES = ("home", "stand")
+
+
+def preview_keyframe(model: Any) -> int | None:
+    """The keyframe a robot is shown in: one named `home` or `stand` (any
+    case), else the first; None when the model has none (zero pose).
+    A legged robot's zero pose is rarely the pose it stands in (#122)."""
+    import mujoco  # noqa: PLC0415
+
+    names = [
+        (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, k) or "").lower()
+        for k in range(model.nkey)
+    ]
+    for wanted in PREVIEW_KEYFRAMES:
+        if wanted in names:
+            return names.index(wanted)
+    return 0 if model.nkey else None
+
+
 def _render_model(
     model: mujoco.MjModel, out: Path, camera_spec: dict[str, float]
 ) -> bool:
-    """One offscreen frame of a compiled model at its first keyframe (or
-    zero), from a free camera placed by `camera_spec` around the model's
-    own centre and extent."""
+    """One offscreen frame of a compiled model at its preview keyframe
+    (`preview_keyframe`, or zero), from a free camera placed by
+    `camera_spec` around the model's own centre and extent."""
     import mujoco  # noqa: PLC0415
 
     data = mujoco.MjData(model)
-    if model.nkey > 0:
-        mujoco.mj_resetDataKeyframe(model, data, 0)
+    key = preview_keyframe(model)
+    if key is not None:
+        mujoco.mj_resetDataKeyframe(model, data, key)
     mujoco.mj_forward(model, data)
     width, height = PREVIEW_SIZE
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, width)

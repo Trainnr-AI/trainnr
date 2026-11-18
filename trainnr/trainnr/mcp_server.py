@@ -156,10 +156,19 @@ def describe_robot(robot: str) -> dict[str, Any]:
     root = find_bundle(robot) if robot in names else None
     if root is None or robot in NOT_A_BUNDLE:
         raise KeyError(f"no robot {robot!r}; one of {names}")
-    detail: dict[str, Any] = {
-        "stamp": stamp(robot, root),
-        "files": sorted(p.name for p in root.iterdir()),
-    }
+    from trainnr.project.details import robot_sections  # noqa: PLC0415
+
+    version = stamp(robot, root)
+    detail: dict[str, Any] = {"stamp": version}
+    # what the robot's page in the Studio shows, section by section (#123):
+    # the census, joints, keyframes, actuators, bodies, sensors, sites,
+    # the importer's audit, the files
+    try:
+        sections = robot_sections(root, version)
+    except (ValueError, OSError) as why:
+        detail["census"] = f"unreadable: {why}"
+    else:
+        detail.update({sec["title"]: _section_json(sec) for sec in sections})
     profile = root / "profile.json"
     if profile.exists():
         # Raw JSON, deliberately not through RobotProfile's validating
@@ -167,12 +176,22 @@ def describe_robot(robot: str) -> dict[str, Any]:
         # and this window reports what a bundle SAYS, schema or not.
         detail["profile"] = json.loads(profile.read_text())
     fits = root / FITS_DIR
-    if fits.is_dir():
-        detail["fits"] = {
-            record.name: json.loads(record.read_text())
-            for record in sorted(fits.glob("*.json"))
-        }
+    records = sorted(fits.glob("*.json")) if fits.is_dir() else []
+    detail["fits"] = (
+        {record.name: json.loads(record.read_text()) for record in records}
+        if records
+        else "none yet: identify_system fits one from a recording"
+    )
     return detail
+
+
+def _section_json(section: dict[str, Any]) -> Any:
+    """A page section as an agent reads it: key/value rows as an object,
+    a table as one object per row keyed by its columns."""
+    if section.get("kind") == "table":
+        columns = section["columns"]
+        return [dict(zip(columns, row, strict=False)) for row in section["rows"]]
+    return {key: value for key, value in section["rows"]}
 
 
 def _actuator_bundles(actuator: str | None = None) -> list[dict[str, Any]]:
@@ -350,9 +369,10 @@ def onboard_robot(
     ] = False,
 ) -> dict[str, Any] | Refusal:
     """A robot enters as a hash-stamped bundle, by its file's format: an
-    MJCF's directory copied whole (meshes and includes ride along) and
-    compiled once as the honesty check; a URDF through MuJoCo's own
-    loader; a USD asset (.usd/.usda/.usdc/.usdz) read by Newton's
+    MJCF's own files copied (its includes, the meshes and textures they
+    name, a licence beside it; never the rest of its folder, and the stamp
+    covers exactly those) and compiled once as the honesty check; a URDF
+    through MuJoCo's own loader; a USD asset (.usd/.usda/.usdc/.usdz) read by Newton's
     importer and written as a bundle with leaf names, mesh files, sensors
     and a home key — `variants` selects its variant sets (e.g.
     {"Physics": "Newton_compliant"}) and `root` is "fixed" (default) or
@@ -3824,8 +3844,8 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     _guard_tools(server)
     server.tool(description="Every robot: name@hash, file census")(list_robots)
     server.tool(
-        description="One robot in full: its model census, its fit records, and "
-        "whether repeated fits agree."
+        description="One robot as its Studio page shows it: census, joints, "
+        "keyframes, sites, fits."
     )(describe_robot)
     server.tool(
         description="The actuator library: servos, friction tiers, provenance, and "
@@ -4201,7 +4221,7 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "success criterion, streamed to the Studio. Job handle."
     )(actions.generate_planned_demos)
     server.tool(
-        description="Add a robot from its MJCF file (meshes and includes come along) "
+        description="Add a robot from its MJCF file (only the files it uses) "
         "or a USD file: a hash-stamped robot folder, compiled once to check it "
         "loads; the reply lists the collision geoms, sites and trunk a "
         "trainer needs."

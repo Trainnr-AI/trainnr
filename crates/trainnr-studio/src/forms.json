@@ -5,7 +5,7 @@
    "tool": "onboard_robot",
    "page": "robots",
    "label": "Add robot",
-   "summary": "Add a robot from its MJCF file (meshes and includes come along) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
+   "summary": "Add a robot from its MJCF file (only the files it uses) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
    "fields": [
     {
      "name": "model_path",
