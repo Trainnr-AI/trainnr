@@ -171,7 +171,12 @@ claude plugin install trainnr@trainnr
 or, inside a Claude Code session, `/plugin marketplace add Trainnr-AI/trainnr`
 then `/plugin install trainnr@trainnr`. The next Claude Code session
 prepares the server's environment and downloads the Studio in the
-background (`TRAINNR_NO_PREFETCH=1` turns that off); the Studio opens when
+background (`TRAINNR_NO_PREFETCH=1` turns that off). That first
+preparation takes about 30 s, which is about as long as Claude Code waits
+for a server to start, so on a slower connection the first session can
+show trainnr as failed: open `/mcp` and reconnect it once the preparation
+is done, or start that session with a longer wait,
+`MCP_TIMEOUT=120000 claude`. The Studio opens when
 you ask for it ("open the Studio", `launch_studio`). Before any project
 exists it opens on a Welcome page: start your own project, or open the
 sample.
@@ -326,9 +331,13 @@ it at your binary with `TRAINNR_STUDIO`.
 <summary><b>Any other MCP client</b> (Cursor, Codex, a checkout)</summary>
 
 **Any MCP client, no checkout**: the packages are on PyPI, so the server
-is one command with [uv](https://docs.astral.sh/uv/) installed:
+is one command with [uv](https://docs.astral.sh/uv/) installed. Its first
+start installs the server's environment, about 25 s, and a client gives a
+server about 30 s to start, so install it once before adding it; then it
+starts in a few seconds:
 
 ```sh
+uvx --from "trainnr[sim,mcp]" trainnr version     # once: installs it
 claude mcp add trainnr -- uvx --from "trainnr[sim,mcp]" trainnr mcp
 ```
 
