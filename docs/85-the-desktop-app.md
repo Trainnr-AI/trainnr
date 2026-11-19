@@ -207,7 +207,12 @@ Each phase ends with a check on a fresh machine, not with code merged.
    Start-menu entry, an optional desktop one and an uninstaller, leaving
    the projects and the engine in place. Windows keeps its zip as well,
    whose `.exe` runs where it is unpacked (the plugin's installer and
-   `trainnr studio` download that). The exe links its C runtime
+   `trainnr studio` download that). An agent connected from the app
+   opens that same app: the entry Connect writes names it
+   (`TRAINNR_STUDIO`; on Linux the AppImage's own path), where
+   `launch_studio` had looked only in a checkout and its own download
+   folder and fetched a second copy, 66 MB in 16 s (Windows 11,
+   2026-11-18). The exe links its C runtime
    statically (`crates/trainnr-studio/.cargo/config.toml`): v0.1.0's
    imported VCRUNTIME140.dll, which a fresh Windows may lack, and the
    release now checks the imports (`package-studio.py
