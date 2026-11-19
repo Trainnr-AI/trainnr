@@ -8,6 +8,7 @@ import importlib.util
 import os
 import plistlib
 import re
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,6 +111,38 @@ class TheLayouts(unittest.TestCase):
         self.assertEqual(self.tool.needs_vc_runtime(static), [])
         self.assertEqual(self.tool.main(["windows-crt-check", str(linked)]), 1)
         self.assertEqual(self.tool.main(["windows-crt-check", str(static)]), 0)
+
+    def _exe(self, name: str, numbers: tuple[int, int, int], text: str) -> Path:
+        """An exe whose version resource gives `numbers` and `text`, laid
+        out as VS_FIXEDFILEINFO and a StringFileInfo value store them."""
+        major, minor, patch = numbers
+        fixed = self.tool.FIXED_FILE_INFO + struct.pack(
+            "<II", major << 16 | minor, patch << 16
+        )
+        exe = self.out / name
+        exe.write_bytes(b"MZ...." + fixed + b"\0\0" + text.encode("utf-16-le"))
+        return exe
+
+    def test_an_exe_without_its_version_is_caught(self) -> None:
+        # v0.2.0's exe showed no version in Properties (Windows 11,
+        # 2026-11-18).
+        bare = self.out / "bare.exe"
+        bare.write_bytes(b"MZ....KERNEL32.dll")
+        rc = self._exe("rc.exe", (0, 2, 0), "0.2.0-rc.1")
+        cases = {
+            (bare, "0.2.0"): "no version resource",
+            (rc, "0.2.0-rc.1"): None,
+            (rc, "0.2.1"): "file version 0.2.0.0, not 0.2.1.0",
+            (rc, "0.2.0-rc.2"): "no product version 0.2.0-rc.2",
+        }
+        for (exe, version), problem in cases.items():
+            with self.subTest(exe=exe.name, version=version):
+                self.assertEqual(
+                    self.tool.windows_version_problem(exe, version), problem
+                )
+        check = ["windows-version-check", str(rc), "--version"]
+        self.assertEqual(self.tool.main([*check, "0.2.0-rc.1"]), 0)
+        self.assertEqual(self.tool.main([*check, "0.2.1"]), 1)
 
 
 if __name__ == "__main__":
