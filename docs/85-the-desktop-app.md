@@ -194,7 +194,14 @@ Each phase ends with a check on a fresh machine, not with code merged.
    environment's `trainnr.exe` (a console script, which never puts the
    working folder on the path; checked "Connected" from the home), a
    different program from the old entry's, so the panel offers Update.
-   Left: the connection status in the window (PR #32, once its review is
+   The same day the other two ways were checked there, from the home:
+   `uvx --from "trainnr[sim,mcp]" trainnr mcp` connected, its first
+   start (25 s, an empty uv cache) near Claude Code's 30 s limit and the
+   next in 1.6 s; the plugin connected once uv was on PATH (first start
+   28 s), and without uv Claude Code said only "Connection closed", so
+   its session hook now says how to install uv. Over each, the project
+   tools answered (`create_project`, `use_project`, `describe_studio`,
+   `launch_studio`). Left: the connection status in the window (PR #32, once its review is
    answered).
 4. **Distribution.** Done on this branch, unsigned: the release builds
    the app to double-click (`tools/package-studio.py`): a macOS `.app` in
