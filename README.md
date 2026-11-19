@@ -391,16 +391,21 @@ DDS stack.
 
 | | macOS (Apple Silicon) | Linux (x86_64) | Windows (x86_64) |
 |---|---|---|---|
-| MCP server, data from files and public logs, identification, simulation, pre-flight, drift | yes | yes | through WSL2 |
+| MCP server, data from files and public logs, identification, simulation, pre-flight, drift | yes | yes | through WSL2; natively, the server and its project tools |
 | Evaluation of a trained walk | yes, on the CPU (slow) | yes, CUDA or CPU | through WSL2 |
 | The sim-to-sim gate on plain MuJoCo | yes | yes | through WSL2 |
 | The gate on Unitree's simulator over DDS, live capture from Unitree's DDS bus | no | yes | through WSL2 |
 | Training (`train_walk`, mjlab on MuJoCo Warp) and `preview_rewards` | the smoke recipe and `check_task`, on the CPU (20 iterations in 70 s on Apple Silicon, 2026-10-08); a full run: rent a GPU (`tools/cloud-gpu.py`) | NVIDIA GPU with CUDA | NVIDIA GPU through WSL2 |
 | Captured scenes (COLMAP, Gaussian splats) | yes, on Metal | yes, CUDA | through WSL2 |
-| The Studio | prebuilt, downloaded; run on an M1 Pro | prebuilt, downloaded | prebuilt, downloaded; native Windows untested, WSL2 tested |
+| The Studio | prebuilt, downloaded; run on an M1 Pro | prebuilt, downloaded | the installer or the zip; installed and its engine set up on Windows 11, WSL2 tested |
 
-On Windows, WSL2 is the tested path; nothing has been run on native
-Windows. `preview_rewards` needs CUDA today. Isaac Sim and Isaac Lab need
+On Windows, WSL2 is the tested path for the whole loop. On native
+Windows 11 (2026-11-18, [`docs/85`](docs/85-the-desktop-app.md)) the
+installer, the app's engine setup and the MCP server were checked, the
+server reached all three ways (the app's Connect, `uvx`, the plugin),
+with the project tools; nothing that simulates, evaluates or trains has
+been run there, and the app's buttons have not been clicked through.
+`preview_rewards` needs CUDA today. Isaac Sim and Isaac Lab need
 Linux or Windows with an NVIDIA RTX GPU and do not run on macOS; Isaac Sim
 USD assets still come in through Newton's importer, without Isaac Sim.
 The Mac rows were measured on an Apple M1 Pro
