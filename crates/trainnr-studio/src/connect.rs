@@ -6,8 +6,16 @@
 //! through a launcher at a fixed path, `<trainnr home>/engine/bin/trainnr`,
 //! rewritten whenever the engine changes, so an agent's entry survives an
 //! update (Paper's `~/.paper/bin/paper` is the same idea); on Windows the
-//! entry names the engine's Python, because a `.cmd` launcher does not
-//! start reliably from every client. Each client is added by its own
+//! entry names the environment's own `trainnr.exe`, because a `.cmd`
+//! launcher does not start reliably from every client.
+//!
+//! Neither may run `python -m` bare: `-m` puts the client's working folder
+//! first on the import path, and a client started in the user's home finds
+//! `~/trainnr` (the default trainnr home) there, which shadows the engine's
+//! editable package, and the server dies on its first import (checked on
+//! Windows 11 with Claude Code, 2026-11-18). The launcher passes `-P`, as
+//! the plugin's hook does; a console script never puts the working folder
+//! on the path. Each client is added by its own
 //! button, which is the asking: Claude Code and Codex through their own
 //! `mcp add`, Cursor by adding one entry to its `mcp.json`, every other
 //! entry left as it was. Nothing is written at launch.
@@ -71,20 +79,26 @@ pub fn in_temporary_folder(path: &Path) -> bool {
     path.starts_with(&temp) || resolved(path).starts_with(resolved(&temp))
 }
 
-/// The Python of the environment under `root` (a checkout or the
-/// engine's runtime), where `uv sync` made it.
-fn venv_python(root: &Path) -> PathBuf {
+/// A program of the environment under `root` (a checkout or the engine's
+/// runtime), where `uv sync` made it: `python`, or a console script.
+fn venv_program(root: &Path, name: &str) -> PathBuf {
     let venv = root.join(crate::spawn::PIPELINE_DIR).join(".venv");
     if cfg!(windows) {
-        venv.join("Scripts").join("python.exe")
+        venv.join("Scripts").join(format!("{name}.exe"))
     } else {
-        venv.join("bin").join("python")
+        venv.join("bin").join(name)
     }
+}
+
+fn venv_python(root: &Path) -> PathBuf {
+    venv_program(root, "python")
 }
 
 /// The command an agent runs, once there is an environment to run it in:
 /// on macOS and Linux the launcher (written here, pointing at `root`), on
-/// Windows the environment's Python itself.
+/// Windows the environment's `trainnr.exe`. An entry from before naming
+/// the environment's Python is another program, so the panel offers to
+/// update it.
 pub fn server_command(root: &Path, engine_home: &Path, uv: &Path) -> Result<ServerCommand, String> {
     let python = venv_python(root);
     if !python.is_file() {
@@ -92,13 +106,13 @@ pub fn server_command(root: &Path, engine_home: &Path, uv: &Path) -> Result<Serv
     }
     let env = vec![(crate::engine::UV_ENV.to_owned(), uv.display().to_string())];
     if cfg!(windows) {
+        let program = venv_program(root, SERVER_NAME);
+        if !program.is_file() {
+            return Err(format!("no trainnr command at {} yet", program.display()));
+        }
         return Ok(ServerCommand {
-            program: python,
-            args: vec![
-                "-m".into(),
-                crate::spawn::TRAINNR_CLI_MODULE.into(),
-                "mcp".into(),
-            ],
+            program,
+            args: vec!["mcp".into()],
             env,
         });
     }
@@ -112,6 +126,8 @@ pub fn server_command(root: &Path, engine_home: &Path, uv: &Path) -> Result<Serv
 
 /// `<engine home>/bin/trainnr`: runs the `trainnr` command in `python`'s
 /// environment with the engine's uv named, whatever version is set up.
+/// `-P` keeps the client's working folder off the import path (the
+/// module's note).
 fn write_launcher(engine_home: &Path, python: &Path, uv: &Path) -> Result<PathBuf, String> {
     let bin = engine_home.join("bin");
     std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
@@ -120,7 +136,7 @@ fn write_launcher(engine_home: &Path, python: &Path, uv: &Path) -> Result<PathBu
     let quoted = |p: &Path| format!("'{}'", p.display().to_string().replace('\'', "'\\''"));
     let body = format!(
         "#!/bin/sh\n# Written by the trainnr Studio: the trainnr command from the engine.\n\
-         {}=${{{}:-{}}} exec {} -m {} \"$@\"\n",
+         {}=${{{}:-{}}} exec {} -P -m {} \"$@\"\n",
         crate::engine::UV_ENV,
         crate::engine::UV_ENV,
         quoted(uv),
@@ -837,8 +853,36 @@ mod tests {
         assert_eq!(made.args, ["mcp"]);
         let script = std::fs::read_to_string(&made.program).unwrap();
         assert!(script.contains(&python.display().to_string()));
-        assert!(script.contains("-m trainnr.cli"));
+        // `-P`: a client started in the home, beside `~/trainnr`, must not
+        // import that folder as the package.
+        assert!(script.contains("-P -m trainnr.cli"));
         assert!(server_command(&home.join("none"), &home, Path::new("uv")).is_err());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_windows_entry_runs_the_environments_trainnr_exe() {
+        let home = scratch("windows-entry");
+        let root = home.join("runtime");
+        let python = venv_python(&root);
+        std::fs::create_dir_all(python.parent().unwrap()).unwrap();
+        std::fs::write(&python, "").unwrap();
+        let engine = home.join("engine");
+        let uv = Path::new(r"C:\e\bin\uv.exe");
+        assert!(
+            server_command(&root, &engine, uv).is_err(),
+            "no trainnr.exe yet"
+        );
+        let trainnr = python.with_file_name("trainnr.exe");
+        std::fs::write(&trainnr, "").unwrap();
+        let made = server_command(&root, &engine, uv).expect("made");
+        // Not `python -m`: that puts the client's working folder first on
+        // the import path. A different program from the old entry's, so
+        // the panel offers Update.
+        assert_eq!(made.program, trainnr);
+        assert_ne!(made.program, python);
+        assert_eq!(made.args, ["mcp"]);
         let _ = std::fs::remove_dir_all(&home);
     }
 }
