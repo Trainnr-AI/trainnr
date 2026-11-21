@@ -102,6 +102,41 @@ class TheLeggedWalk(_InAProject):
                 "reason"
             ],
         )
+        self._onboard(
+            "torqued",
+            biped_xml().replace(
+                '<position joint="left_hip" kp="5"/>', '<motor joint="left_hip"/>'
+            ),
+        )
+        self.assertIn(
+            "not position actuators",
+            declare("g", robot="torqued", actuator="model")["reason"],
+        )
+        self.assertIn(
+            "matches none",
+            declare("h", robot="biped", actuator="model", pinned_joints=["tail.*"])[
+                "reason"
+            ],
+        )
+        self.assertIn(
+            "is not a pattern",
+            declare("i", robot="biped", actuator="model", pinned_joints=["("])[
+                "reason"
+            ],
+        )
+        self.assertIn(
+            "nothing would walk",
+            declare("j", robot="biped", actuator="model", pinned_joints=[".*"])[
+                "reason"
+            ],
+        )
+        keyless = biped_xml()
+        keyless = keyless[: keyless.index("<keyframe>")] + "</mujoco>"
+        self._onboard("keyless", keyless)
+        self.assertIn(
+            "no keyframe to stand in",
+            declare("k", robot="keyless", actuator="model")["reason"],
+        )
         ok = declare("walk", robot="biped", actuator="model", pinned_joints=["neck.*"])
         self.assertEqual(ok["status"], "done", ok)
 

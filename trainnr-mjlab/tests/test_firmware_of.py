@@ -20,6 +20,14 @@ class TheFirmware(unittest.TestCase):
         )
         self.assertEqual((fitted.vin, fitted.kp, fitted.error_gain), (6.0, 32.0, 1.25))
         self.assertEqual(fitted.max_pwm, 1.0)
+        # a bench fit of a family the table knows keeps its own constants
+        bench_xl330 = firmware_of(
+            {
+                "params": {"actuator": "xl330"},
+                "context": {"firmware": {"vin": 5.0, "kp": 200, "error_gain": 0.01}},
+            }
+        )
+        self.assertEqual((bench_xl330.vin, bench_xl330.kp), (5.0, 200.0))
         with self.assertRaisesRegex(KeyError, "no firmware constants"):
             firmware_of({"params": {"actuator": "mystery"}})
 

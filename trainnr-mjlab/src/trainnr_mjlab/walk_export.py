@@ -359,10 +359,8 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
     ]
     # the joints the action drives, by the actuators it targets: all of
     # them, unless the walk holds some at the default pose (#100)
-    acting = [
-        joint_of_ctrl[ctrl_names.index(_unprefixed(t))]
-        for t in joint_action.target_names
-    ]
+    # (target_names are joint names: an MJCF's actuators keep their own)
+    acting = [_unprefixed(t) for t in joint_action.target_names]
     action_joints = [] if acting == [_unprefixed(j) for j in joint_names] else acting
     scale = joint_action._scale
     scale_list = (
@@ -459,7 +457,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "input": ex.input_name,
             "output": ex.output_name,
             "input_width": ex.obs_dim,
-            "output_width": len(joint_names),
+            "output_width": len(acting),
             "normalization": "folded into the graph",
             "export_check_max_abs_diff": ex.max_abs_diff,
         },
@@ -488,11 +486,16 @@ def _limits_carried(trained: dict[str, Any], out_dir: Path) -> dict[str, str] | 
     same ones; None for a run that trained against none."""
     import shutil  # noqa: PLC0415
 
+    from trainnr_mjlab.legged_walk import legged_robot  # noqa: PLC0415
+
     line = trained.get("limits")
-    spec = (trained.get("legged") or {}).get("limits") or {}
-    if not line or not spec.get("file"):
+    spec = trained.get("legged") or {}
+    if not line or not spec.get("limits"):
         return None
-    shutil.copy2(spec["file"], out_dir / LIMITS_FILE)
+    source = legged_robot(spec).limits_file  # the robot's own limits.json
+    if source is None:
+        return None
+    shutil.copy2(source, out_dir / LIMITS_FILE)
     mode, _, stamp = str(line).partition(": ")
     return {"file": LIMITS_FILE, "stamp": stamp, "mode": mode}
 

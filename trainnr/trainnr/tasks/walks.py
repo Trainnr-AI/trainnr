@@ -317,6 +317,11 @@ def resolve_legged(spec: LeggedWalkSpec) -> tuple[dict[str, Any], Path, Any]:
     model_file = model_file_of(bundle_dir)
     if model_file is None:
         raise FileNotFoundError(f"{bundle_dir}: no model file recorded to compile")
+    if missing_files(bundle_dir):  # never downloaded by a declaration
+        raise FileNotFoundError(
+            f"{name}'s meshes are fetched on first use (FETCH.json) and are not here "
+            "yet: show or train its own walk once, then declare this one"
+        )
     model = mujoco.MjModel.from_xml_path(str(model_file))
     obj = mujoco.mjtObj
     free = [
@@ -336,10 +341,17 @@ def resolve_legged(spec: LeggedWalkSpec) -> tuple[dict[str, Any], Path, Any]:
     foot_sites = list(spec.foot_sites) or [s for s in sites if FOOT_WORD in s.lower()]
     foot_geoms = list(spec.foot_geoms) or [g for g in geoms if FOOT_WORD in g.lower()]
     keys = [_name(model, obj.mjOBJ_KEY, k) for k in range(model.nkey)]
+    if not keys:
+        raise ValueError(
+            f"{name} has no keyframe to stand in: add one named home or stand to its "
+            "model (the policy's default pose and every reset start there)"
+        )
     stand = spec.stand_keyframe or next(
-        (k for want in STAND_KEYFRAMES for k in keys if k.lower() == want),
-        keys[0] if keys else "",
+        (k for want in STAND_KEYFRAMES for k in keys if k.lower() == want), keys[0]
     )
+    # an unnamed keyframe is addressed by its index, as MuJoCo would
+    key_index = keys.index(stand) if stand in keys else -1
+    stand_ref = stand or f"#{key_index}"
     missing = [f"site {s}" for s in foot_sites if s not in sites]
     missing += [
         f"geom {g}"
@@ -353,7 +365,7 @@ def resolve_legged(spec: LeggedWalkSpec) -> tuple[dict[str, Any], Path, Any]:
     ]
     if mujoco.mj_name2id(model, obj.mjOBJ_BODY, trunk) < 0:
         missing.append(f"body {trunk}")
-    if stand and stand not in keys:
+    if key_index < 0:
         missing.append(f"keyframe {stand}")
     if not foot_sites:
         missing.append("foot sites (none named 'foot'; declare foot_sites)")
@@ -370,20 +382,21 @@ def resolve_legged(spec: LeggedWalkSpec) -> tuple[dict[str, Any], Path, Any]:
         raise ValueError(
             f"{name} is not in a walk's shape: missing {', '.join(missing)}{hint}"
         )
-    if stand:
-        _require_stand_in_range(model, keys.index(stand), name, stand)
+    _require_stand_in_range(model, key_index, name, stand_ref)
+    pinned = _pinned_of(spec.pinned_joints, model, name)
     actuator = _actuator_of(spec.actuator, bundle_dir, model, name)
-    limits = _limits_of(spec.limits, bundle_dir, model, stand, name)
+    limits = _limits_of(spec.limits, bundle_dir, model, stand_ref, name)
+    # no machine path: the trainer finds the bundle by the robot's name and
+    # the files by their place in it or in the project (AGENTS.md)
     resolved = {
         "robot": stamp(name, bundle_dir),
-        "bundle_dir": str(bundle_dir),
         "model_file": model_file.name,
         "actuator": actuator,
-        "stand_keyframe": stand or None,
+        "stand_keyframe": stand_ref,
         "trunk": trunk,
         "foot_sites": foot_sites,
         "foot_geoms": foot_geoms,
-        "pinned_joints": list(spec.pinned_joints),
+        "pinned_joints": pinned,
         "reset_z": list(spec.reset_z) or None,
         "command": {
             k: list(v)
@@ -435,22 +448,39 @@ def _limits_of(
             f"{robot}'s keyframe {stand!r} breaks its limits: "
             f"{', '.join(broken[stand])}; fix the keyframe or name another"
         )
-    return {"file": str(path), "mode": mode}
+    return {"mode": mode}  # the bundle's own limits.json
 
 
 def _actuator_of(
     actuator: str, bundle_dir: Path, model: mujoco.MjModel, robot: str
 ) -> str:
-    """The actuator a legged walk names, resolved: MODEL_ACTUATORS, or the
-    verified bundle file (the library's by name, else one in the project)."""
+    """The actuator a legged walk names, resolved without a machine path:
+    MODEL_ACTUATORS (the model's own, every one a position actuator, the
+    walk sends position targets), `library:<name>` for a certified bundle,
+    or the bundle file's path in the robot's project. A bundle is verified."""
     from trainnr.robot.actuator_bundle import BUNDLE_STORE, read_bundle  # noqa: PLC0415
 
     if actuator == MODEL_ACTUATORS:
         if model.nu == 0:
             raise ValueError(f"{robot}'s model has no actuators, so 'model' has none")
+        torque = [
+            _name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or f"#{a}"
+            for a in range(model.nu)
+            if not _is_position(model, a)
+        ]
+        if torque:
+            raise ValueError(
+                f"{robot}'s actuators {', '.join(torque)} are not position actuators "
+                "(a motor or velocity actuator): a walk sends position targets, so "
+                "'model' needs <position> actuators, or name an actuator bundle"
+            )
         return actuator
-    library = BUNDLE_STORE / f"{actuator}.bundle.json"
-    found = library if library.is_file() else _beside_robot(bundle_dir, actuator)
+    name = actuator.removeprefix(LIBRARY_PREFIX)
+    library = BUNDLE_STORE / f"{name}.bundle.json"
+    if library.is_file():
+        read_bundle(library)
+        return f"{LIBRARY_PREFIX}{name}"
+    found = _beside_robot(bundle_dir, actuator)
     if found is None:
         known = sorted(
             f.name.removesuffix(".bundle.json")
@@ -461,7 +491,53 @@ def _actuator_of(
             "...), a file in the project, or 'model'"
         )
     read_bundle(found)  # verified: a tampered or foreign file is refused
-    return str(found)
+    return found.relative_to(bundle_dir.resolve().parent.parent).as_posix()
+
+
+LIBRARY_PREFIX = "library:"
+
+
+def _is_position(model: mujoco.MjModel, a: int) -> bool:
+    """A position actuator: an affine bias pulling toward the control
+    (MuJoCo's <position>: gain kp, bias -kp*q)."""
+    return (
+        int(model.actuator_biastype[a]) == int(mujoco.mjtBias.mjBIAS_AFFINE)
+        and float(model.actuator_biasprm[a][1]) < 0.0
+    )
+
+
+def _pinned_of(
+    patterns: tuple[str, ...], model: mujoco.MjModel, robot: str
+) -> list[str]:
+    """The pinned joint patterns, each checked against the model's hinges:
+    a pattern that is not a pattern, matches no hinge, or leaves none
+    driven is refused by name."""
+    import re  # noqa: PLC0415
+
+    hinges = [
+        _name(model, mujoco.mjtObj.mjOBJ_JOINT, j)
+        for j in range(model.njnt)
+        if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE
+    ]
+    held: set[str] = set()
+    for pattern in patterns:
+        try:
+            matched = {h for h in hinges if re.fullmatch(pattern, h)}
+        except re.error as why:
+            raise ValueError(
+                f"pinned_joints: {pattern!r} is not a pattern ({why})"
+            ) from why
+        if not matched:
+            raise ValueError(
+                f"pinned_joints: {pattern!r} matches none of {robot}'s hinges "
+                f"({', '.join(hinges)})"
+            )
+        held |= matched
+    if held and held == set(hinges):
+        raise ValueError(
+            f"pinned_joints holds every hinge of {robot}: nothing would walk"
+        )
+    return list(patterns)
 
 
 def _require_stand_in_range(

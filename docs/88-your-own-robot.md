@@ -71,7 +71,7 @@ walk names it as `robots/<bench>/fits/actuators/<servo>.bundle.json`.
 
 One recording's interval is about that recording: an encoder's quantization
 biases a run systematically (a synthetic SCS0009 bench recovers each
-parameter within a few percent, the intervals narrower than that bias:
+parameter it pins within 7 percent, the intervals narrower than that bias:
 [record](findings/servo-bench-synthetic-scs0009-2026-11-22.json)), so
 fit two or more recordings and read the cross-run spread `identify_system`
 writes before trusting a number.

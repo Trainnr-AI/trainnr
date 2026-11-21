@@ -92,21 +92,22 @@ def firmware_for(actuator_slug: str) -> Firmware:
 
 
 def firmware_of(bundle: dict) -> Firmware:
-    """A bundle's firmware: the table's for a family BAM measured, else the
-    constants the bundle's own fit measured (`context.firmware`, written by
-    trainnr's `servo-bench` method from a bench recording, #101): the
+    """A bundle's firmware: the constants its own fit measured, when it
+    carries them (`context.firmware`, written by trainnr's `servo-bench`
+    method from a bench recording, #101), else the table's: the
     supply, the gain register it ran at, the duty per radian of error over
-    that register, the pwm ceiling. A family in neither is refused by name."""
+    that register, the pwm ceiling. A family in neither is refused by name.
+    A bench fit keeps the table's rate limit, where the family has one."""
     slug = bundle["params"]["actuator"]
-    if slug in FIRMWARE:
-        return FIRMWARE[slug]
     fitted = (bundle.get("context") or {}).get("firmware")
-    if not fitted:
-        return firmware_for(slug)  # refuses, naming the table
+    if not fitted:  # a vendored fit: the family's measured constants
+        return firmware_for(slug)  # (refuses a family the table lacks)
+    # a bench fit measured its own servo: its constants win over the table's
     return Firmware(
         family=slug,
         vin=float(fitted["vin"]),
         kp=float(fitted["kp"]),
         error_gain=float(fitted["error_gain"]),
         max_pwm=float(fitted.get("max_pwm", 1.0)),
+        max_velocity=FIRMWARE[slug].max_velocity if slug in FIRMWARE else None,
     )

@@ -20,6 +20,7 @@ def _biped() -> str:
 class TheLeggedRobot(unittest.TestCase):
     def test_a_spec_becomes_the_robot_and_its_walk(self) -> None:
         import mujoco  # noqa: PLC0415
+        from trainnr.bundles import locate  # noqa: PLC0415
 
         from trainnr_mjlab.legged_walk import (  # noqa: PLC0415
             MODEL_DR_BASIS,
@@ -31,10 +32,11 @@ class TheLeggedRobot(unittest.TestCase):
             bundle = Path(tmp) / "biped"
             bundle.mkdir()
             (bundle / "scene.xml").write_text(_biped())
+            locate.add_search_root(Path(tmp))  # the trainer finds it by name
+            self.addCleanup(locate._SEARCH_ROOTS.remove, Path(tmp))
             spec = {
                 "name": "legged-walk@000000000000",
                 "robot": "biped@000000000000",
-                "bundle_dir": str(bundle),
                 "model_file": "scene.xml",
                 "actuator": "model",
                 "stand_keyframe": "stand",

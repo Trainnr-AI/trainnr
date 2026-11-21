@@ -191,7 +191,7 @@ class JointLimits:
         return hit
 
 
-def _parse(name: str, item: Mapping[str, Any]) -> Limit:
+def _parse(name: str, item: Mapping[str, Any]) -> Limit:  # noqa: PLR0912 - one refusal per malformation
     form = item.get("form")
     if form not in FORMS:
         raise ValueError(
@@ -218,11 +218,25 @@ def _parse(name: str, item: Mapping[str, Any]) -> Limit:
             raise ValueError(
                 f"limit {name!r}: a table has minimum_by or maximum_by rows"
             )
+        for key in ("minimum_by", "maximum_by"):
+            rows = [row[0] for row in item.get(key) or []]
+            if rows != sorted(rows) or len(set(rows)) != len(rows):
+                raise ValueError(
+                    f"limit {name!r}: {key}'s first column rises (the lookup reads "
+                    f"the first row at or above), got {rows}"
+                )
         return Limit(name, form, (item["over"], item["joint"]), dict(item), note)
     axes = list(item.get("axes") or [])
     values = item.get("values") or {}
     if not axes or any(a not in values for a in axes):
         raise ValueError(f"limit {name!r}: a grid has axes, each with its values")
+    for a in axes:
+        grid = list(values[a])
+        if grid != sorted(grid) or len(set(grid)) != len(grid):
+            raise ValueError(
+                f"limit {name!r}: axis {a}'s values rise (write a right leg's in "
+                f"rising order, with signs), got {grid}"
+            )
     shape = [len(values[a]) for a in axes]
     for cell in item.get("forbidden") or []:
         if len(cell) != len(axes) or any(

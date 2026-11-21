@@ -147,7 +147,11 @@ def legged_walk_env_cfg(  # noqa: PLR0915 - the recipe's knobs; one linear trans
             robot.actuator, target_names_expr=robot.servo_joints, physics_dt=PHYSICS_DT
         )
         if robot.actuator is not None
-        else XmlActuatorCfg(target_names_expr=robot.servo_joints)
+        # the walk sends position targets: a model whose actuators are not
+        # position actuators is refused by mjlab, not driven limp
+        else XmlActuatorCfg(
+            target_names_expr=robot.servo_joints, command_field="position"
+        )
     )
     entity, robot_stamp = entity_from_bundle(
         robot.robot_dir,
@@ -405,11 +409,11 @@ def _limits_terms(cfg: ManagerBasedRlEnvCfg, robot: LeggedRobot) -> str:
 # A declared legged walk's spec, as the trainnr side resolves it (paths
 # absolute, the actuator a bundle file or MODEL): the keys it reads.
 MODEL = "model"
+LIBRARY = "library:"
 SPEC_KEYS = frozenset(
     {
         "name",
         "robot",
-        "bundle_dir",
         "model_file",
         "actuator",
         "stand_keyframe",
@@ -440,11 +444,18 @@ def legged_robot(spec: Mapping[str, Any]) -> LeggedRobot:
     import re  # noqa: PLC0415
 
     import mujoco  # noqa: PLC0415
+    from trainnr.bundles.locate import find_bundle  # noqa: PLC0415
+    from trainnr.robot.actuator_bundle import BUNDLE_STORE  # noqa: PLC0415
+    from trainnr.robot.joint_limits import LIMITS_FILE  # noqa: PLC0415
 
     unknown = sorted(set(spec) - SPEC_KEYS)
     if unknown:
         raise ValueError(f"a legged walk's spec has no {', '.join(unknown)}")
-    bundle_dir = Path(spec["bundle_dir"])
+    name = str(spec["robot"]).split("@", 1)[0]
+    found = find_bundle(name)  # the project's robots first (use_project)
+    if found is None:
+        raise FileNotFoundError(f"no robot {name!r} in the project or the library")
+    bundle_dir = Path(found)
     model = mujoco.MjModel.from_xml_path(str(bundle_dir / spec["model_file"]))
     obj = mujoco.mjtObj
     names = [mujoco.mj_id2name(model, obj.mjOBJ_JOINT, j) for j in range(model.njnt)]
@@ -480,22 +491,38 @@ def legged_robot(spec: Mapping[str, Any]) -> LeggedRobot:
 
     init_state = None
     reset_z = tuple(spec.get("reset_z") or RESET_ABOVE_STAND)
-    key = spec.get("stand_keyframe")
+    key = str(spec.get("stand_keyframe") or "")
     if key:
-        k = mujoco.mj_name2id(model, obj.mjOBJ_KEY, key)
-        if k < 0:
+        # by name, or `#<index>` for an unnamed keyframe
+        k = (
+            int(key[1:])
+            if key.startswith("#")
+            else mujoco.mj_name2id(model, obj.mjOBJ_KEY, key)
+        )
+        if not 0 <= k < model.nkey:
             raise ValueError(f"{spec['robot']} has no keyframe {key!r}")
         qpos = model.key_qpos[k]
+        root = int(
+            model.jnt_qposadr[names.index(free[0])]
+        )  # the free joint's own place
         init_state = EntityCfg.InitialStateCfg(
-            pos=(float(qpos[0]), float(qpos[1]), float(qpos[2])),
-            rot=(float(qpos[3]), float(qpos[4]), float(qpos[5]), float(qpos[6])),
+            pos=(float(qpos[root]), float(qpos[root + 1]), float(qpos[root + 2])),
+            rot=tuple(float(v) for v in qpos[root + 3 : root + 7]),  # type: ignore[arg-type]
             joint_pos={
                 exact(n): float(qpos[model.jnt_qposadr[names.index(n)]]) for n in hinges
             },
         )
     command = spec.get("command") or {}
-    actuator = spec.get("actuator")
+    actuator = str(spec.get("actuator") or MODEL)
     limits = spec.get("limits") or {}
+    if actuator.startswith(LIBRARY):  # a certified bundle in the library
+        bundle_file: Path | None = (
+            BUNDLE_STORE / f"{actuator.removeprefix(LIBRARY)}.bundle.json"
+        )
+    elif actuator != MODEL:  # a bundle file in the robot's project
+        bundle_file = bundle_dir.resolve().parent.parent / actuator
+    else:
+        bundle_file = None
     return LeggedRobot(
         name=str(spec["robot"]),
         robot_dir=bundle_dir,
@@ -506,11 +533,11 @@ def legged_robot(spec: Mapping[str, Any]) -> LeggedRobot:
         servo_joints=tuple(exact(n) for n in hinges),
         pose_joints=tuple(exact(n) for n in driven),
         reset_z=(float(reset_z[0]), float(reset_z[1])),
-        actuator=None if actuator in (None, MODEL) else Path(str(actuator)),
+        actuator=bundle_file,
         pinned=tuple(exact(n) for n in pinned),
         init_state=init_state,
         without_floor=True,
-        limits_file=Path(limits["file"]) if limits else None,
+        limits_file=bundle_dir / LIMITS_FILE if limits else None,
         limits_mode=str(limits.get("mode", LIMITS_TERMINATE)),
         lin_vel_x=tuple(command.get("lin_vel_x", LIN_VEL_X)),
         lin_vel_y=tuple(command.get("lin_vel_y", LIN_VEL_Y)),

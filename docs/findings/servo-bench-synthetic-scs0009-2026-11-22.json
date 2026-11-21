@@ -1,24 +1,45 @@
 {
  "id": "servo-bench-synthetic-scs0009-2026-11-22",
- "claim": "The servo-bench identification method recovers a synthetic SCS0009-class servo from a 12 s bench recording (steps then a chirp on a 60 g, 8 cm pendulum, positions quantized to the encoder's 1024 counts over 300 degrees with 2 mrad noise): stall torque 0.255 N*m against 0.25 true, P gain 39.3 duty/rad against 40, back-EMF 0.00408 against 0.004 N*m*s/rad, Coulomb friction 0.0085 against 0.008 N*m, command delay 11.1 against 12 ms, armature 2.8e-5 against 2.0e-5 kg*m^2 (beside the arm's 3.4e-4); held-out position error 5.4 mrad, the noise level. Each estimate is within 2.5 percent of the truth except friction (6 percent), the delay (one integrator step) and the armature (small beside the arm), and the reported 95 percent intervals are narrower than these biases: the encoder's quantization biases one recording systematically, so two or more recordings and their cross-run spread are what earn trust.",
+ "claim": "The servo-bench identification method recovers a synthetic SCS0009-class servo from a 12 s bench recording (steps then a chirp on a 60 g, 8 cm pendulum, positions quantized to the encoder's 1024 counts over 300 degrees with 2 mrad noise): P gain 40.5 duty/rad against 40, stall torque 0.239 against 0.25 N*m, back-EMF 0.00378 against 0.004 N*m*s/rad, Coulomb friction 0.0074 against 0.008 N*m, command delay 11.3 against 12 ms, each pinned; the armature (2e-5 kg*m^2 beside the arm's 3.4e-4) comes out not pinned, as it should from this data. Held-out position error 5.6 mrad, the noise level. The pinned estimates sit 1.3 to 7 percent from the truth while their 95 percent intervals are narrower: the encoder's quantization biases one recording systematically, so two or more recordings and their cross-run spread are what earn trust.",
  "date": "2026-11-22",
  "repo_commit": "abffd10",
  "argv": [
   "trainnr call onboard_robot {\"model_path\": \"<bench.xml beside bench.json>\", \"name\": \"scs0009-bench\"}",
   "trainnr call identify_system {\"robot\": \"scs0009-bench\", \"recording\": \"bench-steps\"}"
  ],
- "instrument": "trainnr.robot.servo_bench (numpy semi-implicit Euler at 1 ms, scipy differential evolution then least squares), MuJoCo for the arm's inertia and gravity; RTX 3090 Ti machine, CPU only; 2 min 15 s for the fit with 16 bootstrap replicates",
+ "instrument": "trainnr.robot.servo_bench (numpy semi-implicit Euler at 1 ms with static friction, scipy differential evolution then least squares with fitted block starts), MuJoCo for the arm's inertia and gravity; CPU only; 2 min 33 s for the fit with 16 bootstrap replicates",
  "inputs": {
   "bench": "one hinge (axis y) driving a 10 g capsule and a 50 g sphere at 8 cm; bench.json: servo scs0009, vin 6.0 V, kp 32, max_pwm 1.0",
-  "truth": {"stall_torque_nm": 0.25, "duty_per_rad": 40.0, "back_emf_nms": 0.004, "friction_base_nm": 0.008, "armature_kgm2": 2e-05, "command_delay_s": 0.012},
+  "truth": {
+   "stall_torque_nm": 0.25,
+   "duty_per_rad": 40.0,
+   "back_emf_nms": 0.004,
+   "friction_base_nm": 0.008,
+   "armature_kgm2": 2e-05,
+   "command_delay_s": 0.012
+  },
   "recording": "50 Hz, 12 s: square steps of +-0.6 rad at 0.5 Hz for 6 s, then a chirp of 0.5 rad from 0.2 Hz rising 0.25 Hz per second; simulated by the method's own law from rest, Gaussian noise 2 mrad, then rounded to 300/1024 degrees"
  },
  "outcome": {
-  "estimates": {"stall_torque_nm": 0.25527, "duty_per_rad": 39.340, "back_emf_nms": 0.0040807, "friction_base_nm": 0.0084832, "armature_kgm2": 2.8014e-05, "command_delay_s": 0.011052},
-  "half_widths_95": {"stall_torque_nm": 0.00117, "duty_per_rad": 0.648, "back_emf_nms": 1.83e-05, "friction_base_nm": 0.000188, "armature_kgm2": 6.56e-07, "command_delay_s": 0.000106},
-  "position_rmse_rad": 0.00302,
-  "held_out_position_rmse_rad": 0.0054,
-  "pinned": "6 of 6"
+  "estimates": {
+   "stall_torque_nm": 0.238742,
+   "duty_per_rad": 40.5275,
+   "back_emf_nms": 0.00377858,
+   "friction_base_nm": 0.00741931,
+   "armature_kgm2": 7.95374e-07,
+   "command_delay_s": 0.011323
+  },
+  "half_widths_95": {
+   "stall_torque_nm": 0.00151,
+   "duty_per_rad": 0.691,
+   "back_emf_nms": 1.33e-05,
+   "friction_base_nm": 0.000119,
+   "armature_kgm2": 2.04e-06,
+   "command_delay_s": 0.000112
+  },
+  "position_rmse_rad": 0.003532,
+  "held_out_position_rmse_rad": 0.0056,
+  "pinned": "5 of 6 (the armature not)"
  },
  "artifacts": {
   "robots/scs0009-bench/fits/bench-steps@65c56fa471f5.json": "the fit record in the test project",
@@ -27,7 +48,7 @@
  "protocol": "Synthetic: the truth is simulated by the same law the method fits, so this measures recovery through quantization and noise, not the law's fidelity to a real servo. Blocks of 2 s, each started from its measured position and a fitted starting velocity; the last block held out; intervals the wider of a 16-replicate block bootstrap and the asymptotic interval from the Jacobian, inflated for the residuals' lag-1 autocorrelation.",
  "caveats": [
   "Synthetic data: a real SCS0009's law, gearbox and encoder may differ from BAM's first tier; the method's held-out error on a real bench recording is the test of that.",
-  "One recording: the intervals are narrower than the quantization's bias on four of six parameters; the cross-run spread over two or more recordings is the honest uncertainty.",
+  "One recording: the pinned intervals are narrower than the quantization's bias on most parameters; the cross-run spread over two or more recordings is the honest uncertainty.",
   "Back-EMF and viscous friction are one term from positions; the bundle puts it all in kt^2/R and records friction_viscous 0."
  ]
 }

@@ -97,6 +97,18 @@ class TheForms(unittest.TestCase):
                     "forbidden": [[2]],
                 }
             )
+        with self.assertRaisesRegex(ValueError, "values rise"):
+            _limits(
+                {
+                    "name": "g",
+                    "form": "grid",
+                    "axes": ["a"],
+                    "values": {"a": [30, 0, -30]},
+                    "forbidden": [],
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "first column rises"):
+            _limits(dict(KNEE_ANKLE, minimum_by=[[50, -45], [40, -60]]))
         with self.assertRaisesRegex(KeyError, "lack: knee"):
             _limits(KNEE_ANKLE).violated(np.zeros((1, 1)), ["ankle"])
 

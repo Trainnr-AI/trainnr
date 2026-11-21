@@ -13,11 +13,12 @@ bench uses (Duclusaud et al., ICRA 2025).
 
 The law is BAM's first tier (`m1`), the one trainnr_mjlab's actuator runs:
 the firmware's duty `clip(G * (target - q), +-max_pwm)` drives a DC motor,
-`tau = S * duty / max_pwm - B * qd` with the stall torque `S = kt*vin/R`
-and the back-EMF `B = kt^2/R`, against Coulomb friction, the armature and
-the arm. From positions alone `B` and the gearbox's viscous friction are
-one term (both multiply the velocity): the fit puts it all in the motor
-and says so. The arm's known gravity torque anchors the torque scale and
+`tau = S * duty - B * qd` with `S = kt*vin/R` (the stall torque at full
+duty, as trainnr_mjlab's kernel computes it) and the back-EMF
+`B = kt^2/R`, against Coulomb friction, the armature and the arm. From
+positions alone `B` and the gearbox's viscous friction are one term
+(both multiply the velocity): the fit puts it all in the motor and says
+so. The arm's known gravity torque anchors the torque scale and
 its known inertia the armature; the command delay is fitted too.
 
 The recording is cut in 2 s blocks, each simulated from its own measured
@@ -209,17 +210,24 @@ def simulate_many(arm: Arm, bench: Bench, xs: np.ndarray, block: Block) -> np.nd
         - 1
     )
     target = block.command[np.clip(held, 0, len(block.command) - 1)]
-    q = np.full(len(xs), float(block.measured[0]))
-    qd = np.full(len(xs), block.start_velocity)
+    q: np.ndarray = np.full(len(xs), float(block.measured[0]))
+    qd: np.ndarray = np.full(len(xs), block.start_velocity)
     out = np.empty((len(xs), steps))
     top = bench.max_pwm
     for i in range(steps):
         out[:, i] = q
         duty = np.clip(gain * (target[:, i] - q), -top, top)
-        drive = stall * duty / top - emf * qd + arm.a * np.sin(q) + arm.b * np.cos(q)
-        stuck = (np.abs(qd) < STICK_VELOCITY) & (np.abs(drive) <= coulomb)
+        drive = stall * duty - emf * qd + arm.a * np.sin(q) + arm.b * np.cos(q)
+        holds = np.abs(drive) <= coulomb
         sign = np.sign(np.where(qd != 0.0, qd, drive))
-        qd = np.where(stuck, 0.0, qd + (drive - coulomb * sign) / inertia * SUBSTEP_S)
+        moved = qd + (drive - coulomb * sign) / inertia * SUBSTEP_S
+        # static friction: a velocity friction would carry through zero
+        # stops there when the drive cannot overcome it (else it jitters
+        # around zero at the step's size and never sticks)
+        stuck = holds & (
+            (np.abs(qd) < STICK_VELOCITY) | (np.sign(moved) != np.sign(qd))
+        )
+        qd = np.where(stuck, 0.0, moved)
         # a candidate too stiff for the step diverges: bounded here, and
         # far from any measurement, so the search leaves it
         qd = np.clip(qd, -MAX_SPEED, MAX_SPEED)
@@ -508,8 +516,8 @@ def actuator_bundle(
             "method": NAME,
             "bench": bench_stamp,
             "recording": recording,
-            "law": "BAM m1 (Duclusaud et al., ICRA 2025): duty = clip(G*(target-q)), "
-            "tau = S*duty/max_pwm - B*qd, Coulomb friction, armature",
+            "law": "BAM m1 (Duclusaud et al., ICRA 2025): duty = clip(G*(target-q), "
+            "+-max_pwm), tau = S*duty - B*qd, Coulomb friction, armature",
             "anchor": "the arm's gravity torque and inertia, from the bench model; "
             "back-EMF and viscous friction are one term from positions, all in kt^2/R",
         },
@@ -527,14 +535,31 @@ def actuator_bundle(
             "held_out_position_rmse_rad": round(fit.held_out_rmse_rad, 6),
             "blocks": fit.blocks,
         },
-        "uncertainty": {
-            p.name: {"low": p.lower, "high": p.upper, "pinned": p.pinned}
-            for p in result.parameters
-        },
+        "uncertainty": _bundle_intervals(result, bench.vin),
     }
     bundle["checks"] = run_checks(bundle["params"])  # derived, outside the stamp
     bundle["stamp"] = _stamp(bundle)
     return bundle
+
+
+def _bundle_intervals(result: IdentificationResult, vin: float) -> dict[str, Any]:
+    """The fit's intervals on the bundle's own parameters (what a walk's
+    `identified` randomization draws from): kt and R bounded from the stall
+    torque's and the back-EMF's intervals, conservatively (kt = B*vin/S,
+    R = kt*vin/S); the armature, friction and delay as fitted."""
+    by = {p.name: p for p in result.parameters}
+    s, b = by["stall_torque"], by["back_emf"]
+    s_lo, s_hi = max(s.lower, 1e-12), s.upper
+    b_lo, b_hi = max(b.lower, 0.0), b.upper
+    kt_lo, kt_hi = b_lo * vin / s_hi, b_hi * vin / s_lo
+    out: dict[str, Any] = {
+        "kt": {"low": kt_lo, "high": kt_hi},
+        "R": {"low": kt_lo * vin / s_hi, "high": kt_hi * vin / s_lo},
+    }
+    for name in ("armature", "friction_base", "command_delay"):
+        p = by[name]
+        out[name] = {"low": max(p.lower, 0.0), "high": p.upper}
+    return out
 
 
 @method(
