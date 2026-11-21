@@ -93,6 +93,9 @@ class EpisodeOutcome(TrackingOutcome):
     (docs/e2e-research/71 E0) - the smoothness a video shows, as numbers."""
 
     smoothness: Any = None
+    # control steps spent past a declared limit over several joints (#121);
+    # None when the robot declares none
+    limit_steps: int | None = None
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,28 @@ def _snap_cameras(
         pictures = rgb.detach().cpu().numpy()
         for world in worlds:
             per_world[world].append(pictures[world])
+
+
+def _walk_limits(unwrapped: Any) -> Any:
+    """The robot's declared limits the walk trained against (its
+    `joint_limits` termination or cost), as a batch checker; else None."""
+    from trainnr_mjlab.limits_term import limits_of  # noqa: PLC0415
+
+    for terms in (unwrapped.cfg.terminations, unwrapped.cfg.rewards):
+        term = terms.get("joint_limits") if terms else None
+        if term is not None:
+            return limits_of(unwrapped, term.params["limits_file"])
+    return None
+
+
+def _limit_terminated(unwrapped: Any) -> Any:
+    """The worlds whose episode the limits termination ended this step."""
+    import torch  # noqa: PLC0415
+
+    manager = unwrapped.termination_manager
+    if "joint_limits" in getattr(manager, "active_terms", []):
+        return manager.get_term("joint_limits").bool()
+    return torch.zeros_like(manager.terminated)
 
 
 def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging and its capture
@@ -183,6 +208,8 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
     from trainnr.evaluate.smoothness import SmoothnessMeter  # noqa: PLC0415
 
     meter = SmoothnessMeter(trials, dt=float(unwrapped.step_dt))
+    limits = _walk_limits(unwrapped)
+    limit_steps = torch.zeros(trials, dtype=torch.long, device=device)
     obs = env.get_observations()  # a TensorDict, not the (obs, extras) pair
     first_command = unwrapped.command_manager.get_command(COMMAND_TERM).clone()
     while open_worlds.any():
@@ -208,6 +235,13 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
         err_sum += err * open_worlds
         cmd_sum += cmd * open_worlds
         steps += open_worlds.long()
+        if limits is not None:
+            # the pose the step ended in (a world that just ended its
+            # episode is checked before its reset is read as its pose)
+            broken = limits.violated(unwrapped.scene["robot"].data.joint_pos).any(dim=1)
+            limit_steps += (broken & open_worlds).long()
+            broken_ends = open_worlds & dones.bool() & _limit_terminated(unwrapped)
+            limit_steps += (broken_ends & ~broken).long()
         closing = open_worlds & dones.bool()
         if max_ticks is not None:
             closing |= open_worlds & (steps >= max_ticks)
@@ -224,6 +258,7 @@ def rollout_episodes(  # noqa: PLR0913, PLR0915 - one rollout loop: its judging 
             mean_err=float(err_sum[i] / recorded_steps[i]),
             mean_cmd=float(cmd_sum[i] / recorded_steps[i]),
             smoothness=meter.result(i),
+            limit_steps=int(limit_steps[i]) if limits is not None else None,
         )
         arrays: dict[str, Any] = {}
         if capture and trace[i]:
@@ -934,6 +969,11 @@ def judge(args: argparse.Namespace, run: Tracker) -> None:  # noqa: PLR0912, PLR
                 "mean_cmd_mps": round(outcome.mean_cmd, 4),
                 "err_ratio": round(outcome.err_ratio, 4),
                 **(outcome.smoothness.columns() if outcome.smoothness else {}),
+                **(
+                    {"limit_steps": outcome.limit_steps}
+                    if outcome.limit_steps is not None
+                    else {}
+                ),
             },
         )
         for trial, outcome in enumerate(outcomes)

@@ -235,7 +235,10 @@ class LeggedWalkSpec:
     recorded. `pinned_joints` (names or patterns) are held at the stand
     pose and left out of the action; `reset_z` is the trunk height's
     spread above the stand pose at reset; the velocity commands default
-    to microduck's (`lin_vel_x`, `lin_vel_y`, `ang_vel_z`)."""
+    to microduck's (`lin_vel_x`, `lin_vel_y`, `ang_vel_z`). `limits` says
+    what breaking the robot's limits over several joints does in training,
+    when its bundle declares them (`limits.json`, #121): `terminate` (the
+    default) ends the episode, `cost` pays for it, `off` ignores them."""
 
     robot: str = ""
     actuator: str = ""
@@ -248,6 +251,7 @@ class LeggedWalkSpec:
     lin_vel_x: tuple[float, ...] = ()
     lin_vel_y: tuple[float, ...] = ()
     ang_vel_z: tuple[float, ...] = ()
+    limits: str = ""
     dr_span: float = DEFAULT_SPAN
     terrain: str = "flat"
     episode_s: float = DEFAULT_EPISODE_S
@@ -369,6 +373,7 @@ def resolve_legged(spec: LeggedWalkSpec) -> tuple[dict[str, Any], Path, Any]:
     if stand:
         _require_stand_in_range(model, keys.index(stand), name, stand)
     actuator = _actuator_of(spec.actuator, bundle_dir, model, name)
+    limits = _limits_of(spec.limits, bundle_dir, model, stand, name)
     resolved = {
         "robot": stamp(name, bundle_dir),
         "bundle_dir": str(bundle_dir),
@@ -387,8 +392,50 @@ def resolve_legged(spec: LeggedWalkSpec) -> tuple[dict[str, Any], Path, Any]:
         }
         or None,
         "dr_span": spec.dr_span,
+        "limits": limits,
     }
     return resolved, bundle_dir, model
+
+
+LIMITS_MODES = ("terminate", "cost", "off")
+
+
+def _limits_of(
+    mode: str, bundle_dir: Path, model: mujoco.MjModel, stand: str, robot: str
+) -> dict[str, str] | None:
+    """The robot's declared limits over several joints and what breaking
+    one does in training; None when it declares none or the walk turns
+    them off. Refused by name: a mode it does not know, limits on joints
+    the model lacks, a stand pose that breaks one."""
+    from trainnr.robot.joint_limits import (  # noqa: PLC0415
+        LIMITS_FILE,
+        JointLimits,
+        check_keyframes,
+    )
+
+    given, mode = mode, mode or LIMITS_MODES[0]
+    if mode not in LIMITS_MODES:
+        raise ValueError(f"limits is one of {', '.join(LIMITS_MODES)}, got {mode!r}")
+    path = bundle_dir / LIMITS_FILE
+    if not path.is_file():
+        if given and given != "off":  # asked for, so never ignored
+            raise ValueError(
+                f"{robot} declares no limits ({LIMITS_FILE} in its bundle)"
+            )
+        return None
+    if mode == "off":
+        return None
+    limits = JointLimits.load(path)
+    try:
+        broken = check_keyframes(limits, model)
+    except KeyError as why:
+        raise ValueError(f"{robot}'s {LIMITS_FILE}: {str(why).strip(chr(39))}") from why
+    if stand and stand in broken:
+        raise ValueError(
+            f"{robot}'s keyframe {stand!r} breaks its limits: "
+            f"{', '.join(broken[stand])}; fix the keyframe or name another"
+        )
+    return {"file": str(path), "mode": mode}
 
 
 def _actuator_of(

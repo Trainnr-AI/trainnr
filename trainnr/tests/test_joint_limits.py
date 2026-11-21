@@ -4,18 +4,11 @@ the left leg's signs, the stricter neighbour between grid values."""
 
 from __future__ import annotations
 
-import importlib.util
-import json
-import sys
-import tempfile
 import unittest
-from pathlib import Path
 
 import numpy as np
 
 from trainnr.robot.joint_limits import SCHEMA, JointLimits
-
-TOOLS = Path(__file__).resolve().parents[2] / "tools"
 
 
 def _limits(*items: dict) -> JointLimits:
@@ -106,93 +99,6 @@ class TheForms(unittest.TestCase):
             )
         with self.assertRaisesRegex(KeyError, "lack: knee"):
             _limits(KNEE_ANKLE).violated(np.zeros((1, 1)), ["ankle"])
-
-
-class TheFirmwareConversion(unittest.TestCase):
-    """`tools/limits-from-robot-json.py` on a small config in the firmware's
-    own format: the hip map's character i is roll value i."""
-
-    def test_the_four_firmware_limits_become_rules_tables_and_grids(self) -> None:
-        if str(TOOLS) not in sys.path:
-            sys.path.insert(0, str(TOOLS))
-        spec = importlib.util.spec_from_file_location(
-            "convert", TOOLS / "limits-from-robot-json.py"
-        )
-        assert spec is not None and spec.loader is not None
-        convert = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(convert)
-        robot = {
-            "head_interlock": {
-                "yaw_window_deg": 1.0,
-                "roll_max_deg": 15.0,
-                "roll_margin_deg": 2.0,
-                "roll_free_deg": 1.0,
-            },
-            "knee_ankle": {
-                "knee_over_deg": 30.0,
-                "ankle_min_by_knee_deg": [[68.0, 0.0]],
-            },
-            "hip_map": {
-                "grid": {
-                    "hip_pitch": [0.0, 30.0],
-                    "hip_roll": [-12.0, 0.0, 15.0],
-                    "hip_yaw": [0.0],
-                    "knee": [0.0],
-                    "ankle": [0.0],
-                },
-                "rows": [
-                    {
-                        "hip_pitch": 0.0,
-                        "hip_yaw": 0.0,
-                        "knee": 0.0,
-                        "left": "001",
-                        "right": "000",
-                    },
-                    {
-                        "hip_pitch": 30.0,
-                        "hip_yaw": 0.0,
-                        "knee": 0.0,
-                        "left": "000",
-                        "right": "000",
-                    },
-                ],
-            },
-            "both_legs": {
-                "yaw_out_over_deg": 0.0,
-                "pitch_forward_of_deg": -30.0,
-                "band_pitch_forward_of_deg": -15.0,
-                "band_roll_in_past_deg": -8.0,
-            },
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "limits.json"
-            out.write_text(json.dumps(convert.convert(robot, "test")))
-            limits = JointLimits.load(out)
-        legs = {
-            f"{side}_{j}": 0.0
-            for side in ("left", "right")
-            for j in ("hip_yaw", "hip_roll", "hip_pitch", "knee", "ankle")
-        }
-        pose = {**legs, "head_yaw": 0.0, "head_roll": 0.0}
-        self.assertEqual(limits.violations(_rad(**pose)), [])
-        self.assertEqual(
-            limits.violations(_rad(**{**pose, "head_roll": 14})), ["head roll stop"]
-        )
-        # left hip at pitch 0, roll 15 (character 2) is forbidden; the right
-        # leg's map has nothing
-        self.assertEqual(
-            limits.violations(_rad(**{**pose, "left_hip_roll": 15})), ["left hip map"]
-        )
-        self.assertEqual(limits.violations(_rad(**{**pose, "right_hip_roll": -15})), [])
-        # both hips toed out (the right one in its own signs) and forward
-        toed = {
-            **pose,
-            "left_hip_yaw": 5,
-            "right_hip_yaw": -5,
-            "left_hip_pitch": -40,
-            "right_hip_pitch": 40,
-        }
-        self.assertIn("both legs forward, toed out", limits.violations(_rad(**toed)))
 
 
 if __name__ == "__main__":

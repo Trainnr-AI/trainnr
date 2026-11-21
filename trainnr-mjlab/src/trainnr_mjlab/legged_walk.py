@@ -99,6 +99,10 @@ class LeggedRobot:
     pinned: tuple[str, ...] = ()
     init_state: EntityCfg.InitialStateCfg | None = None
     without_floor: bool = False  # an onboarded scene's floor plane dropped
+    # the robot's limits over several joints (#121) and what breaking one
+    # does in training: LIMITS_TERMINATE ends the episode, LIMITS_COST pays
+    limits_file: Path | None = None
+    limits_mode: str = "terminate"
     lin_vel_x: tuple[float, float] = LIN_VEL_X
     lin_vel_y: tuple[float, float] = LIN_VEL_Y
     ang_vel_z: tuple[float, float] = ANG_VEL_Z
@@ -277,6 +281,7 @@ def legged_walk_env_cfg(  # noqa: PLR0915 - the recipe's knobs; one linear trans
     cfg.terminations["nan_state"] = TerminationTermCfg(
         func=envs_mdp.nan_detection, time_out=False
     )
+    limits = _limits_terms(cfg, robot)
 
     # Events: their numbers through 1.6's native functions, plus ours.
     events = cfg.events
@@ -356,12 +361,45 @@ def legged_walk_env_cfg(  # noqa: PLR0915 - the recipe's knobs; one linear trans
     # a review habit.
     lint(cfg.events, (actuator,))
 
-    return cfg, {
+    identity = {
         "robot": robot_stamp,
         "actuator": actuator_stamp,
         "dr_basis": dr_basis,
         "head": HEAD_PINNED if robot.pinned else HEAD_FREE,
     }
+    if limits:
+        identity["limits"] = limits
+    return cfg, identity
+
+
+LIMITS_TERMINATE, LIMITS_COST = "terminate", "cost"
+LIMITS_MODES = (LIMITS_TERMINATE, LIMITS_COST)
+
+
+def _limits_terms(cfg: ManagerBasedRlEnvCfg, robot: LeggedRobot) -> str:
+    """The robot's declared limits over several joints in the walk: a
+    termination (a pose the robot refuses ends the episode) or a cost per
+    limit broken. Returns the identity's line, or "" with no limits."""
+    if robot.limits_file is None:
+        return ""
+    from trainnr.bundles.hashing import stamp  # noqa: PLC0415
+
+    from trainnr_mjlab.limits_term import limits_broken, limits_count  # noqa: PLC0415
+
+    if robot.limits_mode not in LIMITS_MODES:
+        raise ValueError(
+            f"limits is one of {', '.join(LIMITS_MODES)}, got {robot.limits_mode!r}"
+        )
+    params = {"limits_file": str(robot.limits_file)}
+    if robot.limits_mode == LIMITS_TERMINATE:
+        cfg.terminations["joint_limits"] = TerminationTermCfg(
+            func=limits_broken, time_out=False, params=params
+        )
+    else:
+        cfg.rewards["joint_limits"] = RewardTermCfg(
+            func=limits_count, weight=-1.0, params=params
+        )
+    return f"{robot.limits_mode}: {stamp('limits', robot.limits_file)}"
 
 
 # A declared legged walk's spec, as the trainnr side resolves it (paths
@@ -382,6 +420,7 @@ SPEC_KEYS = frozenset(
         "reset_z",
         "command",
         "dr_span",
+        "limits",
     }
 )
 # Above the stand keyframe's height, the reset's spread (m).
@@ -456,6 +495,7 @@ def legged_robot(spec: Mapping[str, Any]) -> LeggedRobot:
         )
     command = spec.get("command") or {}
     actuator = spec.get("actuator")
+    limits = spec.get("limits") or {}
     return LeggedRobot(
         name=str(spec["robot"]),
         robot_dir=bundle_dir,
@@ -470,6 +510,8 @@ def legged_robot(spec: Mapping[str, Any]) -> LeggedRobot:
         pinned=tuple(exact(n) for n in pinned),
         init_state=init_state,
         without_floor=True,
+        limits_file=Path(limits["file"]) if limits else None,
+        limits_mode=str(limits.get("mode", LIMITS_TERMINATE)),
         lin_vel_x=tuple(command.get("lin_vel_x", LIN_VEL_X)),
         lin_vel_y=tuple(command.get("lin_vel_y", LIN_VEL_Y)),
         ang_vel_z=tuple(command.get("ang_vel_z", ANG_VEL_Z)),

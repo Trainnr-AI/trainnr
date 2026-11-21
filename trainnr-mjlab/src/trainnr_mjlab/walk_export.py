@@ -129,7 +129,7 @@ class Floor:
     friction: tuple[float, float, float]
 
 
-def export(  # noqa: PLR0913 - the export's own knobs, each named
+def export(  # noqa: PLR0913, PLR0915 - the export's own knobs and steps, each named
     checkpoint: Path,
     *,
     project: Path,
@@ -233,6 +233,9 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         ),
     )
     (out_dir / SCENE_FILE).write_text(_scene_xml(unwrapped), encoding="utf-8")
+    limits = _limits_carried(trained, out_dir)
+    if limits:
+        manifest[Key.LIMITS] = limits
     attach_metadata_to_onnx(
         str(policy_path),
         {
@@ -474,6 +477,24 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
     if deploy.unitree is not None:
         manifest[Key.UNITREE] = asdict(deploy.unitree)
     return manifest
+
+
+LIMITS_FILE = "limits.json"
+
+
+def _limits_carried(trained: dict[str, Any], out_dir: Path) -> dict[str, str] | None:
+    """The robot's limits over several joints the run trained against
+    (#121), copied beside the policy so a runtime and the gate check the
+    same ones; None for a run that trained against none."""
+    import shutil  # noqa: PLC0415
+
+    line = trained.get("limits")
+    spec = (trained.get("legged") or {}).get("limits") or {}
+    if not line or not spec.get("file"):
+        return None
+    shutil.copy2(spec["file"], out_dir / LIMITS_FILE)
+    mode, _, stamp = str(line).partition(": ")
+    return {"file": LIMITS_FILE, "stamp": stamp, "mode": mode}
 
 
 def _servos(entity: Any) -> list[dict[str, Any]]:

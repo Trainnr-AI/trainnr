@@ -57,6 +57,9 @@ class Key:
     COMMAND_BASIS = "command_basis"
     TERMINATION = "termination"
     UNITREE = "unitree"
+    # The robot's limits over several joints the policy trained against
+    # (#121): the file beside the policy, its stamp, the training mode.
+    LIMITS = "limits"
 
 
 # Every key a manifest may carry; one it must.
@@ -345,6 +348,17 @@ class Manifest:
         return UnitreeFacts.of(raw) if raw else None
 
     @property
+    def limits(self) -> Any:
+        """The declared limits over several joints (a `JointLimits`), or
+        None when the policy trained against none."""
+        raw = self.raw.get(Key.LIMITS)
+        if not raw:
+            return None
+        from trainnr.robot.joint_limits import JointLimits  # noqa: PLC0415
+
+        return JointLimits.load(self.root / raw["file"])
+
+    @property
     def robot_name(self) -> str:
         """The cited robot bundle's name, without its version."""
         return str(self.raw.get(Key.ROBOT, "")).split("@", 1)[0]
@@ -391,7 +405,8 @@ def load_manifest(deployment_dir: Path) -> Manifest:
             f"{path}: observation terms this runtime cannot compute: {unknown}; "
             f"known sources are {', '.join(KNOWN_SOURCES)}"
         )
-    for f in (raw[Key.ONNX]["file"], raw[Key.SCENE]["file"]):
+    carried = [raw[Key.LIMITS]["file"]] if raw.get(Key.LIMITS) else []
+    for f in (raw[Key.ONNX]["file"], raw[Key.SCENE]["file"], *carried):
         if not (root / f).is_file():
             raise FileNotFoundError(f"{root}: missing {f}")
     widths = sum(int(t["width"]) for t in raw[Key.OBSERVATIONS])
