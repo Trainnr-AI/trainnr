@@ -58,6 +58,7 @@ def _robot_folder(root: Path) -> Path:
     (folder / "robot_v1.xml").write_text(ROBOT)
     (folder / "analysis.json").write_text("{}")
     (folder / "LICENSE").write_text("MIT")
+    (folder / "limits.json").write_text("{}")  # trainnr's own: kept (docs/88)
     return folder
 
 
@@ -71,7 +72,7 @@ class TheBundle(unittest.TestCase):
             out = onboard_mjcf(source / "scene.xml", "duck", Path(tmp) / "duck", {})
             self.assertEqual(
                 out["files"]["copied"],
-                ["LICENSE", "assets/leg.obj", "robot.xml", "scene.xml"],
+                ["LICENSE", "assets/leg.obj", "limits.json", "robot.xml", "scene.xml"],
             )
             self.assertEqual(out["files"]["left_beside"], 3)
             bundle = Path(tmp) / "duck"

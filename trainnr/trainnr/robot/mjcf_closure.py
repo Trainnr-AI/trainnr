@@ -34,6 +34,9 @@ TEXTURE_FILES = (
 # Files beside the model kept with it although it does not name them:
 # the licence and the notes that say where it came from.
 KEPT_BESIDE = ("LICENSE", "LICENCE", "COPYING", "NOTICE", "README")
+# trainnr's own files about the robot, kept too: its limits over several
+# joints and, for a servo bench, what the servo is (docs/88).
+TRAINNR_BESIDE = ("limits.json", "bench.json")
 
 
 def _xml_files(model_file: Path) -> list[Path]:
@@ -88,9 +91,11 @@ def model_closure(model_file: Path) -> list[Path]:
 
 
 def kept_beside(model_file: Path) -> list[Path]:
-    """The licence and readme files in the model's folder, kept with it."""
+    """The licence and readme files in the model's folder, and trainnr's own
+    files about the robot (its limits, a bench's servo), kept with it."""
     return sorted(
         path
         for path in model_file.resolve().parent.iterdir()
-        if path.is_file() and path.name.upper().startswith(KEPT_BESIDE)
+        if path.is_file()
+        and (path.name.upper().startswith(KEPT_BESIDE) or path.name in TRAINNR_BESIDE)
     )
