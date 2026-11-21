@@ -149,9 +149,14 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         checkpoint_iteration,
         pin_command_envelope,
     )
-    from trainnr_mjlab.walks import use_project, walk_spec  # noqa: PLC0415
+    from trainnr_mjlab.walks import (  # noqa: PLC0415
+        adopt_legged_of,
+        use_project,
+        walk_spec,
+    )
 
     use_project(project)
+    adopt_legged_of(robot, checkpoint)
     spec = walk_spec(robot)
     checkpoint = Path(checkpoint).resolve()
     run_dir = checkpoint.parent
@@ -349,11 +354,18 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
         round(float(v), FLOAT_DIGITS)
         for v in entity.data.default_joint_pos[0].cpu().tolist()
     ]
+    # the joints the action drives, by the actuators it targets: all of
+    # them, unless the walk holds some at the default pose (#100)
+    acting = [
+        joint_of_ctrl[ctrl_names.index(_unprefixed(t))]
+        for t in joint_action.target_names
+    ]
+    action_joints = [] if acting == [_unprefixed(j) for j in joint_names] else acting
     scale = joint_action._scale
     scale_list = (
         [float(v) for v in scale[0].cpu().tolist()]
         if isinstance(scale, torch.Tensor)
-        else [float(scale)] * len(joint_names)
+        else [float(scale)] * len(acting)
     )
     observations = []
     manager = env.observation_manager
@@ -430,6 +442,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "effort_limit": effort,
             "default_pos": default_pos,
             SERVOS: servos,
+            "action_joints": action_joints or None,
         },
         Key.ACTION: {
             "kind": "joint position target = default_pos + scale * action",

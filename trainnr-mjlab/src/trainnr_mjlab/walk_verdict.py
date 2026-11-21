@@ -67,7 +67,14 @@ from trainnr_mjlab.walk_view import (
 from trainnr_mjlab.walk_view import (
     trained_identity as read_trained_identity,
 )
-from trainnr_mjlab.walks import DEFAULT_ROBOT, ROBOTS, Identity, use_project, walk_spec
+from trainnr_mjlab.walks import (
+    DEFAULT_ROBOT,
+    ROBOTS,
+    Identity,
+    adopt_legged_of,
+    use_project,
+    walk_spec,
+)
 
 # The judgment's rule lives in `trainnr.evaluate.tracking`, shared
 # with the deployment gate; these names stay for the callers here.
@@ -745,6 +752,7 @@ def judge(args: argparse.Namespace, run: Tracker) -> None:  # noqa: PLR0912, PLR
     if args.judge_at_fit and args.judge_span is not None:
         raise SystemExit("--judge-at-fit and --judge-span exclude each other")
     use_project(args.project)
+    adopt_legged_of(args.robot, args.checkpoint)
     spec = walk_spec(args.robot)
     default_span = spec.default_span
     judge_span = default_span if args.judge_span is None else args.judge_span

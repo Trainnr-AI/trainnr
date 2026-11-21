@@ -1927,7 +1927,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Train a walk (a declared task, or robot go1/go2/microduck). recipe=smoke checks the stack in minutes, saving nothing; recipe=full trains (8000 iterations unless set, hours on a GPU) as experiment `name`, never over one.",
+    "description": "Train a walk: a declared task (any robot: family legged-walk) or robot go1/go2/microduck. recipe smoke: minutes, saves nothing; full: 8000 iterations unless set (hours, GPU), as experiment `name`, never over one.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

@@ -144,6 +144,104 @@ def _microduck_env(  # noqa: PLR0913 - the walk's knobs, named
     )
 
 
+# A declared legged walk (#100): any onboarded legged robot, its spec
+# resolved by the trainnr side. The walk's name in the registry is LEGGED;
+# its robot comes from the spec a tool adopts (`adopt_legged`: the train
+# door's --legged-spec, or the trained run's identity for a judge, a play
+# or an export), never from the name.
+LEGGED = "legged"
+_LEGGED_SPEC: dict[str, Any] = {}
+
+
+def adopt_legged(spec: dict[str, Any] | None) -> None:
+    """The legged walk this process builds from now on (None: none)."""
+    _LEGGED_SPEC.clear()
+    if spec:
+        _LEGGED_SPEC.update(spec)
+
+
+def adopt_legged_of(robot: str, checkpoint: Path) -> None:
+    """For a legged walk's checkpoint, adopt the spec its run recorded, so
+    a judge, a play or an export builds the robot it trained on."""
+    if robot != LEGGED:
+        return
+    import json  # noqa: PLC0415
+
+    from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+
+    identity = Path(checkpoint).resolve().parent / IDENTITY_FILE
+    recorded = json.loads(identity.read_text()) if identity.is_file() else {}
+    adopt_legged(recorded.get(Identity.LEGGED))
+
+
+def adopted_legged() -> dict[str, Any]:
+    """The adopted spec, refused by name when none was adopted."""
+    if not _LEGGED_SPEC:
+        raise ValueError(
+            "the legged walk builds from a declared task's spec: pass "
+            "--legged-spec, or judge a run whose identity carries it"
+        )
+    return dict(_LEGGED_SPEC)
+
+
+def _legged_env(  # noqa: PLR0913 - the walk's knobs, named
+    *,
+    play: bool = False,
+    dr_span: float | str | None,
+    pin_scale: float | None,
+    pin_axis: str = "all",
+    bundle: Any = None,
+    head: str = "free",
+    scene: Path | None = None,
+    cameras: bool = True,
+    legacy_actor: bool = False,
+    camera_in_actor: bool = True,
+    camera_size: tuple[int, int] | None = None,
+    fit: str | None = None,
+) -> tuple[Any, dict[str, str]]:
+    from trainnr_mjlab.legged_walk import (  # noqa: PLC0415
+        legged_robot,
+        legged_walk_env_cfg,
+    )
+    from trainnr_mjlab.microduck_walk import PIN_AXES  # noqa: PLC0415
+
+    spec = adopted_legged()
+    _no_scene(
+        spec["robot"], scene, cameras, legacy_actor, camera_in_actor, camera_size, fit
+    )
+    held = "pinned" if spec.get("pinned_joints") else "free"
+    if bundle is not None or head not in ("free", held):
+        # a judge passes the head its run recorded: the spec's own, accepted
+        raise ValueError(
+            "a legged walk's actuator and held joints come from its spec "
+            "(actuator, pinned_joints), not from --bundle or --head"
+        )
+    cfg, identity = legged_walk_env_cfg(
+        legged_robot(spec),
+        play=play,
+        law_dr_span=dr_span,
+        law_pin_scale=pin_scale,
+        law_pin_only=_axis(PIN_AXES, pin_axis),
+    )
+    # the spec rides in the identity: a judge, a play or an export of the
+    # run rebuilds the same robot from it
+    recorded: dict[str, Any] = {**identity, Identity.LEGGED: spec}
+    return cfg, recorded
+
+
+def _legged_spec() -> WalkSpec:
+    spec = _LEGGED_SPEC
+    return WalkSpec(
+        LEGGED,
+        _legged_env,
+        _microduck_agent,  # microduck's PPO recipe, the legged walk's own
+        float(spec.get("dr_span", _microduck_span())) if spec else _microduck_span(),
+        str(spec.get("name", "legged-walk")).split("@", 1)[0]
+        if spec
+        else "legged-walk",
+    )
+
+
 def _axis(axes: dict[str, tuple[str, ...] | None], name: str) -> tuple[str, ...] | None:
     if name not in axes:
         raise KeyError(f"no mismatch axis {name!r}; this walk has {sorted(axes)}")
@@ -331,6 +429,9 @@ class Identity:
     # the command schedule a run trained under, when it is not the recipe's
     # own (a captured scene's, go2_walk.SCENE_COMMAND_STAGES)
     COMMANDS = "commands"
+    # a declared legged walk's resolved spec (#100): the robot, its
+    # actuator, its stand pose and the rest; a judge rebuilds from it
+    LEGGED = "legged"
 
 
 NO_CAMERAS = "none"  # the identity's word for an actor that saw no camera
@@ -410,6 +511,7 @@ WALKS: dict[str, Callable[[], WalkSpec]] = {
     "microduck": _microduck_spec,
     "go1": _go1_spec,
     "go2": _go2_spec,
+    LEGGED: _legged_spec,
 }
 
 

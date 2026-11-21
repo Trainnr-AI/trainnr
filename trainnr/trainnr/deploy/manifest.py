@@ -160,6 +160,14 @@ class Joints:
     sdk_order_map: tuple[int, ...] | None = None
     sdk_order_source: str | None = None
     servos: tuple[dict[str, Any], ...] = ()
+    # The joints the action drives, when not all of `policy_order`: the
+    # rest are held at `default_pos` (a legged walk's pinned head, #100).
+    action_joints: tuple[str, ...] = ()
+
+    @property
+    def acting(self) -> tuple[str, ...]:
+        """The joints the policy's action drives, in its output order."""
+        return self.action_joints or self.policy_order
 
     @classmethod
     def of(cls, raw: dict[str, Any]) -> Joints:
@@ -175,6 +183,7 @@ class Joints:
             sdk_order_map=tuple(int(i) for i in sdk) if sdk is not None else None,
             sdk_order_source=raw.get("sdk_order_source"),
             servos=tuple(raw.get(SERVOS) or ()),
+            action_joints=tuple(raw.get("action_joints") or ()),
         )
 
 
