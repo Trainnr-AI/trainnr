@@ -89,3 +89,24 @@ def firmware_for(actuator_slug: str) -> Firmware:
             "add them here with their provenance, never inline."
         )
     return FIRMWARE[actuator_slug]
+
+
+def firmware_of(bundle: dict) -> Firmware:
+    """A bundle's firmware: the table's for a family BAM measured, else the
+    constants the bundle's own fit measured (`context.firmware`, written by
+    trainnr's `servo-bench` method from a bench recording, #101): the
+    supply, the gain register it ran at, the duty per radian of error over
+    that register, the pwm ceiling. A family in neither is refused by name."""
+    slug = bundle["params"]["actuator"]
+    if slug in FIRMWARE:
+        return FIRMWARE[slug]
+    fitted = (bundle.get("context") or {}).get("firmware")
+    if not fitted:
+        return firmware_for(slug)  # refuses, naming the table
+    return Firmware(
+        family=slug,
+        vin=float(fitted["vin"]),
+        kp=float(fitted["kp"]),
+        error_gain=float(fitted["error_gain"]),
+        max_pwm=float(fitted.get("max_pwm", 1.0)),
+    )

@@ -40,7 +40,7 @@ from mjlab.utils.spec import create_motor_actuator
 
 from trainnr_mjlab.bundle import verified_bundle
 from trainnr_mjlab.events import MISSING_EXPANSION_MESSAGE
-from trainnr_mjlab.firmware import firmware_for
+from trainnr_mjlab.firmware import firmware_of
 from trainnr_mjlab.kernel import (
     LawParams,
     duty,
@@ -185,7 +185,7 @@ class BamActuatorCfg(ActuatorCfg):
                 "no command_delay in the fit: zero bus latency assumed "
                 "(some BAM motor families never record it — 57 §3)",
             )
-        firmware = firmware_for(params["actuator"])
+        firmware = firmware_of(bundle)
         if firmware.max_velocity is not None:
             raise NotImplementedError(
                 f"{params['actuator']}: this firmware rate-limits its internal "
