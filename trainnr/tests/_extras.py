@@ -32,6 +32,8 @@ MJX = installed("mujoco", "mujoco.mjx")
 # tests run where the mjx instrument lives, or on explicit opt-in.
 MJX_ACCELERATED = installed("jax_cuda12_plugin") or installed("jax_plugins")
 MJX_CPU_OPT_IN = os.environ.get("TRAINNR_MJX_CPU_TESTS") == "1"
+# Tests that take minutes (an identification's whole search): opt in.
+SLOW_OPT_IN = os.environ.get("TRAINNR_SLOW_TESTS") == "1"
 NUMPY = installed("numpy")
 TRAIN = installed("lerobot")
 REMOTE = installed("openpi_client", "mujoco")
@@ -84,4 +86,8 @@ RENDER = _can_render()
 needs_render = unittest.skipUnless(
     RENDER,
     "no offscreen OpenGL/EGL context here; runs on a desktop or Linux CI",
+)
+
+needs_slow = unittest.skipUnless(
+    SLOW_OPT_IN, "takes minutes: TRAINNR_SLOW_TESTS=1 runs it"
 )

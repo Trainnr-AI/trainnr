@@ -62,6 +62,7 @@ class Runtime:
     default_pos: np.ndarray = field(init=False)
     scale: np.ndarray = field(init=False)
     action_to_ctrl: tuple[int, ...] = field(init=False)
+    acted: np.ndarray = field(init=False)
     joint_qpos: np.ndarray = field(init=False)
     joint_qvel: np.ndarray = field(init=False)
     sensors: dict[str, tuple[int, int]] = field(init=False)
@@ -69,8 +70,10 @@ class Runtime:
 
     def __post_init__(self) -> None:
         joints = self.manifest.joints
-        n = len(joints.policy_order)
-        self.last_action = np.zeros(n, dtype=np.float32)
+        # the policy-order joints the action drives (all, unless some are
+        # held at their default pose)
+        self.acted = np.array([joints.policy_order.index(j) for j in joints.acting])
+        self.last_action = np.zeros(len(self.acted), dtype=np.float32)
         self.default_pos = np.asarray(joints.default_pos, dtype=np.float64)
         self.scale = np.asarray(self.manifest.action.scale, dtype=np.float64)
         self.action_to_ctrl = joints.action_to_ctrl
@@ -160,7 +163,9 @@ class Runtime:
         """The joint targets an action asks for: the manifest's home pose
         plus its scale times the action (one spelling; the guards and the
         pre-flight's recorder read it)."""
-        return self.default_pos + self.scale * np.asarray(action, dtype=np.float64)
+        target = self.default_pos.copy()
+        target[self.acted] += self.scale * np.asarray(action, dtype=np.float64)
+        return target
 
     def step(self, target: np.ndarray, action: np.ndarray) -> None:
         """One control tick at `target`: the controls written, `decimation`

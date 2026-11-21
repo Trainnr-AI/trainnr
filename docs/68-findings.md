@@ -23,10 +23,12 @@ record's numbers, command and artifacts stand on their own.
 `projects/…` paths are local project directories, untracked by
 design; where a copy ships it is named first.
 
-## Index (64 records, newest first)
+## Index (66 records, newest first)
 
 | record | date | claim |
 |---|---|---|
+| [servo-bench-synthetic-scs0009-2026-11-22](#servo-bench-synthetic-scs0009-2026-11-22) | 2026-11-22 | The servo-bench identification method recovers a synthetic SCS0009-class servo from a 12 s bench recording… |
+| [nano-limits-match-firmware-2026-11-22](#nano-limits-match-firmware-2026-11-22) | 2026-11-22 | Microduck Nano's four firmware limits over several joints (head interlock, knee and ankle, a hip collision… |
 | [g1-court-dance-tracked-2026-11-17](#g1-court-dance-tracked-2026-11-17) | 2026-11-17 | A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video… |
 | [g1-court-dance-lag-trained-2026-11-17](#g1-court-dance-lag-trained-2026-11-17) | 2026-11-17 | Training the court-dance tracking policy with a command lag drawn in 0-40 ms (train_tracking's new default)… |
 | [g1-court-dance-evaluated-2026-11-17](#g1-court-dance-evaluated-2026-11-17) | 2026-11-17 | The court-dance tracking policy (court-dance-g1-16k, model_1999), judged on 40 paired trials under its… |
@@ -91,6 +93,74 @@ design; where a copy ships it is named first.
 | [multiplication-basin-2026-08-31](#multiplication-basin-2026-08-31) | 2026-08-31 | Open-loop replay of a kept kitting episode from a jittered start survives inside a measured basin: 9/9 and… |
 | [t5-first-funnel-2026-08-27](#t5-first-funnel-2026-08-27) | 2026-08-27 | The T5 chain's first certificate, a 600-step ACT on four demonstrations: 0/4 on four paired starts, CP95 [0,… |
 | [audit-newton-solvermujoco-roundtrip-2026-08-27](#audit-newton-solvermujoco-roundtrip-2026-08-27) | 2026-08-27 | Newton's SolverMuJoCo import of a MuJoCo model drops sensors, keyframes and visual geoms, rewrites the root… |
+
+## servo-bench-synthetic-scs0009-2026-11-22
+
+**The servo-bench identification method recovers a synthetic SCS0009-class servo from a 12 s bench recording (steps then a chirp on a 60 g, 8 cm pendulum, positions quantized to the encoder's 1024 counts over 300 degrees with 2 mrad noise): P gain 40.5 duty/rad against 40, stall torque 0.239 against 0.25 N*m, back-EMF 0.00378 against 0.004 N*m*s/rad, Coulomb friction 0.0074 against 0.008 N*m, command delay 11.3 against 12 ms, each pinned; the armature (2e-5 kg*m^2 beside the arm's 3.4e-4) comes out not pinned, as it should from this data. Held-out position error 5.6 mrad, the noise level. The pinned estimates sit 1.3 to 7 percent from the truth while their 95 percent intervals are narrower: the encoder's quantization biases one recording systematically, so two or more recordings and their cross-run spread are what earn trust.**
+
+- date: 2026-11-22 · commit: `abffd10`
+- instrument: `trainnr.robot.servo_bench (numpy semi-implicit Euler at 1 ms with static friction, scipy differential evolution then least squares with fitted block starts), MuJoCo for the arm's inertia and gravity; CPU only; 2 min 33 s for the fit with 16 bootstrap replicates`
+- command: `trainnr call onboard_robot {"model_path": "<bench.xml beside bench.json>", "name": "scs0009-bench"} trainnr call identify_system {"robot": "scs0009-bench", "recording": "bench-steps"}`
+- protocol: Synthetic: the truth is simulated by the same law the method fits, so this measures recovery through quantization and noise, not the law's fidelity to a real servo. Blocks of 2 s, each started from its measured position and a fitted starting velocity; the last block held out; intervals the wider of a 16-replicate block bootstrap and the asymptotic interval from the Jacobian, inflated for the residuals' lag-1 autocorrelation.
+- inputs:
+  - bench: one hinge (axis y) driving a 10 g capsule and a 50 g sphere at 8 cm; bench.json: servo scs0009, vin 6.0 V, kp 32, max_pwm 1.0
+  - truth:
+    - stall_torque_nm: 0.25
+    - duty_per_rad: 40.0
+    - back_emf_nms: 0.004
+    - friction_base_nm: 0.008
+    - armature_kgm2: 2e-05
+    - command_delay_s: 0.012
+  - recording: 50 Hz, 12 s: square steps of +-0.6 rad at 0.5 Hz for 6 s, then a chirp of 0.5 rad from 0.2 Hz rising 0.25 Hz per second; simulated by the method's own law from rest, Gaussian noise 2 mrad, then rounded to 300/1024 degrees
+- outcome:
+  - estimates:
+    - stall_torque_nm: 0.238742
+    - duty_per_rad: 40.5275
+    - back_emf_nms: 0.00377858
+    - friction_base_nm: 0.00741931
+    - armature_kgm2: 7.95374e-07
+    - command_delay_s: 0.011323
+  - half_widths_95:
+    - stall_torque_nm: 0.00151
+    - duty_per_rad: 0.691
+    - back_emf_nms: 1.33e-05
+    - friction_base_nm: 0.000119
+    - armature_kgm2: 2.04e-06
+    - command_delay_s: 0.000112
+  - position_rmse_rad: 0.003532
+  - held_out_position_rmse_rad: 0.0056
+  - pinned: 5 of 6 (the armature not)
+- artifacts:
+  - robots/scs0009-bench/fits/bench-steps@65c56fa471f5.json: the fit record in the test project
+  - robots/scs0009-bench/fits/actuators/scs0009.bundle.json: the actuator bundle a legged walk on Microduck Nano's model then trained with (a smoke)
+- caveats:
+  - Synthetic data: a real SCS0009's law, gearbox and encoder may differ from BAM's first tier; the method's held-out error on a real bench recording is the test of that.
+  - One recording: the pinned intervals are narrower than the quantization's bias on most parameters; the cross-run spread over two or more recordings is the honest uncertainty.
+  - Back-EMF and viscous friction are one term from positions; the bundle puts it all in kt^2/R and records friction_viscous 0.
+
+## nano-limits-match-firmware-2026-11-22
+
+**Microduck Nano's four firmware limits over several joints (head interlock, knee and ankle, a hip collision map per leg, both legs together), written as nine limits in trainnr's three forms (rules, step tables, grids), give the same verdict as a line-by-line port of its firmware's safety.cpp on 200,000 random poses drawn uniformly inside every joint's range: 4,461 allowed by both, 195,539 refused by both, 0 disagreements. Its STAND keyframe keeps all nine; its SIT keyframe breaks both hip maps.**
+
+- date: 2026-11-22 · commit: `abffd10`
+- instrument: `trainnr.robot.joint_limits; Trainnr-AI/microduck-nano firmware/config/robot.json and firmware/app/microduck/sketch/src/duck/safety.cpp at fd78686`
+- command: `python: JointLimits(limits.json).violated(poses) against safety.cpp's leg_allowed and both_legs_allowed ported to Python, on the same 200,000 poses (numpy seed 0)`
+- protocol: Uniform poses mostly fall in forbidden regions (the hip maps forbid much of the joint space), so the allowed side is the smaller, 4,461; both sides agree. The grid's stricter-neighbour rule and its 1e-3 degree grid-value tolerance follow the firmware's bracket().
+- inputs:
+  - limits: head roll and yaw interlock and head roll stop (rules), left and right knee and ankle (tables, the right leg's signs flipped), left and right hip maps (5-axis grids, 13x3x4x3x8, 842 and 924 forbidden cells including the review's extra collisions), both legs forward and toed out with two rolled-in bands (rules)
+  - poses: 200,000, every joint uniform in its firmware range (numpy default_rng(0))
+- outcome:
+  - poses: 200000
+  - allowed_by_both: 4461
+  - refused_by_both: 195539
+  - disagreements: 0
+  - hip_map_character_order_check: the review's 37 extra collisions were all already in the maps under character i = roll value i; under the reverse order 26 would have been new
+  - keyframes:
+    - STAND: keeps all nine
+    - SIT: breaks left hip map and right hip map
+- caveats:
+  - A comparison of two readings of the same data, not of either against the parts: the limits are as good as the design's collision sweep.
+  - Poses exactly on table rows and grid values are rare under a uniform draw; the unit tests pin those edges separately.
 
 ## g1-court-dance-tracked-2026-11-17
 

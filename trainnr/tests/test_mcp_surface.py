@@ -163,10 +163,15 @@ class Registries(unittest.TestCase):
         # the honest answer, not a gap. Both kinds must exist and both
         # must round-trip through the window unchanged.
         from trainnr.tasks.tracking import is_tracking  # noqa: PLC0415
-        from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
+        from trainnr.tasks.walks import is_legged, walk_robot  # noqa: PLC0415
 
         details = []
         for t in list_tasks():
+            if is_legged(t["task"]):
+                # a walk on any robot names it: refused by name before
+                with self.assertRaisesRegex(ValueError, "needs a robot"):
+                    describe_task(t["task"])
+                continue
             if is_tracking(t["task"]):
                 # the family has no default reference: it is described
                 # once declared over one, and refuses by name before

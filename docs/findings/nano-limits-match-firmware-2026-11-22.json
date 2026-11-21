@@ -1,0 +1,28 @@
+{
+ "id": "nano-limits-match-firmware-2026-11-22",
+ "claim": "Microduck Nano's four firmware limits over several joints (head interlock, knee and ankle, a hip collision map per leg, both legs together), written as nine limits in trainnr's three forms (rules, step tables, grids), give the same verdict as a line-by-line port of its firmware's safety.cpp on 200,000 random poses drawn uniformly inside every joint's range: 4,461 allowed by both, 195,539 refused by both, 0 disagreements. Its STAND keyframe keeps all nine; its SIT keyframe breaks both hip maps.",
+ "date": "2026-11-22",
+ "repo_commit": "abffd10",
+ "argv": [
+  "python: JointLimits(limits.json).violated(poses) against safety.cpp's leg_allowed and both_legs_allowed ported to Python, on the same 200,000 poses (numpy seed 0)"
+ ],
+ "instrument": "trainnr.robot.joint_limits; Trainnr-AI/microduck-nano firmware/config/robot.json and firmware/app/microduck/sketch/src/duck/safety.cpp at fd78686",
+ "inputs": {
+  "limits": "head roll and yaw interlock and head roll stop (rules), left and right knee and ankle (tables, the right leg's signs flipped), left and right hip maps (5-axis grids, 13x3x4x3x8, 842 and 924 forbidden cells including the review's extra collisions), both legs forward and toed out with two rolled-in bands (rules)",
+  "poses": "200,000, every joint uniform in its firmware range (numpy default_rng(0))"
+ },
+ "outcome": {
+  "poses": 200000,
+  "allowed_by_both": 4461,
+  "refused_by_both": 195539,
+  "disagreements": 0,
+  "hip_map_character_order_check": "the review's 37 extra collisions were all already in the maps under character i = roll value i; under the reverse order 26 would have been new",
+  "keyframes": {"STAND": "keeps all nine", "SIT": "breaks left hip map and right hip map"}
+ },
+ "artifacts": {},
+ "protocol": "Uniform poses mostly fall in forbidden regions (the hip maps forbid much of the joint space), so the allowed side is the smaller, 4,461; both sides agree. The grid's stricter-neighbour rule and its 1e-3 degree grid-value tolerance follow the firmware's bracket().",
+ "caveats": [
+  "A comparison of two readings of the same data, not of either against the parts: the limits are as good as the design's collision sweep.",
+  "Poses exactly on table rows and grid values are rare under a uniform draw; the unit tests pin those edges separately."
+ ]
+}

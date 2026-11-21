@@ -21,7 +21,11 @@ from trainnr.plugins import load_group
 from trainnr.robot.identify import IdentificationResult
 
 ENTRY_POINT_GROUP = "trainnr.identification_methods"
-BUILTIN_MODULES = ("trainnr.robot.methods", "trainnr.robot.legged_fit")
+BUILTIN_MODULES = (
+    "trainnr.robot.methods",
+    "trainnr.robot.legged_fit",
+    "trainnr.robot.servo_bench",
+)
 
 
 @runtime_checkable

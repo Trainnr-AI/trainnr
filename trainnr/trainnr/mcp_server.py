@@ -326,7 +326,7 @@ def create_task(
     project = current_project()
     try:
         out = declare_task(project, family, name, settings)
-    except (KeyError, ValueError, FileExistsError, TypeError) as why:
+    except (KeyError, ValueError, FileExistsError, FileNotFoundError, TypeError) as why:
         return refusal(_reason(why))
     write_index(project, index_project(project))
     # The reply speaks the call's words: the family and the settings given.
@@ -483,18 +483,30 @@ def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each r
     root = _project_root_if_any()
     dr_span: float | None = None
     task_stamp: str | None = None
+    legged_spec: str | None = None
     if task is None and robot is None:
         task = _the_project_walk(root)
         if task is None:
             return refusal(_no_single_walk(root))
+    from trainnr.tasks.walks import LEGGED_RIG  # noqa: PLC0415
+
+    if task is None and robot == LEGGED_RIG:
+        return refusal(
+            "a walk on your own robot is declared first: create_task(family="
+            "'legged-walk', name=..., settings={'robot': ..., 'actuator': ...}), "
+            "then train_walk(task=...)"
+        )
+    run_robot = robot
     if task is not None:
         declared = _declared_walk(root, task)
         if isinstance(declared, str):
             return refusal(declared)
         robot, dr_span, task_stamp = declared.robot, declared.dr_span, declared.stamp
         fit = fit if fit is not None else declared.fit
+        legged_spec = declared.legged_spec
+        run_robot = declared.legged_robot or robot
     if name is None and root is not None and agent == ARCHIVED_AGENT:
-        name = _dated_run_name(robot)
+        name = _dated_run_name(run_robot)
     try:
         log_dir = _run_dir(root, name)
         scene_dir = _scene_dir(root, scene)
@@ -522,6 +534,7 @@ def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each r
             cameras=cameras,
             fit=fit,
             lag_dr_ms=lag_dr_ms,
+            legged_spec=legged_spec,
         )
     except ValueError as why:
         return refusal(str(why))
@@ -714,6 +727,8 @@ class DeclaredWalk:
     dr_span: float | None
     stamp: str
     fit: str | None = None  # the joint fit the walk trains under, if declared
+    legged_spec: str | None = None  # a legged walk's resolved spec, written (#100)
+    legged_robot: str | None = None  # and the robot it walks, by name
 
 
 def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
@@ -721,7 +736,11 @@ def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
     reason it is not one."""
     from trainnr.project.locate import Project  # noqa: PLC0415
     from trainnr.project.task_ref import read_task_reference  # noqa: PLC0415
-    from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
+    from trainnr.tasks.walks import (  # noqa: PLC0415
+        is_legged,
+        walk_robot,
+        write_legged_spec,
+    )
 
     if root is None:
         return "a declared task needs an open project"
@@ -732,8 +751,22 @@ def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
         return _reason(why)
     if walk is None:
         return f"{task!r} is not a walk"
+    legged_spec = legged_robot = None
+    if is_legged(ref.task_id):
+        try:
+            written = write_legged_spec(ref.folder, ref.spec, ref.stamp)
+        except (FileNotFoundError, KeyError, ValueError) as why:
+            return _reason(why)
+        legged_spec = str(written)
+        legged_robot = str(ref.spec.get("robot", "")).split("@", 1)[0]
     return DeclaredWalk(
-        name=task, robot=walk, dr_span=ref.dr_span, stamp=ref.stamp, fit=ref.fit
+        name=task,
+        robot=walk,
+        dr_span=ref.dr_span,
+        stamp=ref.stamp,
+        fit=ref.fit,
+        legged_spec=legged_spec,
+        legged_robot=legged_robot,
     )
 
 
@@ -1147,8 +1180,12 @@ def _walk_of_run(artifacts: Iterable[Any], run_dir: Path) -> str | None:
     """The walk robot a run belongs to: the family of the declared task
     its identity cites, else the robot its identity names when that is
     a registered walk's."""
-    from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
+    from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+    from trainnr.tasks.walks import LEGGED_RIG, walk_robot  # noqa: PLC0415
 
+    identity = run_dir / IDENTITY_FILE
+    if identity.is_file() and json.loads(identity.read_text()).get(LEGGED_RIG):
+        return LEGGED_RIG  # a declared legged walk: its spec rides in the run
     task_id = _task_id_in_project(artifacts, _run_task(run_dir))
     robot = walk_robot(task_id) if task_id else None
     return robot if robot is not None else _robot_of_run(run_dir)
@@ -4170,10 +4207,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train a walk (a declared task, or robot go1/go2/microduck). "
-        "recipe=smoke checks the stack in minutes, saving nothing; recipe=full "
-        "trains (8000 iterations unless set, hours on a GPU) as experiment `name`, "
-        "never over one."
+        description="Train a walk: a declared task (any robot: family "
+        "legged-walk) or robot go1/go2/microduck. recipe smoke: minutes, saves "
+        "nothing; full: 8000 iterations unless set (hours, GPU), as experiment "
+        "`name`, never over one."
     )(train_walk)
     server.tool(
         description="Evaluate a policy: paired episodes, exact intervals, versions "

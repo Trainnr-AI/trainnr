@@ -119,7 +119,7 @@ def _coerce(value: Any, default: Any) -> Any:
     return value
 
 
-def _same_shape(value: Any, default: Any) -> bool:
+def _same_shape(value: Any, default: Any) -> bool:  # noqa: PLR0911 - one return per kind
     """A value fits a field when it is the default's kind of thing: a
     number for a number, a tuple of the same length for a tuple, a
     mapping for a mapping, a string for a string."""
@@ -129,6 +129,10 @@ def _same_shape(value: Any, default: Any) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     if isinstance(default, str):
         return isinstance(value, str)
+    if isinstance(default, tuple) and not default:
+        # an empty default is a list to fill (a legged walk's foot sites,
+        # its pinned joints): any length, the builder checks the items
+        return isinstance(value, tuple)
     if isinstance(default, tuple):
         return (
             isinstance(value, tuple)

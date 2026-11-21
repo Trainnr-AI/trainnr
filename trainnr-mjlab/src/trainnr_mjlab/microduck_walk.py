@@ -45,27 +45,7 @@ import math
 from pathlib import Path
 
 from mjlab.envs import ManagerBasedRlEnvCfg
-from mjlab.envs import mdp as envs_mdp
-from mjlab.envs.mdp.actions import JointPositionActionCfg
-from mjlab.managers import EventTermCfg, RewardTermCfg, TerminationTermCfg
-from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.sensor import (
-    ContactMatch,
-    ContactSensorCfg,
-    ObjRef,
-    RingPatternCfg,
-    TerrainHeightSensorCfg,
-)
-from mjlab.tasks.velocity import mdp
-from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
-from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from trainnr.paths import checkout
-
-from trainnr_mjlab.actuator import BamActuatorCfg
-from trainnr_mjlab.dr import bam_param_dr_event
-from trainnr_mjlab.entity import entity_from_bundle
-from trainnr_mjlab.events import bam_expansion_event
-from trainnr_mjlab.linter import lint
 
 # The checkout: `$TRAINNR_REPO`, else the ancestor that carries trainnr.
 REPO = checkout()
@@ -177,7 +157,7 @@ PIN_AXES: dict[str, tuple[str, ...] | None] = {
 PHYSICS_DT = 0.005
 
 
-def microduck_walk_env_cfg(  # noqa: PLR0913, PLR0915 - the recipe's knobs; one linear transcription, each statement a cited number
+def microduck_walk_env_cfg(  # noqa: PLR0913 - the recipe's knobs; one linear transcription, each statement a cited number
     *,
     play: bool = False,
     law_dr_span: float | str | None = LAW_DR_SPAN,
@@ -195,222 +175,30 @@ def microduck_walk_env_cfg(  # noqa: PLR0913, PLR0915 - the recipe's knobs; one 
     2026-09-04). `None` or 0 means NO law DR: the actuator runs at the
     fit exactly — the point arm of the walk C1 study, and the pinned
     truth every arm is judged at. The basis string says which."""
-    cfg = make_velocity_env_cfg()
-    if cfg.sim.mujoco.timestep != PHYSICS_DT:
-        raise AssertionError(
-            f"mjlab's base timestep moved to {cfg.sim.mujoco.timestep}; this "
-            f"transcription is pinned against {PHYSICS_DT} (50 Hz control) — "
-            "re-derive the delay steps and rates before trusting it"
-        )
-
-    # Their solver raise for the duck.
-    cfg.sim.nconmax = NCONMAX
-    cfg.sim.mujoco.iterations = SOLVER_ITERATIONS
-    cfg.sim.mujoco.ls_iterations = LS_ITERATIONS
-
-    # The robot: our stamped bundle, the certified actuator.
-    actuator = BamActuatorCfg.from_bundle(
-        bundle or XL330_BUNDLE, target_names_expr=SERVO_JOINTS, physics_dt=PHYSICS_DT
+    from trainnr_mjlab.legged_walk import (  # noqa: PLC0415 - it imports this module
+        LeggedRobot,
+        legged_walk_env_cfg,
     )
-    entity, robot_stamp = entity_from_bundle(ROBOT_DIR, MODEL_FILE, (actuator,))
-    cfg.scene.entities = {"robot": entity}
-    cfg.viewer.body_name = TRUNK
 
-    # Flat terrain (their walk; height scan leaves both obs groups).
-    assert cfg.scene.terrain is not None
-    cfg.scene.terrain.terrain_type = "plane"
-    cfg.scene.terrain.terrain_generator = None
-
-    # Sensors: their three, on our model's names. Their self-collision
-    # sensor targets their `self_collision_only`-classed geoms; the
-    # subtree-vs-subtree form covers the same contacts on 1.6.
-    feet_ground = ContactSensorCfg(
-        name="feet_ground_contact",
-        primary=ContactMatch(mode="geom", pattern=FOOT_GEOMS, entity="robot"),
-        secondary=ContactMatch(mode="body", pattern="terrain"),
-        fields=("found", "force"),
-        reduce="netforce",
-        num_slots=1,
-        track_air_time=True,
-    )
-    self_collision = ContactSensorCfg(
-        name="self_collision",
-        primary=ContactMatch(mode="subtree", pattern=TRUNK, entity="robot"),
-        secondary=ContactMatch(mode="subtree", pattern=TRUNK, entity="robot"),
-        fields=("found", "force"),
-        reduce="none",
-        num_slots=1,
-        history_length=4,
-    )
-    foot_height_scan = TerrainHeightSensorCfg(
-        name="foot_height_scan",
-        frame=tuple(ObjRef(type="site", name=s, entity="robot") for s in FOOT_SITES),
-        pattern=RingPatternCfg.single_ring(radius=0.04, num_samples=2),
-        ray_alignment="yaw",
-        max_distance=1.0,
-        exclude_parent_body=True,
-        include_geom_groups=(0,),
-        debug_vis=False,
-    )
-    cfg.scene.sensors = (feet_ground, self_collision, foot_height_scan)
-
-    # Action: scale 1.0, EXPLICIT — the value their deploy flag
-    # `--action-scale 0.8` contradicts (57 §5, confirmed at the source);
-    # the C4 manifest exists so that contradiction cannot ship.
-    joint_pos_action = cfg.actions["joint_pos"]
-    assert isinstance(joint_pos_action, JointPositionActionCfg)
-    joint_pos_action.scale = 1.0
     if head not in (HEAD_FREE, HEAD_PINNED):
         raise ValueError(f"head must be {HEAD_FREE!r} or {HEAD_PINNED!r}, got {head!r}")
-    if head == HEAD_PINNED:
-        joint_pos_action.actuator_names = LEG_ACTUATORS
-
-    # Commands: their ranges; heading control off (their duck steers by
-    # yaw-rate command, not heading pursuit).
-    twist = cfg.commands["twist"]
-    assert isinstance(twist, UniformVelocityCommandCfg)
-    twist.ranges = UniformVelocityCommandCfg.Ranges(
-        lin_vel_x=LIN_VEL_X,
-        lin_vel_y=LIN_VEL_Y,
-        ang_vel_z=ANG_VEL_Z,
-        # No heading range: 1.6's UniformVelocityCommand refuses a
-        # heading range while heading_command is off (caught by the
-        # box's first real env build, 2026-09-01).
-        heading=None,
+    robot = LeggedRobot(
+        name="microduck",
+        robot_dir=ROBOT_DIR,
+        model_file=MODEL_FILE,
+        trunk=TRUNK,
+        foot_sites=FOOT_SITES,
+        foot_geoms=FOOT_GEOMS,
+        servo_joints=SERVO_JOINTS,
+        pose_joints=POSE_JOINTS,
+        reset_z=RESET_Z,
+        actuator=bundle or XL330_BUNDLE,
+        pinned=HEAD_ACTUATORS if head == HEAD_PINNED else (),
     )
-    twist.heading_command = False
-
-    # Observations: actor loses base_lin_vel (critic keeps it —
-    # privileged); flat terrain removes height_scan from both.
-    del cfg.observations["actor"].terms["base_lin_vel"]
-    del cfg.observations["actor"].terms["height_scan"]
-    del cfg.observations["critic"].terms["height_scan"]
-
-    # Rewards: their numbers onto 1.6's terms.
-    rewards = cfg.rewards
-    rewards["track_linear_velocity"].weight = 2.0
-    rewards["track_linear_velocity"].params["std"] = TRACK_LIN_STD
-    rewards["track_angular_velocity"].weight = 2.0
-    rewards["track_angular_velocity"].params["std"] = TRACK_ANG_STD
-    rewards["upright"].weight = 2.0
-    rewards["upright"].params["std"] = UPRIGHT_STD
-    rewards["upright"].params["asset_cfg"].body_names = (TRUNK,)
-    rewards["upright"].params.pop("terrain_sensor_names", None)
-    rewards["pose"].params["std_standing"] = POSE_STD_STANDING
-    rewards["pose"].params["std_walking"] = POSE_STD_WALKING
-    rewards["pose"].params["std_running"] = POSE_STD_WALKING
-    rewards["pose"].params["asset_cfg"] = SceneEntityCfg(
-        "robot", joint_names=POSE_JOINTS
+    return legged_walk_env_cfg(
+        robot,
+        play=play,
+        law_dr_span=law_dr_span,
+        law_pin_scale=law_pin_scale,
+        law_pin_only=law_pin_only,
     )
-    rewards["pose"].params["walking_threshold"] = WALKING_THRESHOLD
-    rewards["air_time"].weight = 3.0
-    rewards["air_time"].params["threshold_min"] = AIR_TIME_WINDOW[0]
-    rewards["air_time"].params["threshold_max"] = AIR_TIME_WINDOW[1]
-    rewards["air_time"].params["command_threshold"] = COMMAND_THRESHOLD
-    for name in ("foot_clearance", "foot_slip"):
-        rewards[name].params["asset_cfg"].site_names = FOOT_SITES
-    rewards["foot_clearance"].params["target_height"] = FOOT_TARGET_HEIGHT
-    rewards["foot_clearance"].params["command_threshold"] = COMMAND_THRESHOLD
-    rewards["foot_swing_height"].params["target_height"] = FOOT_TARGET_HEIGHT
-    rewards["foot_swing_height"].params["command_threshold"] = COMMAND_THRESHOLD
-    rewards["foot_slip"].weight = -0.1  # their "deliberately weak"
-    rewards["foot_slip"].params["command_threshold"] = COMMAND_THRESHOLD
-    rewards["action_rate_l2"].weight = -0.1  # stage-0; their ramp is a curriculum
-    rewards["body_ang_vel"].weight = -0.05
-    rewards["body_ang_vel"].params["asset_cfg"].body_names = (TRUNK,)
-    rewards["angular_momentum"].weight = -0.02
-    rewards.pop("soft_landing", None)  # theirs: "velocity removes it"
-    rewards["self_collisions"] = RewardTermCfg(
-        func=mdp.self_collision_cost,
-        weight=-1.0,
-        params={"sensor_name": self_collision.name},
-    )
-
-    # Terminations: base's, plus the NaN guard — theirs in spirit,
-    # 1.6's native `nan_detection` in mechanism.
-    cfg.terminations.pop("out_of_terrain_bounds", None)
-    cfg.terminations["nan_state"] = TerminationTermCfg(
-        func=envs_mdp.nan_detection, time_out=False
-    )
-
-    # Events: their numbers through 1.6's native functions, plus ours.
-    events = cfg.events
-    events["foot_friction"].params["asset_cfg"].geom_names = FOOT_GEOMS
-    events["foot_friction"].params["ranges"] = FOOT_FRICTION
-    events["reset_base"].params["pose_range"]["z"] = RESET_Z
-    if play:
-        # `play` is for WATCHING a policy, so the disturbances it must
-        # survive stay on and come more often (theirs: a viewer sees
-        # recovery), while observation corruption goes off — a viewer
-        # wants the true state, not the actor's noisy view. Stated
-        # because the first cut changed only the push interval, which
-        # reads as an inversion rather than a mode (review 2026-09-01).
-        events["push_robot"].interval_range_s = PLAY_PUSH_INTERVAL_S
-        cfg.observations["actor"].enable_corruption = False
-    else:
-        events["push_robot"].interval_range_s = PUSH_INTERVAL_S
-    events["push_robot"].params["velocity_range"] = {
-        "x": PUSH_VELOCITY,
-        "y": PUSH_VELOCITY,
-    }
-    events["base_com"].params["asset_cfg"].body_names = (TRUNK,)
-    # 1.6's Ranges dict keys are ENTITY-NAME patterns, not axes (the
-    # box's env build refused 'x' as a body name, 2026-09-01); a plain
-    # tuple applies over body_com_offset's default axes [0, 1, 2] —
-    # exactly their all-axes +-offset.
-    events["base_com"].params["ranges"] = (-TRUNK_COM_OFFSET, TRUNK_COM_OFFSET)
-    events["mass_inertia"] = EventTermCfg(
-        func=envs_mdp.dr.pseudo_inertia,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=(TRUNK,)),
-            # their derivation: e^(2·alpha) spans the ±5 % mass range
-            "alpha_range": (
-                math.log(MASS_INERTIA[0]) / 2.0,
-                math.log(MASS_INERTIA[1]) / 2.0,
-            ),
-        },
-    )
-    events["armature"] = EventTermCfg(
-        func=envs_mdp.dr.joint_armature,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=SERVO_JOINTS),
-            "operation": "scale",
-            "ranges": ARMATURE,
-        },
-    )
-    # Ours: the expansion event (their decorator-carrier no-op, owned),
-    # and law DR from the certified bundle with a declared basis.
-    events["bam_expansion"] = bam_expansion_event()
-    if law_pin_scale is not None:
-        # The envelope probe: the law at a fixed offset from the fit.
-        law_dr, dr_basis = bam_param_dr_event(
-            actuator, pin_scale=law_pin_scale, pin_only=law_pin_only
-        )
-        events["bam_param_dr"] = law_dr
-    elif law_dr_span == IDENTIFIED:
-        # No fallback: the bundle's interval or a refusal.
-        law_dr, dr_basis = bam_param_dr_event(actuator, fallback_span=None)
-        events["bam_param_dr"] = law_dr
-    elif law_dr_span:
-        law_dr, dr_basis = bam_param_dr_event(
-            actuator, fallback_span=float(law_dr_span)
-        )
-        events["bam_param_dr"] = law_dr
-    else:
-        dr_basis = "none: the bundle's point fit exactly (no law DR)"
-
-    # Curricula: none — see the module docstring's OMITTED list.
-    cfg.curriculum = {}
-
-    # Zero silent no-ops, by construction — the linter is the gate, not
-    # a review habit.
-    lint(cfg.events, (actuator,))
-
-    return cfg, {
-        "robot": robot_stamp,
-        "actuator": actuator.stamp,
-        "dr_basis": dr_basis,
-        "head": head,
-    }
