@@ -177,6 +177,7 @@
       "trainnr/go2-walk",
       "trainnr/gripper-pick",
       "trainnr/kitting",
+      "trainnr/legged-walk",
       "trainnr/lift-study",
       "trainnr/microduck-walk"
      ]
@@ -219,7 +220,7 @@
    "tool": "train_walk",
    "page": "experiments",
    "label": "Train",
-   "summary": "Train a walk (a declared task, or robot go1/go2/microduck).",
+   "summary": "Train a walk: a declared task (any robot: family legged-walk) or robot go1/go2/microduck.",
    "fields": [
     {
      "name": "task",

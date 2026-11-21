@@ -24,11 +24,16 @@ unless it says otherwise.
 obs     = concat(term(t) for t in observations)          # float32, width onnx.input_width
 action  = onnx(obs)                                      # width onnx.output_width
 action  = clip(action, action.clip) if action.clip       # rsl_rl's clip_actions
-target  = joints.default_pos + action.scale * action     # joint position targets
+target  = joints.default_pos                              # every joint at home, then
+target[acting] += action.scale * action                  # the acting joints moved
 ctrl[joints.action_to_ctrl[i]] = target[i]               # then decimation physics steps
 last_action = action                                     # clipped, unscaled
 ```
 
+`acting` are the indices in `policy_order` of `joints.action_joints`, or
+every joint when the key is absent: a policy that drives only some joints
+(a legged walk with its head pinned, docs/88) holds the rest at
+`default_pos`, and its output is `len(action_joints)` wide.
 `action.offset` is always equal to `joints.default_pos`; it is written so
 `action` reads on its own (`kind` spells the rule with `default_pos`). The
 runtime ticks at `control.control_hz`, that is every
@@ -52,7 +57,7 @@ runtime ticks at `control.control_hz`, that is every
 | `certificate` | the evaluation the deployment cites; the gate compares against it | |
 | `control` | `physics_timestep_s`, `decimation`, `control_hz` (rounded, for printing), `episode_length_s` | yes |
 | `joints` | below | yes |
-| `action` | `kind`, `scale` (one per joint), `offset`, `clip` (`[lo, hi]` or null) | yes |
+| `action` | `kind`, `scale` (one per acting joint), `offset`, `clip` (`[lo, hi]` or null) | yes |
 | `observations` | below, in concatenation order | yes |
 | `onnx` | `file`, `input` and `output` tensor names, `input_width`, `output_width`, `normalization` (always "folded into the graph": feed raw terms), `export_check_max_abs_diff` | yes |
 | `scene` | `file`, `meshes`, `terrain`, `floor` (the trained floor's size, condim, priority, friction) | yes |
@@ -60,6 +65,7 @@ runtime ticks at `control.control_hz`, that is every
 | `command_basis` | in words, which command curriculum stage the checkpoint had reached | |
 | `termination` | `fell_over_deg`: the tilt at which the evaluation counted a fall | |
 | `unitree` | for a Unitree robot only: the names their simulator and controller use | |
+| `limits` | the robot's limits over several joints the policy trained against (docs/88 §3): `file` (beside the policy, `trainnr-joint-limits/1`), `stamp`, `mode` (`terminate` or `cost`); a runtime should refuse or hold a target that breaks one, as the gate fails a trial that does | |
 
 ## `joints`
 
@@ -73,6 +79,7 @@ runtime ticks at `control.control_hz`, that is every
 | `effort_limit` | the actuator's torque limit (N m); null for a servo's joint |
 | `sdk_order_map`, `sdk_order_source` | for a robot with a vendor SDK: the SDK's joint index of each policy joint, and where that map was read |
 | `servos` | groups of joints a position servo drives (below); absent or empty for a PD robot |
+| `action_joints` | the joints the action drives, in its order, when not all of `policy_order`; absent otherwise |
 
 A PD robot's runtime sets `stiffness` and `damping` on each motor and
 sends `target` as its position set point. A servo closes its own loop,

@@ -35,9 +35,16 @@ class Ticks:
     cmd_sum: float = 0.0
     steps: int = 0
     fell: bool = False
+    # the robot's limits over several joints (#121), checked every tick on
+    # the joints in `joint_names` (the policy order): the first one broken
+    # ends the trial as a fall does, and is named
+    limits: Any = None
+    joint_names: tuple[str, ...] = ()
+    limit: str | None = None
 
     def tick(self, runtime: GateRuntime, command: np.ndarray) -> bool:
-        """Advance one tick under `command`; True when the robot fell."""
+        """Advance one tick under `command`; True when the robot fell (or
+        broke a declared limit)."""
         runtime.command = command.astype(np.float32)
         runtime.apply(runtime.act(runtime.observe()))
         v = runtime.base_velocity_b()
@@ -53,6 +60,13 @@ class Ticks:
         self.cmd_sum += float(np.linalg.norm(command[:2]))
         self.steps += 1
         self.fell = bool(runtime.fell_over())
+        if self.limits is not None and not self.fell:
+            joints = runtime.pose()[2]
+            broken = self.limits.violations(
+                dict(zip(self.joint_names, joints, strict=True))
+            )
+            if broken:
+                self.limit, self.fell = broken[0], True
         return self.fell
 
     def outcome(self) -> dict[str, Any]:
@@ -62,4 +76,5 @@ class Ticks:
             "fell": self.fell,
             "mean_err": self.err_sum / max(self.steps, 1),
             "mean_cmd": self.cmd_sum / max(self.steps, 1),
+            **({"limit": self.limit} if self.limits is not None else {}),
         }
