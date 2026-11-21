@@ -22,13 +22,14 @@ from trainnr.bundles.hashing import stamp
 from trainnr_mjlab.actuator import BamActuatorCfg
 
 
-def entity_from_bundle(
+def entity_from_bundle(  # noqa: PLR0913 - the model, its actuators, its pose, its floor
     robot_dir: str | Path,
     model_file: str,
     actuators: tuple[BamActuatorCfg, ...],
     *,
     init_state: EntityCfg.InitialStateCfg | None = None,
     soft_joint_pos_limit_factor: float = 1.0,
+    without_floor: bool = False,
 ) -> tuple[EntityCfg, str]:
     """The bundle's model as an `EntityCfg`, and the bundle's stamp.
 
@@ -72,8 +73,19 @@ def entity_from_bundle(
     bundle_stamp = stamp(robot_dir.name, robot_dir)
     # Only a given init_state replaces EntityCfg's own default.
     optional: dict[str, Any] = {} if init_state is None else {"init_state": init_state}
+
+    def load() -> mujoco.MjSpec:
+        spec = mujoco.MjSpec.from_file(str(model_path))
+        if without_floor:
+            # an onboarded robot often comes as a scene: its floor plane
+            # would lie under mjlab's terrain, a second floor (#100)
+            for geom in list(spec.worldbody.geoms):
+                if geom.type == mujoco.mjtGeom.mjGEOM_PLANE:
+                    spec.delete(geom)
+        return spec
+
     cfg = EntityCfg(
-        spec_fn=lambda: mujoco.MjSpec.from_file(str(model_path)),
+        spec_fn=load,
         articulation=EntityArticulationInfoCfg(
             actuators=tuple(actuators),
             soft_joint_pos_limit_factor=soft_joint_pos_limit_factor,

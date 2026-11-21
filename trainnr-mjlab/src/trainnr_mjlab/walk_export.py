@@ -129,7 +129,7 @@ class Floor:
     friction: tuple[float, float, float]
 
 
-def export(  # noqa: PLR0913 - the export's own knobs, each named
+def export(  # noqa: PLR0913, PLR0915 - the export's own knobs and steps, each named
     checkpoint: Path,
     *,
     project: Path,
@@ -149,9 +149,14 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         checkpoint_iteration,
         pin_command_envelope,
     )
-    from trainnr_mjlab.walks import use_project, walk_spec  # noqa: PLC0415
+    from trainnr_mjlab.walks import (  # noqa: PLC0415
+        adopt_legged_of,
+        use_project,
+        walk_spec,
+    )
 
     use_project(project)
+    adopt_legged_of(robot, checkpoint)
     spec = walk_spec(robot)
     checkpoint = Path(checkpoint).resolve()
     run_dir = checkpoint.parent
@@ -228,6 +233,9 @@ def export(  # noqa: PLR0913 - the export's own knobs, each named
         ),
     )
     (out_dir / SCENE_FILE).write_text(_scene_xml(unwrapped), encoding="utf-8")
+    limits = _limits_carried(trained, out_dir)
+    if limits:
+        manifest[Key.LIMITS] = limits
     attach_metadata_to_onnx(
         str(policy_path),
         {
@@ -349,11 +357,16 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
         round(float(v), FLOAT_DIGITS)
         for v in entity.data.default_joint_pos[0].cpu().tolist()
     ]
+    # the joints the action drives, by the actuators it targets: all of
+    # them, unless the walk holds some at the default pose (#100)
+    # (target_names are joint names: an MJCF's actuators keep their own)
+    acting = [_unprefixed(t) for t in joint_action.target_names]
+    action_joints = [] if acting == [_unprefixed(j) for j in joint_names] else acting
     scale = joint_action._scale
     scale_list = (
         [float(v) for v in scale[0].cpu().tolist()]
         if isinstance(scale, torch.Tensor)
-        else [float(scale)] * len(joint_names)
+        else [float(scale)] * len(acting)
     )
     observations = []
     manager = env.observation_manager
@@ -430,6 +443,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "effort_limit": effort,
             "default_pos": default_pos,
             SERVOS: servos,
+            "action_joints": action_joints or None,
         },
         Key.ACTION: {
             "kind": "joint position target = default_pos + scale * action",
@@ -443,7 +457,7 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
             "input": ex.input_name,
             "output": ex.output_name,
             "input_width": ex.obs_dim,
-            "output_width": len(joint_names),
+            "output_width": len(acting),
             "normalization": "folded into the graph",
             "export_check_max_abs_diff": ex.max_abs_diff,
         },
@@ -461,6 +475,29 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
     if deploy.unitree is not None:
         manifest[Key.UNITREE] = asdict(deploy.unitree)
     return manifest
+
+
+LIMITS_FILE = "limits.json"
+
+
+def _limits_carried(trained: dict[str, Any], out_dir: Path) -> dict[str, str] | None:
+    """The robot's limits over several joints the run trained against
+    (#121), copied beside the policy so a runtime and the gate check the
+    same ones; None for a run that trained against none."""
+    import shutil  # noqa: PLC0415
+
+    from trainnr_mjlab.legged_walk import legged_robot  # noqa: PLC0415
+
+    line = trained.get("limits")
+    spec = trained.get("legged") or {}
+    if not line or not spec.get("limits"):
+        return None
+    source = legged_robot(spec).limits_file  # the robot's own limits.json
+    if source is None:
+        return None
+    shutil.copy2(source, out_dir / LIMITS_FILE)
+    mode, _, stamp = str(line).partition(": ")
+    return {"file": LIMITS_FILE, "stamp": stamp, "mode": mode}
 
 
 def _servos(entity: Any) -> list[dict[str, Any]]:

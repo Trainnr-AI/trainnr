@@ -56,8 +56,10 @@ from trainnr.tasks.overlay import build_from_reference, build_variant  # noqa: E
 from trainnr.tasks.tracking import is_tracking  # noqa: E402
 from trainnr.tasks.walks import (  # noqa: E402
     bundle_walk_shape_missing,
+    is_legged,
     walk_robot,
     walk_shape_sentence,
+    write_legged_spec,
 )
 
 
@@ -123,7 +125,21 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
     without the parts the trainer reads by name (`tasks.walks.WALK_SHAPES`)
     is refused in one sentence, not after a traceback in the log
     (stranger test 2026-10-03)."""
-    missing = shape_missing(robot)
+    legged_spec = None
+    if is_legged(ref.task_id):
+        # the walk's shape is the model's own, checked as its spec resolves
+        # (a part the model lacks is refused by name, the field to declare)
+        try:
+            legged_spec = str(write_legged_spec(folder, ref.spec, ref.stamp))
+        except (FileNotFoundError, KeyError, ValueError) as why:
+            _write_walk_verdict(
+                project, folder, ref, accepted=False,
+                gate="the robot's shape, before the learnability smoke",
+                reasons=[str(why).strip("'\"")], identity={}, log=None,
+            )  # fmt: skip
+            print(f"REJECTED: {ref.stamp} — {why}", flush=True)
+            return False
+    missing = [] if legged_spec else shape_missing(robot)
     if missing:
         reason = walk_shape_sentence(robot, missing)
         _write_walk_verdict(
@@ -146,6 +162,7 @@ def review_walk(  # noqa: PLR0913 - the review's inputs and its two seams
         iterations=SMOKE_ITERATIONS,
         dr_span=ref.dr_span if ref.dr_span is not None else 0.0,
         recorder=False,
+        legged_spec=legged_spec,
     )
     log_path = folder / ACCEPTANCE_LOG
     # the door's line is `uv run --no-sync`: its environment is made ready

@@ -539,10 +539,54 @@ def robot_sections(root: Path, stamp: str) -> list[Section]:
     fits = root / FITS_DIR
     if fits.is_dir():
         sections.insert(1, _fit_table(fits))
+    limits = _limits_table(root, m)
+    if limits is not None:
+        sections.insert(sections.index(joints) + 1, limits)
     revision = _revision_section(root)
     if revision is not None:
         sections.insert(1, revision)
     return sections
+
+
+def _limits_table(root: Path, model: Any) -> Section | None:
+    """The robot's limits over several joints (#121), each in words, and
+    the keyframes that break them; None when its bundle declares none."""
+    from trainnr.robot.joint_limits import (  # noqa: PLC0415
+        LIMITS_FILE,
+        JointLimits,
+        check_keyframes,
+    )
+
+    path = root / LIMITS_FILE
+    if not path.is_file():
+        return None
+    try:
+        limits = JointLimits.load(path)
+        broken = check_keyframes(limits, model)
+    except (KeyError, ValueError) as why:
+        return _kv("Limits", [("unreadable", str(why))])
+    by_limit: dict[str, list[str]] = {}
+    for key, names in broken.items():
+        for name in names:
+            by_limit.setdefault(name, []).append(key)
+    return _table(
+        "Limits",
+        ["limit", "form", "what", "keyframes that break it"],
+        [
+            [
+                limit.name,
+                limit.form,
+                limit.describe(),
+                ", ".join(by_limit.get(limit.name, [])) or "none",
+            ]
+            for limit in limits.limits
+        ],
+        note=(
+            f"Declared in {LIMITS_FILE} ({limits.source or 'no source named'}); a walk "
+            "ends an episode on a broken limit unless its task says otherwise, and "
+            "the gate fails a trial that breaks one."
+        ),
+    )
 
 
 def _revision_section(root: Path) -> Section | None:

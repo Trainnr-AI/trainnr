@@ -49,7 +49,14 @@ from trainnr.envs.rsl_rl_log import FIELD_LINE, ITERATION_LINE
 from trainnr.mcp_jobs import VIEWPORT_WALK, default_jobs_root, jobs_dir_of, track
 from trainnr.project.kinds import IDENTITY_FILE
 
-from trainnr_mjlab.walks import DEFAULT_ROBOT, ROBOTS, Identity, use_project, walk_spec
+from trainnr_mjlab.walks import (
+    DEFAULT_ROBOT,
+    ROBOTS,
+    Identity,
+    adopt_legged,
+    use_project,
+    walk_spec,
+)
 
 DEFAULTS = {
     "g3": {"envs": 4096, "iterations": 8000, "every": 100},
@@ -292,6 +299,13 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         "recording's: the joints take its estimates and are randomized over its "
         "intervals; the run's identity names it (trainnr_mjlab.fit_walk; the Go2)",
     )
+    parser.add_argument(
+        "--legged-spec",
+        type=Path,
+        default=None,
+        help="--robot legged: the declared legged walk's resolved spec (JSON), "
+        "written by trainnr's train door; recorded in the run's identity",
+    )
     args = parser.parse_args()
     knobs = DEFAULTS[args.agent]
     envs = args.envs if args.envs is not None else knobs["envs"]
@@ -311,6 +325,8 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
     from trainnr_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
     use_project(args.project)
+    if args.legged_spec is not None:
+        adopt_legged(json.loads(args.legged_spec.read_text()))
     spec = walk_spec(args.robot)
     span = spec.default_span if args.dr_span is None else args.dr_span
     cfg, identity = spec.env_cfg(

@@ -98,8 +98,9 @@ def project_with(*walks: str) -> Iterator[tuple[Project, _Spawned]]:
 
 class TheRegistryMarksTheWalks(unittest.TestCase):
     def test_walk_families_carry_their_robot(self) -> None:
-        self.assertEqual(walk_robots(), ("go1", "go2", "microduck"))
+        self.assertEqual(walk_robots(), ("go1", "go2", "legged", "microduck"))
         self.assertEqual(walk_robot("go2-walk"), "go2")
+        self.assertEqual(walk_robot("legged-walk"), "legged")  # any robot (#100)
         self.assertEqual(walk_robot("trainnr/microduck-walk"), "microduck")
         self.assertIsNone(walk_robot("kitting"))
         self.assertTrue(resolve("go2-walk").walk)
@@ -172,6 +173,7 @@ class TheWalkDoors(unittest.TestCase):
             out = server.train_walk("smoke", robot="spot")
             self.assertEqual(out["status"], "refused")
             self.assertIn("one of go1, go2, microduck", out["reason"])
+            self.assertIn("legged-walk", out["reason"])
             out = server.train_walk("smoke", task="ghost")
             self.assertEqual(out["status"], "refused")
             self.assertIn("ghost", out["reason"])

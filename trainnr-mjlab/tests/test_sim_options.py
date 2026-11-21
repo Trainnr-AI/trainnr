@@ -5,7 +5,11 @@ prism cap's (a fallen trunk's contacts, known and recorded, docs/78
 
 from __future__ import annotations
 
+import contextlib
+import tempfile
 import unittest
+from collections.abc import Iterator
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -50,7 +54,7 @@ class TheQuietConfig(unittest.TestCase):
         from trainnr_mjlab.sim_options import QuietSimulationCfg  # noqa: PLC0415
 
         for robot in ROBOTS:
-            with self.subTest(robot=robot):
+            with self.subTest(robot=robot), _legged_adopted(robot):
                 builder = walk_spec(robot).env_cfg
                 self.assertTrue(hasattr(builder, "__wrapped__"))
                 # the wrapper shows the builder's own signature, and quiets
@@ -62,6 +66,42 @@ class TheQuietConfig(unittest.TestCase):
                     _built_sim_cfg_type(builder),
                     f"{robot}'s sim config is not the quiet one",
                 )
+
+
+@contextlib.contextmanager
+def _legged_adopted(robot: str) -> Iterator[None]:
+    """For the legged walk, a spec adopted (the small biped trainnr's own
+    legged-walk test onboards); nothing for the named walks."""
+    from trainnr_mjlab.walks import LEGGED, adopt_legged  # noqa: PLC0415
+
+    if robot != LEGGED:
+        yield
+        return
+    from trainnr.bundles import locate  # noqa: PLC0415
+
+    fixture = Path(__file__).resolve().parents[2] / "trainnr" / "tests" / "fixtures"
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "biped").mkdir()
+        (Path(tmp) / "biped" / "scene.xml").write_text(
+            (fixture / "biped.xml").read_text()
+        )
+        locate.add_search_root(Path(tmp))
+        adopt_legged(
+            {
+                "robot": "biped@000000000000",
+                "model_file": "scene.xml",
+                "actuator": "model",
+                "stand_keyframe": "stand",
+                "trunk": "torso",
+                "foot_sites": ["left_foot", "right_foot"],
+                "foot_geoms": ["left_foot_collision", "right_foot_collision"],
+            }
+        )
+        try:
+            yield
+        finally:
+            adopt_legged(None)
+            locate._SEARCH_ROOTS.remove(Path(tmp))
 
 
 if __name__ == "__main__":

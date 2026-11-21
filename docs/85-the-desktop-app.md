@@ -159,8 +159,15 @@ Each phase ends with a check on a fresh machine, not with code merged.
    Studio outside any checkout, with no uv on PATH, found the engine,
    loaded its forms through it and opened the sample; the sample opened
    with no engine in 5.4 s; New project on a machine with nothing set
-   the engine up, then made the project. Left: the same on a fresh Mac
-   and a fresh Windows machine (Prakhar's), and the core's trims above.
+   the engine up, then made the project. *Checked, 2026-11-18, on
+   Windows 11 (Prakhar's), in a throwaway home with empty uv caches:*
+   v0.2.0's `setup.exe` installed in 5 s with no prompt; the engine's
+   steps as `engine.rs` takes them (the pinned uv, the runtime archive,
+   `uv sync --locked` of the core) took 19 s, 485 MB, on the Python 3.12
+   already installed; a `uv sync` killed part way, as Cancel does, was
+   finished by the next one each of four times. The buttons themselves
+   were not clicked (no desktop control from the session). Left: the same
+   on a fresh Mac, and the core's trims above.
 3. **Connect your agent.** Done on this branch (`connect.rs`): a panel
    from the Welcome page and the status bar lists Claude Code, Codex and
    Cursor with whether each is on this machine and already has trainnr
@@ -171,13 +178,24 @@ Each phase ends with a check on a fresh machine, not with code merged.
    other client. The entry runs a launcher at a fixed path,
    `<trainnr home>/engine/bin/trainnr`, rewritten when the engine
    changes, so an update never breaks it (Windows names the engine's
-   Python, since a `.cmd` launcher does not start from every client).
-   Before the engine exists the panel sets it up first. *Checked,
+   `trainnr.exe`, since a `.cmd` launcher does not start from every
+   client). Before the engine exists the panel sets it up first. *Checked,
    2026-10-11:* in a throwaway home, the panel's add put trainnr into
    Claude Code and `claude mcp get trainnr` answered "Connected", Claude
    Code having started the server through the launcher on the fresh
-   engine. Left: the connection status in the window (PR #32, once its
-   review is answered).
+   engine. *Found, 2026-11-18, on Windows 11:* the entry then ran
+   `python -m trainnr.cli mcp`, and `-m` puts the client's working folder
+   first on the import path; started from the user's home, where a
+   Windows terminal opens, the default trainnr home `~\trainnr` shadowed
+   the engine's editable package, and Claude Code said "Failed to
+   connect" (from `C:\` and from Documents, "Connected"). The macOS and
+   Linux launcher had the same `-m`. The launcher now passes `-P`, as
+   the plugin's hook already did, and the Windows entry runs the
+   environment's `trainnr.exe` (a console script, which never puts the
+   working folder on the path; checked "Connected" from the home), a
+   different program from the old entry's, so the panel offers Update.
+   Left: the connection status in the window (PR #32, once its review is
+   answered).
 4. **Distribution.** Done on this branch, unsigned: the release builds
    the app to double-click (`tools/package-studio.py`): a macOS `.app` in
    a disk image with an Applications link to drag onto (`iconutil`,
@@ -189,7 +207,12 @@ Each phase ends with a check on a fresh machine, not with code merged.
    Start-menu entry, an optional desktop one and an uninstaller, leaving
    the projects and the engine in place. Windows keeps its zip as well,
    whose `.exe` runs where it is unpacked (the plugin's installer and
-   `trainnr studio` download that). The exe links its C runtime
+   `trainnr studio` download that). An agent connected from the app
+   opens that same app: the entry Connect writes names it
+   (`TRAINNR_STUDIO`; on Linux the AppImage's own path), where
+   `launch_studio` had looked only in a checkout and its own download
+   folder and fetched a second copy, 66 MB in 16 s (Windows 11,
+   2026-11-18). The exe links its C runtime
    statically (`crates/trainnr-studio/.cargo/config.toml`): v0.1.0's
    imported VCRUNTIME140.dll, which a fresh Windows may lack, and the
    release now checks the imports (`package-studio.py

@@ -34,6 +34,7 @@ from trainnr_mjlab.walks import (
     DEFAULT_ROBOT,
     ROBOTS,
     TERRAIN_SCAN_GROUP,
+    adopt_legged_of,
     use_project,
     walk_spec,
 )
@@ -87,6 +88,7 @@ def main() -> None:
     from trainnr_mjlab.recorder import RerunRecorderCfg  # noqa: PLC0415
 
     use_project(args.project)
+    adopt_legged_of(args.robot, args.checkpoint)
     spec = walk_spec(args.robot)
     # The walk in play mode: the curriculum and the pushes off, episodes
     # open-ended, the same robot, actuator and gains it trained under.
