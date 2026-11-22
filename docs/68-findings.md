@@ -23,13 +23,14 @@ record's numbers, command and artifacts stand on their own.
 `projects/…` paths are local project directories, untracked by
 design; where a copy ships it is named first.
 
-## Index (65 records, newest first)
+## Index (66 records, newest first)
 
 | record | date | claim |
 |---|---|---|
 | [servo-bench-synthetic-scs0009-2026-11-22](#servo-bench-synthetic-scs0009-2026-11-22) | 2026-11-22 | The servo-bench identification method recovers a synthetic SCS0009-class servo from a 12 s bench recording… |
 | [nano-limits-match-firmware-2026-11-22](#nano-limits-match-firmware-2026-11-22) | 2026-11-22 | Microduck Nano's four firmware limits over several joints (head interlock, knee and ankle, a hip collision… |
 | [g1-court-dance-tracked-2026-11-17](#g1-court-dance-tracked-2026-11-17) | 2026-11-17 | A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video… |
+| [g1-court-dance-lag-trained-2026-11-17](#g1-court-dance-lag-trained-2026-11-17) | 2026-11-17 | Training the court-dance tracking policy with a command lag drawn in 0-40 ms (train_tracking's new default)… |
 | [g1-court-dance-evaluated-2026-11-17](#g1-court-dance-evaluated-2026-11-17) | 2026-11-17 | The court-dance tracking policy (court-dance-g1-16k, model_1999), judged on 40 paired trials under its… |
 | [g1-tracking-worlds-on-a-24gb-card-2026-11-16](#g1-tracking-worlds-on-a-24gb-card-2026-11-16) | 2026-11-16 | mjlab's G1 tracking task moves 1.8 times the samples per second with 16,384 worlds as with mjlab's 4,096 on… |
 | [video-to-g1-on-a-24gb-card-2026-11-15](#video-to-g1-on-a-24gb-card-2026-11-15) | 2026-11-15 | A 22-second dance video becomes a Unitree G1 reference motion on one 24 GB RTX 3090 Ti in about 7 minutes… |
@@ -201,6 +202,72 @@ design; where a copy ships it is named first.
 - caveats:
   - One seed, one rollout, no pushes: not the tracking task's evaluation (paired trials with an interval, pushes and delays), which is the next step.
   - The reference is the person's motion as GEM-X estimated it, levelled and smoothed: the policy tracks that, and how faithful it is to the dancer is judged by eye in play.mp4.
+  - Simulation only: no G1 to deploy to (docs/86 §9).
+
+## g1-court-dance-lag-trained-2026-11-17
+
+**Training the court-dance tracking policy with a command lag drawn in 0-40 ms (train_tracking's new default) raised its evaluation under the same tracking task (40 paired trials, pushes, observation noise, a per-trial lag in [0, 20] ms) from 18 of 40, exact 95% interval [0.29, 0.62], to 30 of 40, [0.59, 0.87]. One 20 ms tick late, 15 of 21 trials succeeded where the policy trained without lag managed 1 of 21; with no lag, 15 of 19 against 17 of 19. Paired by trial, the lag-trained policy alone succeeded in 15 trials and the other alone in 3 (exact sign test, two-sided p = 0.0075). The price: tracking a little looser (median body error 7.6 cm against 6.9 cm with no lag) and training 1.6 times slower per sample.**
+
+- date: 2026-11-17 · commit: `cda99f6`
+- instrument: `NVIDIA GeForce RTX 3090 Ti, 24,564 MiB, driver 610.88, WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2), the Studio open and receiving the stream; mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cuda, trainnr_mjlab.tracking_train with --lag-dr-ms 40 (the default on the feat/tracking-lag-dr branch) and trainnr_mjlab.tracking_verdict`
+- command: `trainnr call train_tracking {"reference": "court-dance-tracking", "name": "court-dance-g1-lag", "iterations": 2000, "envs": 16384} trainnr call evaluate_walk {"checkpoint": "court-dance-g1-lag/model_1999"}`
+- protocol: Training: train_tracking from the declared task, the same counts as the baseline (16,384 worlds, 2,000 iterations), with mjlab's delayed actuator drawing a command lag of 0-40 ms per world, redrawn each second (trainnr_mjlab.lag_dr). Evaluation: evaluate_walk's tracking route under the task, seed 1000, the protocol of the record g1-court-dance-evaluated-2026-11-17; the same seed draws the same lag for each trial in both evaluations (checked), so trial i of one pairs with trial i of the other. Sign test: exact binomial on the 18 discordant pairs, 15 against 3.
+- inputs:
+  - task: court-dance-tracking = g1-tracking@49b188d532d9: pushes, lag_ms 20, 40 trials
+  - reference: court-dance-g1@99743ed23aee, 1,095 frames at 50 fps (21.9 s)
+  - baseline: court-dance-g1-16k model_1999, trained without lag, judged under the same task (record g1-court-dance-evaluated-2026-11-17)
+- outcome:
+  - training:
+    - envs: 16384
+    - iterations: 2000
+    - wall_s: 11513
+    - steps_per_second_final: 73727
+    - baseline_steps_per_second_final: 106274
+    - lag_dr: command lag 0-40 ms (0-8 physics steps of 5 ms), redrawn every 1 s per world
+    - final:
+      - reward: 21.08
+      - episode_length_steps: 455.6
+      - error_body_pos_m: 0.0887
+    - baseline_final:
+      - reward: 26.56
+      - episode_length_steps: 490.7
+      - error_body_pos_m: 0.0774
+  - evaluation:
+    - successes: 30
+    - trials: 40
+    - ci95: 0.588, 0.8731
+    - by_lag:
+      - 0_ms:
+        - successes: 15
+        - trials: 19
+        - failed_at_steps: 25, 35, 65, 68
+        - median_body_pos_error_m_of_successes: 0.0755
+        - median_joint_error_rad_of_successes: 0.1631
+      - 20_ms:
+        - successes: 15
+        - trials: 21
+        - failed_at_steps: 36, 43, 48, 54, 673, 982
+        - median_body_pos_error_m_of_successes: 0.0814
+        - median_joint_error_rad_of_successes: 0.1658
+  - baseline_evaluation:
+    - successes: 18
+    - trials: 40
+    - ci95: 0.2926, 0.6151
+  - paired:
+    - both: 15
+    - lag_trained_only: 15
+    - baseline_only: 3
+    - neither: 7
+    - sign_test_two_sided_p: 0.0075
+- artifacts:
+  - runs/court-dance-g1-lag: the run in the g1-dance test project: identity.json (lag_dr, tracking_task), train.log, model_500/1000/1500/1999.pt, the saved stream
+  - runs/court-dance-g1-lag/verdict: walk-verdict-tracking-push-lag20-cuda.json, records-tracking-push-lag20-cuda.jsonl, evaluation.rrd
+  - certificates/court-dance-g1-lag-model_1999-tracking-push-lag20-cuda-seed1000-n40-pdb2315: the evaluation as the project imported it
+- caveats:
+  - One training seed per arm: a measurement of two policies, not of lag randomization as a method; a second seed per arm would say how much of the gap is the seed.
+  - The trials are paired by their seeded start and lag draw; pushes and noise are drawn by the simulator as the rollout goes, so two policies whose worlds reset at different times see the later draws differently.
+  - With no lag the lag-trained policy did slightly worse (15 of 19 against 17 of 19); the difference is two trials and within either interval.
+  - Training took 3 h 12 min against 1 h 58 min: mjlab's delay buffer cost 31% of the sample rate on this card.
   - Simulation only: no G1 to deploy to (docs/86 §9).
 
 ## g1-court-dance-evaluated-2026-11-17
