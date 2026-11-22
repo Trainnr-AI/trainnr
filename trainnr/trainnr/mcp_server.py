@@ -1580,6 +1580,10 @@ def list_gate_runtimes() -> list[dict[str, Any]]:
     ]
 
 
+FILM_VIEWER = "film"  # play_walk's offscreen film (trainnr_mjlab.walk_film, #137)
+ALL_CHECKPOINTS = "all"
+
+
 def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     experiment: str,
     checkpoint: str,
@@ -1590,10 +1594,12 @@ def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     """Open a checkpoint of an experiment in mjlab's own viewer - `viser`,
     its browser viewer (the URL is on the job's log), or `native`, its
     MuJoCo window - with the same rollout streamed into the Studio's Live
-    view by the recorder. `experiment` is its folder under runs/,
-    `checkpoint` a file in it; `scene` names the captured scene a
-    scene-trained checkpoint walks on (its identity says which). Job
-    handle; the viewer lives until closed."""
+    view by the recorder; or `film` it offscreen to a video beside the run
+    (`play-model_N/play.mp4`), `checkpoint` then one file, several
+    comma-separated, or `all`, several joined in order as `film.mp4`.
+    `experiment` is its folder under runs/, `checkpoint` a file in it;
+    `scene` names the captured scene a scene-trained checkpoint walks on
+    (its identity says which). Job handle; the viewer lives until closed."""
     run = experiment
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
@@ -1601,26 +1607,46 @@ def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     from trainnr.project.locate import plain_name  # noqa: PLC0415
 
     project = current_project()
+    film = viewer == FILM_VIEWER
     try:
         plain_name(run, "run name")
         run_dir = project.folder(RUNS_FOLDER) / run
         if not run_dir.is_dir():
             return refusal(f"no experiment {run!r} in this project")
-        path = with_checkpoint_suffix(run_dir / checkpoint)
-        if not path.resolve().is_relative_to(run_dir.resolve()):
-            return refusal(f"checkpoint {checkpoint!r} is not a file of {run!r}")
-        if not path.is_file():
-            held = ", ".join(_checkpoints_in(run_dir)) or "none"
-            return refusal(f"no checkpoint {checkpoint!r} in {run!r}; it holds {held}")
+        held = _checkpoints_in(run_dir)
+        if film and checkpoint == ALL_CHECKPOINTS:
+            names = held
+        else:
+            names = [c.strip() for c in checkpoint.split(",")] if film else [checkpoint]
+        paths = []
+        for name in names:
+            path = with_checkpoint_suffix(run_dir / name)
+            if not path.resolve().is_relative_to(run_dir.resolve()):
+                return refusal(f"checkpoint {name!r} is not a file of {run!r}")
+            if not path.is_file():
+                return refusal(
+                    f"no checkpoint {name!r} in {run!r}; it holds "
+                    f"{', '.join(held) or 'none'}"
+                )
+            paths.append(path)
         artifacts = index_project(project).artifacts
-        tracking = _tracking_play(project, artifacts, run_dir, path)
-        if tracking is not None:
-            return tracking
+        if len(paths) == 1:
+            tracking = _tracking_play(project, artifacts, run_dir, paths[0])
+            if tracking is not None:
+                return tracking
         robot = _walk_of_run(artifacts, run_dir)
         if robot is None:
             return refusal(f"run {run!r} names no walk")
+        if film:
+            if scene is not None:
+                return refusal(
+                    "a film draws the walk's flat floor; a captured scene is not filmed"
+                )
+            return Actions(JobManager(_jobs_root)).film_walk(
+                [str(p) for p in paths], robot=robot, project=str(project.root)
+            )
         return Actions(JobManager(_jobs_root)).play_walk(
-            str(path),
+            str(paths[0]),
             robot=robot,
             envs=envs,
             project=str(project.root),
@@ -4239,9 +4265,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "uses its task's pushes and lag. Job."
     )(evaluate_walk)
     server.tool(
-        description="Open an experiment's checkpoint in mjlab's viewer (viser or "
-        "native), streamed into the Studio's Simulator; a tracking run plays its "
-        "clip once, filmed. A job."
+        description="Play a checkpoint in mjlab's viewer (viser, native) and the "
+        "Studio; viewer film: a video (checkpoint: comma-separated or all). "
+        "Tracking films its clip. Job."
     )(play_walk)
     server.tool(
         description="See the reward before training: roll the declared walk for "

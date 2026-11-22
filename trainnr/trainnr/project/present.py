@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import subprocess
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -369,9 +370,10 @@ FRAMES_FPS = 15
 FRAMES_WIDTH = 640
 
 
-def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
-    import rerun as rr  # noqa: PLC0415
-
+@contextlib.contextmanager
+def decoded_frames(video: Path) -> Iterator[list[Path]]:
+    """The video's frames as JPEGs ffmpeg decoded at `FRAMES_FPS`, at most
+    `FRAMES_WIDTH` wide, gone when the block ends."""
     from trainnr.video.footage import tool  # noqa: PLC0415
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -392,7 +394,14 @@ def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
             timeout=600,
             check=True,
         )
-        for i, frame in enumerate(sorted(Path(tmp).glob("*.jpg"))):
+        yield sorted(Path(tmp).glob("*.jpg"))
+
+
+def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
+    import rerun as rr  # noqa: PLC0415
+
+    with decoded_frames(video) as frames:
+        for i, frame in enumerate(frames):
             rr_.set_time("video", duration=i / FRAMES_FPS)
             rr_.log(entity, rr.EncodedImage(path=frame))
     return f"frames at {FRAMES_FPS} fps"
@@ -628,7 +637,7 @@ def _present_rl_run(
                         continue
                     rr_.set_time(COL_ITERATION, sequence=int(row[it]))
                     rr_.log(path, rr.Scalars(float(row[c])))
-        stills = _log_stills(folder, rr_, root)
+        stills = _log_films(folder, rr_, root) or _log_stills(folder, rr_, root)
         identity = folder / IDENTITY_FILE
         facts = {k: v for k, v in record.items() if k not in ("columns", "curve")}
         text = json.dumps(facts, indent=1)
@@ -673,6 +682,35 @@ def _present_rl_run(
 
 
 STILLS_DIR, STILLS_FILE = "stills", "stills.json"  # walk_stills writes them
+
+
+PLAY_FILMS = "play-*/play.mp4"  # play_walk's films, one per checkpoint (#137)
+
+
+def _log_films(folder: Path, rr_: rr.RecordingStream, root: str) -> str | None:
+    """A run's checkpoint films one after another on the `video` timeline,
+    each frame also at its checkpoint's iteration, so scrubbing the reward
+    curve shows that checkpoint walking. The entity path, or None when the
+    run has no films."""
+    import rerun as rr  # noqa: PLC0415
+
+    films = sorted(
+        (int(m.group(1)), f)
+        for f in folder.glob(PLAY_FILMS)
+        if (m := re.search(r"_(\d+)$", f.parent.name))
+    )
+    if not films:
+        return None
+    path, start = f"{root}/checkpoint", 0.0
+    for iteration, film in films:
+        with decoded_frames(film) as frames:
+            for i, frame in enumerate(frames):
+                rr_.set_time("video", duration=start + i / FRAMES_FPS)
+                rr_.set_time(COL_ITERATION, sequence=iteration)
+                rr_.log(path, rr.EncodedImage(path=frame))
+            start += len(frames) / FRAMES_FPS
+    rr_.reset_time()
+    return path
 
 
 def _log_stills(folder: Path, rr_: rr.RecordingStream, root: str) -> str | None:

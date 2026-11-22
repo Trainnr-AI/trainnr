@@ -157,10 +157,24 @@ create_task(family="legged-walk", name="my-walk",
                       "pinned_joints": [".*head.*"]})
 check_task("my-walk")                                   # builds and learns
 train_walk(task="my-walk", recipe="full")               # hours on a GPU
+play_walk(experiment=..., checkpoint="all", viewer="film")  # a video per checkpoint
 evaluate_walk(checkpoint="<experiment>")                # paired trials, intervals
 export_deployment(experiment=..., checkpoint=..., name=...)
 gate_deployment(deployment=...)                         # plain MuJoCo, every tick
 ```
+
+`viewer="film"` films without a window: each checkpoint (one, several
+comma-separated, or `all`) walks one world from the same seed under one
+held command, forward at the top of the task's range, for 10 s or until
+it falls, drawn from the chase camera at the control rate. Each lands
+beside the run as `play-model_N/play.mp4` with `play.json` (the command,
+the seconds walked, whether and when it fell, the distance covered);
+several are joined in iteration order as `film.mp4`, the iteration on
+the picture, and the run's page in the Studio plays them: on the
+iteration timeline each checkpoint's film, on the `video` timeline the
+whole run. One world and one seed: a look, not an evaluation. The
+module, `trainnr_mjlab.walk_film`, also takes `--command`, `--seconds`
+and `--seed`.
 
 Other settings: `reset_z` (the trunk's spread above the stand pose at
 reset), `lin_vel_x`, `lin_vel_y`, `ang_vel_z` (the commands, microduck's by
