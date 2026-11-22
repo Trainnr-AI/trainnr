@@ -23,10 +23,11 @@ record's numbers, command and artifacts stand on their own.
 `projects/…` paths are local project directories, untracked by
 design; where a copy ships it is named first.
 
-## Index (66 records, newest first)
+## Index (67 records, newest first)
 
 | record | date | claim |
 |---|---|---|
+| [g1-court-dance-gated-2026-11-23](#g1-court-dance-gated-2026-11-23) | 2026-11-23 | The lag-trained court-dance tracking policy, exported for deployment (mjlab's tracking ONNX, its reference… |
 | [servo-bench-synthetic-scs0009-2026-11-22](#servo-bench-synthetic-scs0009-2026-11-22) | 2026-11-22 | The servo-bench identification method recovers a synthetic SCS0009-class servo from a 12 s bench recording… |
 | [nano-limits-match-firmware-2026-11-22](#nano-limits-match-firmware-2026-11-22) | 2026-11-22 | Microduck Nano's four firmware limits over several joints (head interlock, knee and ankle, a hip collision… |
 | [g1-court-dance-tracked-2026-11-17](#g1-court-dance-tracked-2026-11-17) | 2026-11-17 | A Unitree G1 trained in mjlab's tracking task on a reference made from a 22-second stock dance video… |
@@ -93,6 +94,74 @@ design; where a copy ships it is named first.
 | [multiplication-basin-2026-08-31](#multiplication-basin-2026-08-31) | 2026-08-31 | Open-loop replay of a kept kitting episode from a jittered start survives inside a measured basin: 9/9 and… |
 | [t5-first-funnel-2026-08-27](#t5-first-funnel-2026-08-27) | 2026-08-27 | The T5 chain's first certificate, a 600-step ACT on four demonstrations: 0/4 on four paired starts, CP95 [0,… |
 | [audit-newton-solvermujoco-roundtrip-2026-08-27](#audit-newton-solvermujoco-roundtrip-2026-08-27) | 2026-08-27 | Newton's SolverMuJoCo import of a MuJoCo model drops sensors, keyframes and visual geoms, rewrites the root… |
+
+## g1-court-dance-gated-2026-11-23
+
+**The lag-trained court-dance tracking policy, exported for deployment (mjlab's tracking ONNX, its reference and a manifest) and driven by the manifest alone in plain MuJoCo, danced to the clip's end in 32 of 40 gate trials under its evaluation's conditions (pushes, observation noise, start-up draws, a per-trial lag in [0, 20] ms), exact 95% interval [0.64, 0.91], against 30 of 40, [0.59, 0.87], in mjlab: the gate passed (its rate within 0.10 of the evaluation's, whose lower bound is above zero). All 19 trials with no lag succeeded; the 8 failures were all one 20 ms tick late, 7 on an end effector's height and 1 on the torso's. Before the gate, the plain runtime's observation terms were checked against mjlab's own on mjlab's rollout states: every term within 2e-6 over 300 ticks, and the tracking bounds fired on the same tick, on the same bound, as mjlab's terminations on two falls.**
+
+- date: 2026-11-23 · commit: `1ad1c3d + the feat/tracking-export branch`
+- instrument: `WSL2 (Linux 6.18.58.1-microsoft-standard-WSL2), CPU; the export in mjlab-1.6.0+mujoco-3.13.0+warp-1.17.0+cpu (trainnr_mjlab.tracking_export), the gate in mujoco-3.11.0 + onnxruntime (trainnr.deploy.tracking through trainnr.deploy.gate)`
+- command: `trainnr call export_deployment {"experiment": "court-dance-g1-lag", "checkpoint": "model_1999", "name": "court-dance-g1"} trainnr call gate_deployment {"deployment": "court-dance-g1", "trials": 40}`
+- protocol: Export: export_deployment's tracking route, the evaluation above cited. Gate: gate_deployment on the plain MuJoCo runtime, 40 trials, seed 1000, each trial's draw from (seed, trial): the start drawn around the clip's first frame as training drew it, the encoder bias, the torso's centre of mass and the feet's shared friction drawn once, uniform observation noise per term, pushes at training's intervals and velocities, a lag of 0 or 1 control ticks; the conditions taken from the cited evaluation's protocol. A trial succeeds when the clip plays to its end with none of mjlab's three tracking bounds broken. Parity: mjlab's play-mode rollout of the same checkpoint on one world (no noise, no pushes), its states written into the plain runtime tick by tick and every actor term compared; the bounds compared on falls under zero and random actions with mjlab's auto-reset off.
+- inputs:
+  - policy: court-dance-g1-lag model_1999 (record g1-court-dance-lag-trained-2026-11-17)
+  - reference: court-dance-g1@99743ed23aee, 1,095 frames at 50 fps (21.9 s)
+  - evaluation: court-dance-g1-lag-model_1999-tracking-push-lag20-cuda-seed1000-n40-pdb2315@b21e063d303a: 30 of 40, [0.588, 0.8731]
+- outcome:
+  - gate:
+    - successes: 32
+    - trials: 40
+    - ci95: 0.6435, 0.9095
+    - verdict:
+      - passed: True
+      - agrees: True
+      - demonstrated: True
+      - tolerance: 0.1
+      - rule: the gate's success rate is at least the evaluation's minus the tolerance, and the evaluation's lower bound is above zero
+      - gate_rate: 0.8
+      - certificate_rate: 0.75
+      - certificate_lower: 0.588
+  - by_lag:
+    - 0_ms:
+      - successes: 19
+      - trials: 19
+      - failed_at_steps: 
+      - bounds: 
+    - 20_ms:
+      - successes: 13
+      - trials: 21
+      - failed_at_steps: 516, 50, 97, 292, 70, 453, 90, 74
+      - bounds: end effector height, end effector height, end effector height, end effector height, end effector height, end effector height, anchor height, end effector height
+  - evaluation_by_lag:
+    - 0_ms:
+      - successes: 15
+      - trials: 19
+    - 20_ms:
+      - successes: 15
+      - trials: 21
+  - parity_with_mjlab:
+    - ticks: 300
+    - worst_abs_difference_by_term:
+      - command: 0.0
+      - motion_anchor_pos_b: 2.98e-07
+      - motion_anchor_ori_b: 3.43e-07
+      - base_lin_vel: 1.79e-07
+      - base_ang_vel: 1.91e-06
+      - joint_pos: 1.19e-07
+      - joint_vel: 0.0
+      - actions: 0.0
+    - onnx_action_vs_torch_actor: 3.81e-06
+    - bounds:
+      - zero_actions: mjlab ee_body_pos at tick 9, the plain runtime end effector height at tick 9
+      - random_actions_x3: mjlab ee_body_pos at tick 19, the plain runtime end effector height at tick 19
+    - found_on_the_way: the reference's clock leads the control tick by one (mjlab advances it once at reset, from the start pose at frame 0), and the actor's joint_pos term reads the encoder-biased angles; before both were carried, the command term differed by up to 3.8 and joint_pos by 0.0098
+- artifacts:
+  - deploy/court-dance-g1: in the g1-dance test project: policy.onnx (mjlab's tracking export, inputs obs and time_step), motion.npz, deploy.json (trainnr-deploy/1 with its tracking section), scene.xml, assets/ (the G1's meshes from mjlab's asset zoo), gate.json, the gate's saved stream and poses
+- caveats:
+  - The gate's trials are not paired with the evaluation's: both draw their lags from seed 1000 but by different rules (the gate per trial, the evaluation as one vector), and the simulators draw pushes and noise their own ways. The comparison is of rates, within the stated tolerance.
+  - The gate runs core trainnr's MuJoCo (3.11), the evaluation mjlab's MuJoCo Warp (3.13): two simulators, and the agreement is within that difference, not despite it.
+  - With no lag the gate succeeded in 19 of 19 where the evaluation had 15 of 19; whether plain MuJoCo is kinder to this policy or the draws differed is not separated here.
+  - Simulation only: no G1 to deploy to (docs/86 §9). The ONNX is mjlab's own format, which BeyondMimic's motion-tracking controller runs on a G1; that controller was not run.
 
 ## servo-bench-synthetic-scs0009-2026-11-22
 

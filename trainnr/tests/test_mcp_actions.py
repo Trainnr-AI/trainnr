@@ -591,6 +591,23 @@ class ThePlayDoor(unittest.TestCase):
             self.assertEqual(argv[argv.index("--robot") + 1], "legged")
             self.assertEqual(argv[argv.index("--project") + 1], "/p")
 
+    def test_export_tracking_names_the_reference_and_the_lag(self) -> None:
+        with harness() as (actions, spawner):
+            actions.export_tracking(
+                "/p/runs/r/model_9.pt",
+                name="dance",
+                project="/p",
+                reference="/p/recordings/clip",
+                certificate="ev@1",
+                lag_ms=20.0,
+            )
+            [(argv, _cwd)] = spawner.calls
+            argv = argv[argv.index("trainnr_mjlab.tracking_export") :]
+            self.assertEqual(argv[1], "/p/runs/r/model_9.pt")
+            self.assertEqual(argv[argv.index("--reference") + 1], "/p/recordings/clip")
+            self.assertEqual(argv[argv.index("--lag-ms") + 1], "20")
+            self.assertEqual(argv[argv.index("--certificate") + 1], "ev@1")
+
 
 class TheWslRule(unittest.TestCase):
     """The env file is a WSL file: on any other Linux it would point the

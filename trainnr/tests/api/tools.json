@@ -665,7 +665,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Export a trained walk policy: ONNX with normalization folded in, a manifest of joint orders, gains, observations and control rate, and the scene as MJCF. Cites the checkpoint's evaluation. A job.",
+    "description": "Export a trained walk or tracking policy: ONNX (normalization folded in), a manifest (joint orders, gains, observations, rate), the scene as MJCF. Cites the checkpoint's evaluation. A job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

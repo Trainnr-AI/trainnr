@@ -4,7 +4,7 @@ training environment; validated here so a manifest a hand edited, or
 one from an older exporter, is refused by name before a robot moves.
 
 The manifest's sections are typed (`Control`, `Joints`, `Action`,
-`Observation`, `Commands`, `Termination`, `UnitreeFacts`); the raw
+`Observation`, `Commands`, `Tracking`, `Termination`, `UnitreeFacts`); the raw
 mapping stays on `Manifest.raw` for the provenance strings and the
 index. The key names are declared once here and the exporter writes
 them from here.
@@ -60,6 +60,9 @@ class Key:
     # The robot's limits over several joints the policy trained against
     # (#121): the file beside the policy, its stamp, the training mode.
     LIMITS = "limits"
+    # A tracking policy's reference motion and its bounds (docs/87 §8): in
+    # place of `commands`, what it follows and when it has failed.
+    TRACKING = "tracking"
 
 
 # Every key a manifest may carry; one it must.
@@ -75,8 +78,10 @@ REQUIRED_KEYS = (
     Key.OBSERVATIONS,
     Key.ONNX,
     Key.SCENE,
-    Key.COMMANDS,
-)
+)  # and `commands` (a walk) or `tracking` (a tracking policy), one of them
+# The ONNX block's key naming a second input, the reference frame a tracking
+# policy reads at this tick (mjlab's tracking export: `obs`, `time_step`).
+TIME_STEP_INPUT = "time_step_input"
 # An observation term's keys; the runtime never guesses at an extra one.
 TERM_KEYS = frozenset(
     {"name", "width", "source", "params", "scale", "clip", "history_length"}
@@ -103,6 +108,12 @@ SOURCE_JOINT_VEL_REL = "joint_vel_rel"
 SOURCE_LAST_ACTION = "last_action"
 SOURCE_COMMAND_TWIST = "command twist"
 SOURCE_GAIT_PHASE = "gait_phase"
+# A tracking policy's (mjlab's tracking task, docs/87 §8): the reference's
+# joint positions and velocities at this tick, and the reference torso's
+# position and orientation in the robot torso's frame.
+SOURCE_MOTION_COMMAND = "command motion"
+SOURCE_MOTION_ANCHOR_POS = "motion_anchor_pos_b"
+SOURCE_MOTION_ANCHOR_ORI = "motion_anchor_ori_b"
 KNOWN_SOURCES = (
     SOURCE_IMU_LIN_VEL,
     SOURCE_IMU_ANG_VEL,
@@ -112,6 +123,9 @@ KNOWN_SOURCES = (
     SOURCE_LAST_ACTION,
     SOURCE_COMMAND_TWIST,
     SOURCE_GAIT_PHASE,
+    SOURCE_MOTION_COMMAND,
+    SOURCE_MOTION_ANCHOR_POS,
+    SOURCE_MOTION_ANCHOR_ORI,
 )
 
 
@@ -292,6 +306,64 @@ class Termination:
 
 
 @dataclass(frozen=True)
+class Tracking:
+    """A tracking policy's reference and bounds (docs/87 §8). `motion` is
+    the reference beside the policy (`motion.npz`: joint positions and
+    velocities in the policy's joint order, and the poses and velocities
+    of `body_names` in the world, one row per control tick); `anchor_body`
+    is the torso the observations are taken against. The reference's clock
+    leads the control tick by one: at tick k the policy reads frame k + 1
+    and the bounds are checked against it (mjlab advances the clock once
+    at reset, from the start pose at frame 0). A trial fails when
+    the anchor's height is off by more than `anchor_z_m`, its projected
+    gravity's z by more than `anchor_tilt`, or an end effector's height,
+    against the reference carried to the robot's position and heading, by
+    more than `end_effector_z_m` (mjlab's tracking bounds); it succeeds
+    when the clip plays to its end. `start`, `pushes`, `noise` and
+    `lag_ms` are the training conditions an evaluation judges under."""
+
+    motion: str
+    frames: int
+    anchor_body: str
+    body_names: tuple[str, ...]
+    end_effectors: tuple[str, ...]
+    anchor_z_m: float
+    anchor_tilt: float
+    end_effector_z_m: float
+    start: dict[str, Any]
+    pushes: dict[str, Any] | None
+    noise: dict[str, tuple[float, float]]
+    lag_ms: float
+    criterion: str
+    # training's start-up draws an evaluation keeps: encoder bias, a body's
+    # centre of mass, the feet's friction (docs/87 §8)
+    randomization: dict[str, Any]
+
+    @classmethod
+    def of(cls, raw: dict[str, Any]) -> Tracking:
+        bounds = raw["terminations"]
+        return cls(
+            motion=str(raw["motion"]),
+            frames=int(raw["frames"]),
+            anchor_body=str(raw["anchor_body"]),
+            body_names=tuple(raw["body_names"]),
+            end_effectors=tuple(bounds["end_effectors"]),
+            anchor_z_m=float(bounds["anchor_z_m"]),
+            anchor_tilt=float(bounds["anchor_tilt"]),
+            end_effector_z_m=float(bounds["end_effector_z_m"]),
+            start=dict(raw.get("start") or {}),
+            pushes=dict(raw["pushes"]) if raw.get("pushes") else None,
+            noise={
+                k: (float(v[0]), float(v[1]))
+                for k, v in (raw.get("noise") or {}).items()
+            },
+            lag_ms=float(raw.get("lag_ms", 0.0)),
+            criterion=str(raw.get("criterion", "")),
+            randomization=dict(raw.get("randomization") or {}),
+        )
+
+
+@dataclass(frozen=True)
 class UnitreeFacts:
     """What Unitree's own simulator and controller need to run this robot
     (their `unitree_rl_mjlab` checkout): the robot's name in their
@@ -339,6 +411,12 @@ class Manifest:
         return Commands.of(self.raw[Key.COMMANDS], where=f"{self.root}: commands")
 
     @property
+    def tracking(self) -> Tracking | None:
+        """The reference and bounds of a tracking policy; None for a walk."""
+        raw = self.raw.get(Key.TRACKING)
+        return Tracking.of(raw) if raw else None
+
+    @property
     def termination(self) -> Termination:
         return Termination.of(self.raw.get(Key.TERMINATION))
 
@@ -372,7 +450,7 @@ class Manifest:
         return self.root / self.raw[Key.SCENE]["file"]
 
 
-def load_manifest(deployment_dir: Path) -> Manifest:
+def load_manifest(deployment_dir: Path) -> Manifest:  # noqa: PLR0912 - one refusal each
     """Read and validate a deployment's manifest; refuses by name."""
     root = Path(deployment_dir)
     path = root / MANIFEST_FILE
@@ -406,6 +484,10 @@ def load_manifest(deployment_dir: Path) -> Manifest:
             f"known sources are {', '.join(KNOWN_SOURCES)}"
         )
     carried = [raw[Key.LIMITS]["file"]] if raw.get(Key.LIMITS) else []
+    if raw.get(Key.TRACKING):
+        carried.append(raw[Key.TRACKING]["motion"])
+    elif Key.COMMANDS not in raw:
+        raise ValueError(f"{path}: missing {Key.COMMANDS!r} (or {Key.TRACKING!r})")
     for f in (raw[Key.ONNX]["file"], raw[Key.SCENE]["file"], *carried):
         if not (root / f).is_file():
             raise FileNotFoundError(f"{root}: missing {f}")
@@ -416,7 +498,8 @@ def load_manifest(deployment_dir: Path) -> Manifest:
             f"{raw[Key.ONNX]['input_width']}"
         )
     manifest = Manifest(raw=raw, root=root)
-    _ = manifest.commands  # the twist ranges are required, by name
+    if manifest.tracking is None:
+        _ = manifest.commands  # a walk's twist ranges are required, by name
     return manifest
 
 

@@ -325,7 +325,7 @@ The first three, NVIDIA's stack by default:
    tracking task as a trainnr job, live in the Studio); GEM-X's tilted
    floor levelled and its jitter smoothed on the way. The tracking task
    family with its success criterion and its evaluation came 2026-11-17.
-   Left: the export. On 2026-11-17 the court dance trained (16,384 worlds,
+   On 2026-11-17 the court dance trained (16,384 worlds,
    2,000 iterations, about 2 h) and played through its 21.9 s without
    falling ([record](findings/g1-court-dance-tracked-2026-11-17.json));
    judged on 40 paired trials with pushes and up to 20 ms of lag it
@@ -336,7 +336,13 @@ The first three, NVIDIA's stack by default:
    `train_tracking` now does by default; retrained with it, the policy
    succeeded in 30 of 40
    ([record](findings/g1-court-dance-lag-trained-2026-11-17.json)). Measured
-   as a record in `docs/findings/` before any claim.
+   as a record in `docs/findings/` before any claim. The export came
+   2026-11-23: `export_deployment` writes mjlab's tracking ONNX, the
+   reference and a manifest with a tracking section (docs/87 §8), and the
+   gate drives it in plain MuJoCo under the evaluation's conditions: 32 of
+   40 against the evaluation's 30 of 40, passed
+   ([record](findings/g1-court-dance-gated-2026-11-23.json)). Phase 3 is
+   built, in simulation; no G1 has run it.
 4. **Manipulation on the SO-101**: hand pose, the retarget feed, success filtering,
    `export_dataset` with the GR00T flavour, a GR00T N1.7 fine-tune on
    the 24 GB card (§5.5).

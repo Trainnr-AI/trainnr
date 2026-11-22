@@ -334,6 +334,10 @@ class TheSourcesAreOneTable(unittest.TestCase):
             register_source,
         )
 
+        # a tracking policy's sources register from deploy/tracking.py, which
+        # the runtime imports for a tracking manifest (docs/87 §8)
+        import trainnr.deploy.tracking  # noqa: F401, PLC0415
+
         named = {s for s in KNOWN_SOURCES if not s.startswith(SENSOR_PREFIX)}
         self.assertEqual(named, set(SOURCES))
         with self.assertRaisesRegex(ValueError, "already registered"):
