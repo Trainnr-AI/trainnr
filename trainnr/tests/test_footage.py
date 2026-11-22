@@ -164,6 +164,43 @@ class FootageInTheViewer(unittest.TestCase):
         self.assertEqual(view, "first frame")
         self.assertIn("could not play it", record)
 
+    def test_a_runs_checkpoint_films_play_in_iteration_order(self) -> None:
+        """play_walk's films on the run's page (#137): one after another on
+        the video timeline, each frame at its checkpoint's iteration too,
+        iteration 250 after iteration 0 though its name sorts first."""
+        from trainnr.project import present  # noqa: PLC0415
+
+        run = self.tmp / "run"
+        for n in (250, 0):
+            (run / f"play-model_{n}").mkdir(parents=True)
+            clip(run / f"play-model_{n}" / "play.mp4", codec="libx264")
+        (run / "play-notes").mkdir()  # not a checkpoint's film
+
+        class Stream:
+            def __init__(self) -> None:
+                self.now: dict[str, float] = {}
+                self.rows: list[tuple[float, float]] = []
+
+            def set_time(self, timeline: str, **at: float) -> None:
+                self.now[timeline] = next(iter(at.values()))
+
+            def log(self, _path: str, _image: object) -> None:
+                self.rows.append((self.now["video"], self.now["iteration"]))
+
+            def reset_time(self) -> None:
+                self.now = {}
+
+        stream = Stream()
+        path = present._log_films(run, stream, "policy")  # type: ignore[arg-type]
+        self.assertEqual(path, "policy/checkpoint")
+        iterations = [it for _, it in stream.rows]
+        self.assertEqual(iterations, sorted(iterations))
+        self.assertEqual(set(iterations), {0, 250})
+        times = [t for t, _ in stream.rows]
+        self.assertEqual(times, sorted(times))
+        self.assertEqual(stream.now, {})
+        self.assertIsNone(present._log_films(self.tmp, stream, "policy"))  # type: ignore[arg-type]
+
 
 if __name__ == "__main__":
     unittest.main()

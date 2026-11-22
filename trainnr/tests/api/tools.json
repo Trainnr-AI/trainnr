@@ -1397,7 +1397,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Open an experiment's checkpoint in mjlab's viewer (viser or native), streamed into the Studio's Simulator; a tracking run plays its clip once, filmed. A job.",
+    "description": "Play a checkpoint in mjlab's viewer (viser, native) and the Studio; viewer film: a video (checkpoint: comma-separated or all). Tracking films its clip. Job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

@@ -195,6 +195,44 @@ class TheWalkDoors(unittest.TestCase):
             self.assertEqual(argv[argv.index("-m") + 1], "trainnr_mjlab.walk_verdict")
             self.assertEqual(argv[argv.index("--robot") + 1], "microduck")
 
+    def test_play_walk_films_one_several_or_every_checkpoint(self) -> None:
+        """viewer film: the checkpoints named (comma-separated) or all of
+        them, oldest first, to the film job; any one missing is refused
+        naming what the run holds, before a job spawns (#137)."""
+        with project_with("microduck-walk") as (project, spawned):
+            run = project.root / "runs" / "x"
+            run.mkdir(parents=True)
+            (run / "identity.json").write_text(
+                json.dumps({"task": "trainnr/microduck-walk"})
+            )
+            for n in (500, 0, 250):
+                (run / f"model_{n}.pt").write_bytes(b"x")
+
+            def films(argv: list[str]) -> list[str]:
+                start = argv.index("trainnr_mjlab.walk_film") + 1
+                return [Path(a).name for a in argv[start : argv.index("--robot")]]
+
+            out = server.play_walk("x", "model_0, model_9", viewer="film")
+            self.assertEqual(out["status"], "refused")
+            self.assertIn("no checkpoint 'model_9'", out["reason"])
+            self.assertIn("model_0.pt, model_250.pt, model_500.pt", out["reason"])
+            out = server.play_walk("x", "all", viewer="film", scene="room")
+            self.assertEqual(out["status"], "refused")
+            self.assertIn("captured scene is not filmed", out["reason"])
+            out = server.play_walk("x", "model_0,model_0.pt", viewer="viser")
+            self.assertEqual(out["status"], "refused")  # several only on film
+            self.assertEqual(spawned.calls, [])
+            server.play_walk("x", "all", viewer="film")
+            server.play_walk("x", "model_250.pt", viewer="film")
+            first, second = spawned.calls
+            self.assertEqual(
+                films(first), ["model_0.pt", "model_250.pt", "model_500.pt"]
+            )
+            self.assertEqual(films(second), ["model_250.pt"])
+            film = first[first.index("-m") :]  # after uv's own --project
+            self.assertEqual(film[film.index("--robot") + 1], "microduck")
+            self.assertEqual(film[film.index("--project") + 1], str(project.root))
+
     def test_preview_rewards_reads_the_declared_walk(self) -> None:
         with project_with("go2-walk") as (project, spawned):
             server.preview_rewards("go2-flat", controller="stand")

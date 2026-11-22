@@ -587,6 +587,23 @@ class Actions:
             argv += ["--scene", scene]
         return self.jobs.start("play-walk", argv, TRAINNR_MJLAB_DIR)
 
+    def film_walk(
+        self, checkpoints: list[str], *, robot: str | None, project: str
+    ) -> JobHandle:
+        """Walk checkpoints filmed offscreen, one held command and seed,
+        each beside the run and several joined (trainnr_mjlab.walk_film)."""
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.walk_film",
+            *checkpoints,
+            "--robot",
+            require_walk_robot(robot),
+            "--project",
+            project,
+        ]
+        return self.jobs.start("film-walk", argv, TRAINNR_MJLAB_DIR)
+
     def play_tracking(
         self, checkpoint: str, *, reference: str, footage: str, out: str, project: str
     ) -> JobHandle:

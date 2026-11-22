@@ -576,6 +576,21 @@ class ThePlayDoor(unittest.TestCase):
             self.assertEqual(argv[argv.index("--envs") + 1], "4")
             self.assertEqual(argv[argv.index("--project") + 1], "/p")
 
+    def test_film_walk_films_the_checkpoints_in_the_walk_venv(self) -> None:
+        with harness() as (actions, spawner):
+            actions.film_walk(
+                ["/p/runs/r/model_0.pt", "/p/runs/r/model_9.pt"],
+                robot="legged",
+                project="/p",
+            )
+            [(argv, _cwd)] = spawner.calls
+            argv = argv[argv.index("trainnr_mjlab.walk_film") :]
+            self.assertEqual(
+                argv[1:3], ["/p/runs/r/model_0.pt", "/p/runs/r/model_9.pt"]
+            )
+            self.assertEqual(argv[argv.index("--robot") + 1], "legged")
+            self.assertEqual(argv[argv.index("--project") + 1], "/p")
+
 
 class TheWslRule(unittest.TestCase):
     """The env file is a WSL file: on any other Linux it would point the
