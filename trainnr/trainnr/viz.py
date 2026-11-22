@@ -31,6 +31,29 @@ MIRROR_HZ = 20
 # feed and recorder connects to (the Rust shell binds the same port;
 # crates/trainnr-studio/src/main.rs stays a documented mirror).
 STUDIO_ADDRESS = "rerun+http://127.0.0.1:9876/proxy"
+# A Studio's viewer server binds this when set (crates/trainnr-studio,
+# GRPC_BIND_ENV): `launch_studio` gives a second Studio on the machine a
+# free port this way, and every feed it starts inherits it (#124).
+VIEWER_BIND_ENV = "TRAINNR_VIEWER_BIND"
+
+
+def studio_address() -> str:
+    """The address a feed streams to, read at call time: the port
+    `$TRAINNR_VIEWER_BIND` names (on this machine; a bind on every
+    interface is reached on loopback), else `STUDIO_ADDRESS`."""
+    import os  # noqa: PLC0415
+
+    bind = os.environ.get(VIEWER_BIND_ENV, "")
+    _, _, port = bind.rpartition(":")
+    if not port.isdigit():
+        return STUDIO_ADDRESS
+    host = bind.rpartition(":")[0].strip("[]")
+    if host in ("", "0.0.0.0", "::"):
+        host = "127.0.0.1"
+    host = f"[{host}]" if ":" in host else host
+    return f"rerun+http://{host}:{port}/proxy"
+
+
 # A training run's stream, named `<prefix><agent>`: the Studio adds it to
 # its sources without taking the view someone is reading (issue #105);
 # crates/trainnr-studio/src/main.rs mirrors it (test_studio_mirrors).
@@ -64,7 +87,7 @@ def _host_port(address: str) -> tuple[str, int]:
     return parts.hostname, parts.port
 
 
-STUDIO_HOST, STUDIO_PORT = _host_port(STUDIO_ADDRESS)
+STUDIO_HOST, STUDIO_PORT = _host_port(STUDIO_ADDRESS)  # the default Studio's
 TERM_EXIT_STATUS = 128 + 15  # a process ended by SIGTERM, as a shell reports it
 TERM_FLUSH_S = 2.0  # how long a TERMed feed waits for its stream to close
 
@@ -102,7 +125,7 @@ LISTEN_PROBE_S = 0.5
 
 
 def studio_listening(
-    address: str = STUDIO_ADDRESS, timeout_s: float = LISTEN_PROBE_S
+    address: str | None = None, timeout_s: float = LISTEN_PROBE_S
 ) -> bool:
     """Whether something accepts connections at the Studio's address now.
     A feed toward a viewer that never answers keeps every chunk in a
@@ -113,6 +136,7 @@ def studio_listening(
     chosen, not after."""
     import socket  # noqa: PLC0415
 
+    address = address or studio_address()
     try:
         with socket.create_connection(_host_port(address), timeout=timeout_s):
             return True
@@ -123,7 +147,7 @@ def studio_listening(
 def sinks(
     rr: Any,
     *,
-    address: str = STUDIO_ADDRESS,
+    address: str | None = None,
     file: Path | str | None = None,
     listening: bool | None = None,
     wanted: bool | None = None,
@@ -140,6 +164,7 @@ def sinks(
     switched off. `wanted` overrides the environment knob: a file the
     operator named on a command line is written whatever the knob says."""
     saving = viewer_file_wanted() if wanted is None else wanted
+    address = address or studio_address()
     heard = studio_listening(address) if listening is None else listening
     out: list[Any] = []
     if heard:
@@ -154,7 +179,7 @@ def sinks(
 def open_stream(  # noqa: PLR0913 - the stream's own knobs, each named
     app_id: str,
     *,
-    address: str = STUDIO_ADDRESS,
+    address: str | None = None,
     file: Path | str | None = None,
     recording_id: str | None = None,
     on_term: bool = True,
@@ -175,6 +200,7 @@ def open_stream(  # noqa: PLR0913 - the stream's own knobs, each named
     kwargs: dict[str, Any] = (
         {"recording_id": recording_id} if recording_id is not None else {}
     )
+    address = address or studio_address()
     chosen = sinks(rr, address=address, file=file)
     kinds = [type(sink).__name__ for sink in chosen]
     if not chosen:
