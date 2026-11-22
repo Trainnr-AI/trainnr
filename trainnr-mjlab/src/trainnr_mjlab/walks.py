@@ -174,6 +174,14 @@ def adopt_legged_of(robot: str, checkpoint: Path) -> None:
     adopt_legged(recorded.get(Identity.LEGGED))
 
 
+def bundle_of(robot: str) -> str:
+    """The bundle a walk is drawn with: the robot's own name, or for the
+    legged walk the adopted spec's robot (the Studio's mirror, a still)."""
+    if robot != LEGGED:
+        return robot
+    return str(adopted_legged()["robot"]).split("@", 1)[0]
+
+
 def adopted_legged() -> dict[str, Any]:
     """The adopted spec, refused by name when none was adopted."""
     if not _LEGGED_SPEC:

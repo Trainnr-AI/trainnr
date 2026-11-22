@@ -68,6 +68,16 @@ class TheLeggedRobot(unittest.TestCase):
             cfg.actions["joint_pos"].actuator_names, ("^(?!^neck_yaw$).*",)
         )
 
+    def test_the_mirror_draws_the_runs_own_robot(self) -> None:
+        """The Studio's Simulator draws a walk by its bundle: for the legged
+        walk, the robot its run recorded, never the name `legged`."""
+        from trainnr_mjlab.walks import LEGGED, adopt_legged, bundle_of  # noqa: PLC0415
+
+        self.assertEqual(bundle_of("go2"), "go2")
+        adopt_legged({"robot": "nano@0123456789ab"})
+        self.addCleanup(adopt_legged, None)
+        self.assertEqual(bundle_of(LEGGED), "nano")
+
     def test_a_spec_key_it_does_not_read_is_refused(self) -> None:
         from trainnr_mjlab.legged_walk import legged_robot  # noqa: PLC0415
 
