@@ -102,5 +102,31 @@ class TheLagDraw(unittest.TestCase):
         self.assertIs(cfg.scene.entities[ROBOT_ENTITY].articulation.actuators, before)
 
 
+class TheTrackingDefault(unittest.TestCase):
+    """A tracking run draws a command lag unless told not to: mjlab's own
+    tracking config draws none, and a policy trained without one fell in
+    20 of 21 trials one 20 ms tick late (g1-court-dance-evaluated-2026-11-17)."""
+
+    def test_the_g1_tracking_config_takes_two_ticks_of_lag_by_default(self) -> None:
+        from mjlab.tasks.registry import load_env_cfg  # noqa: PLC0415
+
+        from trainnr_mjlab.lag_dr import with_command_lag  # noqa: PLC0415
+        from trainnr_mjlab.tracking_train import (  # noqa: PLC0415
+            LAG_DR_MS,
+            TASK_ID,
+            TRACKING_DR,
+        )
+
+        self.assertGreaterEqual(LAG_DR_MS, 40.0)  # two 20 ms control ticks
+        cfg = load_env_cfg(TASK_ID)
+        identity = with_command_lag(cfg, {Identity.DR_BASIS: TRACKING_DR}, LAG_DR_MS)
+        lags = {
+            a.delay_max_lag
+            for a in cfg.scene.entities[ROBOT_ENTITY].articulation.actuators
+        }
+        self.assertEqual(lags, {8})  # 40 ms of 5 ms physics steps
+        self.assertIn("command lag 0-40 ms", identity[Identity.LAG_DR])
+
+
 if __name__ == "__main__":
     unittest.main()
