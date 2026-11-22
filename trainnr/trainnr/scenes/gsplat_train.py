@@ -304,10 +304,10 @@ class Narrator:
             return
         import rerun as rr  # noqa: PLC0415
 
-        from trainnr.viz import STUDIO_ADDRESS  # noqa: PLC0415
+        from trainnr.viz import studio_address  # noqa: PLC0415
 
         rr.init(APP_ID, spawn=False)
-        rr.connect_grpc(STUDIO_ADDRESS)
+        rr.connect_grpc(studio_address())
         self.rr = rr
         self.layout()
 

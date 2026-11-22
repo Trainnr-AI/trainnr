@@ -292,10 +292,10 @@ class VerdictFeed:
 
     def __init__(self, run_name: str, file: Path | None = None) -> None:
         import rerun as rr  # noqa: PLC0415 - viz extra
-        from trainnr.viz import STUDIO_ADDRESS, open_stream  # noqa: PLC0415
+        from trainnr.viz import open_stream  # noqa: PLC0415
 
         self._rr: Any = rr
-        open_stream(f"trainnr-verdict-{run_name}", address=STUDIO_ADDRESS, file=file)
+        open_stream(f"trainnr-verdict-{run_name}", file=file)
         self._tick = 0
 
     @classmethod

@@ -87,10 +87,11 @@ if TYPE_CHECKING:
     from trainnr.tasks.tracking import TrackingTask
 
 DETAILS_DIR = "details"
+# /7 (2026-11-18): a robot's keyframes and sites, hinge ranges in degrees;
 # /6 (2026-09-22): a gate's trials in its protocol's shape (a course gate's
 # arrival); /5 (2026-09-12): one gate section per runtime; /4 (2026-09-10):
 # a walk's gate and episode; /3 (2026-09-09): fit records read as written.
-SCHEMA = "trainnr-detail/6"
+SCHEMA = "trainnr-detail/7"
 UNAVAILABLE_KEY = "unavailable"  # the writer failed; the Studio ignores the key
 MAX_ROWS = 400  # a table longer than this is truncated, and says so
 MAX_MARKDOWN = 6000  # a datasheet is a page, not a book
@@ -358,6 +359,13 @@ def _fact(value: Any) -> Any:
 
 
 def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
+    return robot_sections(root, artifact.stamp)
+
+
+def robot_sections(root: Path, stamp: str) -> list[Section]:
+    """A robot's page: its asset census, the importer's audit, joints,
+    keyframes, actuators, bodies, sensors, sites, collision, files and fit
+    records - what the Studio shows and `describe_robot` returns."""
     import mujoco  # noqa: PLC0415
 
     from trainnr.project.previews import (  # noqa: PLC0415
@@ -374,7 +382,7 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             _kv(
                 "Asset",
                 [
-                    ("version", artifact.stamp),
+                    ("version", stamp),
                     ("model file", model_file.name),
                     (
                         "fetched on first use",
@@ -394,7 +402,7 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     overview = _kv(
         "Asset",
         [
-            ("version", artifact.stamp),
+            ("version", stamp),
             ("model file", model_file.name),
             ("bodies", m.nbody - 1),
             ("joints", m.njnt),
@@ -420,7 +428,7 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             [
                 name(obj_joint, j),
                 JOINT_TYPES.get(int(m.jnt_type[j]), str(m.jnt_type[j])),
-                _rng(*m.jnt_range[j]) if m.jnt_limited[j] else "unlimited",
+                _joint_range(m, j),
                 _f(m.dof_damping[m.jnt_dofadr[j]]),
                 _f(m.dof_armature[m.jnt_dofadr[j]]),
                 _f(m.dof_frictionloss[m.jnt_dofadr[j]]),
@@ -428,8 +436,8 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             ]
             for j in range(m.njnt)
         ],
-        note="MuJoCo joint parameters; damping, armature and friction loss are what "
-        "system identification measures.",
+        note="MuJoCo joint parameters, hinge ranges in radians and degrees; damping, "
+        "armature and friction loss are what system identification measures.",
     )
     actuators = _table(
         "Actuators",
@@ -493,6 +501,20 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
             for s in range(m.nsensor)
         ],
     )
+    keyframes = _keyframe_table(m)
+    sites = _table(
+        "Sites",
+        ["site", "body", "position (m)"],
+        [
+            [
+                name(mujoco.mjtObj.mjOBJ_SITE, i),
+                name(obj_body, int(m.site_bodyid[i])),
+                [_f(v) for v in m.site_pos[i]],
+            ]
+            for i in range(m.nsite)
+        ],
+        note="Positions in the body's frame: where a trainer reads an IMU or a foot.",
+    )
     collision = _kv(
         "Collision",
         [
@@ -506,9 +528,11 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
         overview,
         audit,
         joints,
+        *([keyframes] if keyframes else []),
         actuators,
         bodies,
         sensors,
+        sites,
         collision,
         _kv("Files", [(f, "") for f in files]),
     ]
@@ -518,6 +542,9 @@ def _robot(project: Project, root: Path, artifact: Artifact) -> list[Section]:
     limits = _limits_table(root, m)
     if limits is not None:
         sections.insert(sections.index(joints) + 1, limits)
+    revision = _revision_section(root)
+    if revision is not None:
+        sections.insert(1, revision)
     return sections
 
 
@@ -559,6 +586,93 @@ def _limits_table(root: Path, model: Any) -> Section | None:
             "ends an episode on a broken limit unless its task says otherwise, and "
             "the gate fails a trial that breaks one."
         ),
+    )
+
+
+def _revision_section(root: Path) -> Section | None:
+    """A robot onboarded again under its name: the revisions it has had
+    and what changed since the one before (#119); None for a first one."""
+    from trainnr.bundles.hashing import REVISION_FILE  # noqa: PLC0415
+    from trainnr.robot.revisions import revisions  # noqa: PLC0415
+
+    record = read_json(root / REVISION_FILE, missing_ok=True)
+    earlier = revisions(root)
+    if not record and not earlier:
+        return None
+    changed = int(record.get("changed") or 0)
+    shown = list(record.get("changes") or [])
+    return _kv(
+        "Revisions",
+        [
+            ("revisions", len(earlier) + 1),
+            ("replaces", record.get("replaces", "")),
+            *[(f"earlier {i}", r["stamp"]) for i, r in enumerate(earlier, start=1)],
+            (
+                "changed since",
+                f"{changed} value{'s' * (changed != 1)}"
+                if changed
+                else "nothing in the model",
+            ),
+            *[(f"change {i}", line) for i, line in enumerate(shown, start=1)],
+        ],
+        note=(
+            f"{changed - len(shown)} more changes not listed"
+            if changed > len(shown)
+            else "Earlier revisions are kept under robots/.revisions; every "
+            "tool uses this one."
+        ),
+    )
+
+
+HINGE = 3  # mjtJoint.mjJNT_HINGE
+SLIDE = 2
+
+
+def _joint_range(m: Any, j: int) -> str:
+    """A joint's range as the page shows it: a hinge's in radians with
+    degrees beside, since drawings, servos and firmware speak degrees (#122)."""
+    if not m.jnt_limited[j]:
+        return "unlimited"
+    lo, hi = m.jnt_range[j]
+    if int(m.jnt_type[j]) != HINGE:
+        return _rng(lo, hi)
+    return f"{_rng(lo, hi)} rad ({np.degrees(lo):.1f}°, {np.degrees(hi):.1f}°)"
+
+
+def _keyframe_table(m: Any) -> Section | None:
+    """Every keyframe's value per one-axis joint (hinges in degrees), a
+    joint per row and a keyframe per column, a value outside its joint's
+    range flagged; the one the preview stands in is named. None when the
+    model has no keyframes."""
+    import mujoco  # noqa: PLC0415
+
+    from trainnr.project.previews import preview_keyframe  # noqa: PLC0415
+
+    if m.nkey == 0:
+        return None
+    keys = [
+        mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_KEY, k) or f"#{k}"
+        for k in range(m.nkey)
+    ]
+    rows = []
+    for j in range(m.njnt):
+        kind = int(m.jnt_type[j])
+        if kind not in (HINGE, SLIDE):
+            continue
+        lo, hi = m.jnt_range[j]
+        cells = []
+        for k in range(m.nkey):
+            v = float(m.key_qpos[k][m.jnt_qposadr[j]])
+            text = f"{np.degrees(v):.1f}°" if kind == HINGE else f"{_f(v)} m"
+            outside = bool(m.jnt_limited[j]) and not lo - 1e-9 <= v <= hi + 1e-9
+            cells.append(f"{text} (outside the range)" if outside else text)
+        rows.append([mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j), *cells])
+    shown = preview_keyframe(m)
+    return _table(
+        "Keyframes",
+        ["joint", *keys],
+        rows,
+        note=f"The preview stands in {keys[shown]!r}." if shown is not None else None,
     )
 
 

@@ -101,7 +101,7 @@ from trainnr.scenes.volume import (
     overhang_components,
     split_by_clearance,
 )
-from trainnr.viz import STUDIO_ADDRESS, studio_listening
+from trainnr.viz import studio_listening
 
 # The work folders inside the scene, kept: the capture's provenance.
 FRAMES_DIR = "frames"
@@ -891,7 +891,7 @@ def capture_scene(  # noqa: PLR0913 - the capture's own knobs, each named
         )
     out_dir.mkdir(parents=True, exist_ok=True)
     log = out_dir / LOG_FILE
-    narrate = studio_listening(STUDIO_ADDRESS) if narrate is None else narrate
+    narrate = studio_listening() if narrate is None else narrate
     started = datetime.now(timezone.utc)
 
     frames_dir = out_dir / FRAMES_DIR

@@ -263,6 +263,7 @@ def index_project(project: Project) -> ProjectIndex:
                 )
             )
     _link_cited_by(artifacts)
+    _mark_superseded(artifacts, project.robots)
     loop = manifest.loop or _loop_of(artifacts, project.root)
     states = _states(artifacts, loop)
     missing = [s for s in states if not s.present and s.needed]
@@ -287,6 +288,24 @@ def index_project(project: Project) -> ProjectIndex:
         in_progress=in_progress + _live_capture(project),
         template=_plan(manifest.template, states, artifacts),
     )
+
+
+# The summary note on an artifact built on a robot's earlier revision.
+SUPERSEDED_KEY = "superseded robot"
+
+
+def _mark_superseded(artifacts: list[Artifact], robots: Path) -> None:
+    """An artifact that cites a robot's earlier revision says so, naming
+    the current one (#119): it was built on a robot that has changed."""
+    from trainnr.robot.revisions import superseded  # noqa: PLC0415
+
+    replaced = superseded(robots)
+    if not replaced:
+        return
+    for a in artifacts:
+        for cited in a.cites.values():
+            if cited in replaced:
+                a.summary[SUPERSEDED_KEY] = f"{cited}, now {replaced[cited]}"
 
 
 def _plan(
@@ -1110,6 +1129,12 @@ def _summary_robot(p: Path) -> dict[str, Any]:
     audit = read_audit(p)
     if audit and audit.get("summary"):
         out["audit"] = audit["summary"]
+    from trainnr.robot.revisions import revisions  # noqa: PLC0415
+
+    earlier = revisions(p)
+    if earlier:  # the current revision of a robot onboarded again (#119)
+        out["revisions"] = len(earlier) + 1
+        out["replaces"] = earlier[0]["stamp"]
     return out
 
 

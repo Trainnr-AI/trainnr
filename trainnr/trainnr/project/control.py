@@ -36,7 +36,7 @@ from urllib.parse import urlsplit
 
 from trainnr import safe_write
 from trainnr.paths import CHECKOUT_ENV, checkout
-from trainnr.project.files import read_json
+from trainnr.project.files import read_json, write_json
 from trainnr.project.locate import (
     INDEX_DIR,
     PROJECT_ENV,
@@ -45,7 +45,7 @@ from trainnr.project.locate import (
     list_projects,
     projects_home,
 )
-from trainnr.viz import STUDIO_ADDRESS
+from trainnr.viz import STUDIO_ADDRESS, VIEWER_BIND_ENV
 
 COMMANDS_DIR = "commands"
 STATE_FILE = "studio-state.json"
@@ -540,10 +540,9 @@ def viewer_port_free(port: int | None = None) -> bool:
     return True
 
 
-def port_holder(port: int) -> str | None:
-    """Who listens on `port`, as `pid N (name)`, when the system says
-    (macOS lists other processes' sockets only to root): a refusal named
-    "another process" left an agent unable to tell which (2026-10-05)."""
+def port_holder_pid(port: int) -> int | None:
+    """The pid listening on `port`, when the system says (macOS lists
+    other processes' sockets only to root)."""
     try:
         import psutil  # noqa: PLC0415
 
@@ -553,18 +552,68 @@ def port_holder(port: int) -> str | None:
                 and conn.laddr
                 and conn.laddr.port == port
             ):
-                if conn.pid is None:
-                    return None
-                return f"pid {conn.pid} ({psutil.Process(conn.pid).name()})"
-    except Exception:  # a name is a courtesy; the refusal stands
+                return conn.pid
+    except Exception:  # a pid is a courtesy; the caller decides without it
         return None
     return None
+
+
+def port_holder(port: int) -> str | None:
+    """Who listens on `port`, as `pid N (name)`, when the system says:
+    a refusal named "another process" left an agent unable to tell which
+    (2026-10-05)."""
+    pid = port_holder_pid(port)
+    if pid is None:
+        return None
+    try:
+        return f"pid {pid} ({_psutil().Process(pid).name()})"
+    except Exception:  # a name is a courtesy; the refusal stands
+        return None
+
+
+def free_port() -> int:
+    """A port nothing listens on now, as the system hands one out."""
+    import socket  # noqa: PLC0415
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((VIEWER_BIND_HOST, 0))
+        return int(probe.getsockname()[1])
+
+
+# The viewer address a project's Studio took when the default one was held
+# by another Studio (#124), so every session on the project streams there.
+VIEWER_FILE = "viewer.json"
+# Whether this process set $TRAINNR_VIEWER_BIND itself (a Studio's port it
+# adopted), so it may change it again; an operator's own setting never is.
+_ADOPTED: dict[str, bool] = {"bind": False}
+
+
+def adopt_viewer(project: Project | None) -> str | None:
+    """Point this process's feeds (and the jobs it starts) at the Studio
+    `project` has open: its recorded port when that Studio is alive, else
+    the default. Never overrides a $TRAINNR_VIEWER_BIND the operator set.
+    Returns the bind adopted, or None for the default."""
+    if os.environ.get(VIEWER_BIND_ENV) and not _ADOPTED["bind"]:
+        return None
+    bind = None
+    if project is not None:
+        record = read_json(project.root / INDEX_DIR / VIEWER_FILE, missing_ok=True)
+        pid = int(record.get("pid") or 0)
+        if record.get("bind") and pid_alive(pid) and is_studio_process(pid):
+            bind = str(record["bind"])
+    if bind is None:
+        if _ADOPTED["bind"]:
+            os.environ.pop(VIEWER_BIND_ENV, None)
+            _ADOPTED["bind"] = False
+        return None
+    os.environ[VIEWER_BIND_ENV] = bind
+    _ADOPTED["bind"] = True
+    return bind
 
 
 # The Studio's viewer server binds this host unless TRAINNR_VIEWER_BIND
 # says otherwise (crates/trainnr-studio/src/main.rs, GRPC_BIND); the probe
 # checks the same address the server will take.
-VIEWER_BIND_ENV = "TRAINNR_VIEWER_BIND"
 VIEWER_BIND_HOST = "127.0.0.1"
 
 
@@ -591,6 +640,21 @@ def viewer_bind_host() -> str:
 # MCP server launches and later quits in one process, and `quit` waited
 # its whole timeout on a Studio that had left in 0.2 s (2026-09-12).
 _LAUNCHED: dict[int, subprocess.Popen] = {}
+
+
+def _second_studio_bind() -> str | None:
+    """A free viewer port for this Studio when the default one is held by
+    a live Studio this home cannot see: another session's window on its
+    own trainnr home (#124), which this one must not quit or move. One in
+    this home was found by `state` and moved instead. None when the
+    default is free, held by something else, or the operator chose the
+    bind ($TRAINNR_VIEWER_BIND)."""
+    if os.environ.get(VIEWER_BIND_ENV) or viewer_port_free():
+        return None
+    holder = port_holder_pid(viewer_bind()[1])
+    if holder is None or not is_studio_process(holder):
+        return None
+    return f"{VIEWER_BIND_HOST}:{free_port()}"
 
 
 def _already_running(project: Project, current: dict[str, Any]) -> dict[str, Any]:
@@ -672,7 +736,7 @@ def wsl_display_environment(
     return env
 
 
-def launch(  # noqa: PLR0911 - each refusal names its own reason
+def launch(  # noqa: PLR0911, PLR0912 - each refusal names its own reason
     project: Project | None, binary: Path | None = None
 ) -> dict[str, Any]:
     """Start the Studio on the project, or on its Welcome page when there
@@ -695,17 +759,19 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
         binary = found
     if not binary.is_file():
         return {"status": "refused", "reason": f"no Studio binary at {binary}"}
-    deadline = time.monotonic() + PORT_FREE_TIMEOUT_S
-    while not viewer_port_free() and time.monotonic() < deadline:
-        time.sleep(0.1)
-    if not viewer_port_free():
-        holder = port_holder(viewer_bind()[1]) or "another process"
-        return {
-            "status": "refused",
-            "reason": f"port {viewer_bind()[1]} (the viewer server) is held by "
-            f"{holder}; quit that Studio or Rerun viewer first (a Studio on "
-            "another project: quit_studio from that project)",
-        }
+    adopt_viewer(None)  # this launch decides the port afresh
+    bind = _second_studio_bind()
+    if bind is None:
+        deadline = time.monotonic() + PORT_FREE_TIMEOUT_S
+        while not viewer_port_free() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        if not viewer_port_free():
+            holder = port_holder(viewer_bind()[1]) or "another process"
+            return {
+                "status": "refused",
+                "reason": f"port {viewer_bind()[1]} (the viewer server) is held "
+                f"by {holder}, which is not a Studio; quit it first",
+            }
     log = project.root / INDEX_DIR / STUDIO_LOG
     log.parent.mkdir(parents=True, exist_ok=True)
     env = wsl_display_environment(wsl_gpu_environment(dict(os.environ)))
@@ -719,6 +785,8 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
     # A downloaded Studio lives in the user's cache, not in the checkout:
     # it finds the simulator's scripts through the checkout's path.
     env.setdefault(CHECKOUT_ENV, str(checkout()))
+    if bind is not None:
+        env[VIEWER_BIND_ENV] = bind
     with safe_write.open_append(log, project.root) as sink:
         child = subprocess.Popen(
             [str(binary)],
@@ -739,11 +807,18 @@ def launch(  # noqa: PLR0911 - each refusal names its own reason
             }
         current = state(project)
         if current.get("alive") and int(current.get("pid") or 0) == child.pid:
+            viewer = project.root / INDEX_DIR / VIEWER_FILE
+            if bind is not None:
+                write_json(viewer, {"bind": bind, "pid": child.pid})
+            elif viewer.is_file():
+                safe_write.remove(viewer)
+            adopt_viewer(project)
             return {
                 "status": "done",
                 "pid": child.pid,
                 "binary": str(binary),
                 "log": str(log),
+                **({"viewer": bind} if bind is not None else {}),
             }
         time.sleep(0.1)
     return {
