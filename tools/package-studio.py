@@ -7,6 +7,7 @@ an AppImage (the desktop app plan, docs/85, phase 4, 2026-10-11).
     python3 tools/package-studio.py linux-appdir <binary> <out> --version 0.1.0
     python3 tools/package-studio.py windows-installer <binary.exe> <out> --version 0.1.0
     python3 tools/package-studio.py windows-crt-check <binary.exe>
+    python3 tools/package-studio.py windows-version-check <binary.exe> --version 0.1.0
 
 The release workflow runs it on each platform's runner and finishes the
 job with the platform's own tools: `iconutil` and `hdiutil` make the
@@ -188,17 +189,64 @@ def needs_vc_runtime(exe: Path) -> list[str]:
     return [dll.decode() for dll in VC_RUNTIME_DLLS if dll in data]
 
 
+#: VS_FIXEDFILEINFO's signature and structure version, as the exe stores
+#: them (little-endian), at the head of its version resource.
+FIXED_FILE_INFO = struct.pack("<II", 0xFEEF04BD, 0x00010000)
+
+
+def windows_file_version(data: bytes) -> str | None:
+    """The file version an exe's version resource gives ("0.2.0.0"), or
+    None without one. Read from the bytes, so it runs on any platform."""
+    at = data.find(FIXED_FILE_INFO)
+    if at < 0:
+        return None
+    ms, ls = struct.unpack_from("<II", data, at + len(FIXED_FILE_INFO))
+    return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+
+
+def windows_version_problem(exe: Path, version: str) -> str | None:
+    """Why `exe` does not name `version` where Windows shows it (Properties,
+    Details), or None. The file version is the numbers alone; the product
+    version, kept as text, the whole version, "-rc.1" included
+    (crates/trainnr-studio/build.rs writes both)."""
+    data = exe.read_bytes()
+    found = windows_file_version(data)
+    if found is None:
+        return "no version resource"
+    numeric = version.split("-", maxsplit=1)[0] + ".0"
+    if found != numeric:
+        return f"file version {found}, not {numeric}"
+    if version.encode("utf-16-le") not in data:
+        return f"no product version {version}"
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "layout",
-        choices=("macos-app", "linux-appdir", "windows-installer", "windows-crt-check"),
+        choices=(
+            "macos-app",
+            "linux-appdir",
+            "windows-installer",
+            "windows-crt-check",
+            "windows-version-check",
+        ),
     )
     parser.add_argument("binary", type=Path)
     parser.add_argument("out", type=Path, nargs="?", help="where the layout is written")
     parser.add_argument("--version")
     parser.add_argument("--third-party", type=Path, help="THIRD_PARTY_LICENSES.md")
     args = parser.parse_args(argv)
+    if args.layout == "windows-version-check":
+        if args.version is None:
+            parser.error("windows-version-check needs --version")
+        problem = windows_version_problem(args.binary, args.version)
+        if problem is not None:
+            print(f"{args.binary}: {problem}")
+            return 1
+        print(f"{args.binary}: version {args.version}")
+        return 0
     if args.layout != "windows-crt-check" and (
         args.out is None or args.version is None
     ):

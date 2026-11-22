@@ -80,6 +80,13 @@ tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "sync", "
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", default-features = false, features = ["std", "process"] }
 
+# The Windows exe's version resource (build.rs): compiled by the Windows
+# SDK's rc.exe on the release's Windows runner; nothing on other targets.
+# Without its `toml` feature, which reads settings from Cargo.toml, its
+# one dependency is version_check.
+[build-dependencies]
+winresource = { version = "0.1.34", default-features = false }
+
 # This standalone workspace has no [workspace.lints] to inherit from, so
 # the lint is stated here: no unsafe code in this crate, `forbid` so it
 # can't be switched off locally with an `#[allow]`
