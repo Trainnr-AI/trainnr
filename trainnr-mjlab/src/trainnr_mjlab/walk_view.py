@@ -48,6 +48,8 @@ from trainnr_mjlab.walks import (
     DEFAULT_ROBOT,
     NO_CAMERAS,
     Identity,
+    adopt_legged_of,
+    bundle_of,
     walk_spec,
 )
 
@@ -386,6 +388,8 @@ def load_walk(  # noqa: PLR0913 - the loader's knobs, each named
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
     trained = trained_identity(checkpoint)
+    # a legged walk's robot is the one its run recorded (#100)
+    adopt_legged_of(robot or DEFAULT_ROBOT, checkpoint)
     spec = walk_spec(robot or DEFAULT_ROBOT)
     # The walk in play mode at the nominal point, as walk_play rolls it:
     # a view, not a judgment, so the trained DR basis is not rebuilt
@@ -557,7 +561,7 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
     )
     env, policy = load_policy(checkpoint, args.envs, device, robot=robot)
     twist_term, twist_bounds = twist_switch(env.unwrapped, streamer.TWIST_AXES)
-    mirror = streamer.walk_scene(robot, args.envs)
+    mirror = streamer.walk_scene(bundle_of(robot or DEFAULT_ROBOT), args.envs)
     mirror_data = mujoco.MjData(mirror)
     device_qpos = as_torch(env.unwrapped.sim.data.qpos)
     device_qvel = as_torch(env.unwrapped.sim.data.qvel)
@@ -594,7 +598,8 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
             "python",
             str(REPO / "tools" / "studio-render-stream.py"),
             streamer.WALK,
-            f"--scene={streamer.WALK}:{robot}:{args.envs}",
+            # the render process builds the same mirror: from the bundle
+            f"--scene={streamer.WALK}:{bundle_of(robot)}:{args.envs}",
             f"--ring={ring_path}",
             *([f"--stage={stage}"] if stage else []),
             *([f"--shm={args.shm}"] if args.shm else []),

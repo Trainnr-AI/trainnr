@@ -128,15 +128,22 @@ def render_pose(scene: tuple[Any, Any, Any, Any], qpos: Any, out: Path) -> None:
 
 
 def _scene_file(robot: str) -> Path:
+    from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
     from trainnr.bundles.locate import find_bundle  # noqa: PLC0415
 
-    folder = find_bundle(robot)
+    from trainnr_mjlab.walks import bundle_of  # noqa: PLC0415
+
+    name = bundle_of(robot)  # a legged walk's own robot (#100)
+    folder = find_bundle(name)
     if folder is None:
-        raise FileNotFoundError(f"no robot bundle named {robot!r}")
-    for name in (f"scene_{robot}.xml", f"{robot}.xml"):
-        if (folder / name).is_file():
-            return folder / name
-    raise FileNotFoundError(f"{folder}: no scene file for {robot}")
+        raise FileNotFoundError(f"no robot bundle named {name!r}")
+    for candidate in (f"scene_{name}.xml", f"{name}.xml"):
+        if (folder / candidate).is_file():
+            return folder / candidate
+    recorded = model_file_for_use(folder)  # an onboarded robot's own model
+    if recorded is not None:
+        return recorded
+    raise FileNotFoundError(f"{folder}: no scene file for {name}")
 
 
 def _policy_loader(spec: Any, device: str) -> tuple[Any, Any]:
@@ -190,6 +197,9 @@ def write_stills(  # noqa: PLR0913 - the tool's knobs, each named
     rows = [row for row in rows if row["iteration"] in done]
     todo = [(n, f) for n, f in selected if n not in done]
     if todo:
+        from trainnr_mjlab.walks import adopt_legged_of  # noqa: PLC0415
+
+        adopt_legged_of(robot, todo[0][1])  # a legged run's own robot (#100)
         env, load = _policy_loader(walk_spec(robot), device)
         scene = scene_renderer(_scene_file(robot), walk_spec(robot).chase)
         for n, checkpoint in todo:

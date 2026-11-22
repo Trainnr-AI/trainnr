@@ -32,6 +32,7 @@ All notable changes to trainnr. The format follows
 
 ### Fixed
 
+- **watch in simulator** on a legged walk (`legged-walk`, #100) failed with "the legged walk builds from a declared task's spec": the Simulator's walk view now takes the robot, its actuator and its stand pose from the run's identity, as the evaluation and the export do, draws the run's own robot (a scene file's floor left to the view's one ground), and so do the experiment card's stills.
 - An agent connected from the Studio's Connect panel no longer fails to start when its client runs in the user's home folder (where a Windows terminal opens): the entry ran `python -m trainnr.cli`, and the home's `trainnr` folder, the default trainnr home, was imported in place of the package. On Windows the entry now runs the engine's `trainnr.exe`, and the panel offers Update for an entry made before; the macOS and Linux launcher passes `-P` and is rewritten when the panel opens.
 - The Studio's Running now panel no longer cuts off a run's buttons under its progress bar, and its log is a framed panel that shows a line repeated in the tail once with its count. A tracking run no longer offers a Simulator scene it does not have.
 - A template step is done when its own artifact exists, not any result of its stage: "Turn a video into motion" needs a recording made from video, and "Train it to track the motion" a finished tracking run. A step with a run still training reads running with its progress, and a done step names what proved it.
