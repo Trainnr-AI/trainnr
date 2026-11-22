@@ -204,6 +204,11 @@ jobs:
       - name: no Visual C++ runtime needed (Windows)
         if: runner.os == 'Windows'
         run: python tools/package-studio.py windows-crt-check "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe"
+      # The version Properties and Task Manager show (crates/trainnr-studio/
+      # build.rs): the release's own, before the signature seals the exe.
+      - name: the exe names its version (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/package-studio.py windows-version-check "crates/trainnr-studio/target/${{ matrix.target }}/release/trainnr-studio.exe" --version "$(python tools/release.py show)"
       # Windows: SSL.com's cloud signing (eSigner), a certificate in the
       # maintainer's name whose key never leaves SSL.com's HSM, as the code
       # signing rules require since 2023; timestamped by the tool itself.
