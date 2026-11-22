@@ -1827,7 +1827,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Record a robot's telemetry live into the project, over UDP or Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from the robot or its simulator); stop_capture saves it as a recording.",
+    "description": "Record a robot live: telemetry over UDP or Unitree's DDS (rt/lowstate, rt/lowcmd), or source camera: url (http/rtsp stream or /dev/videoN), shown in the Studio; stop_capture saves it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1846,6 +1846,9 @@
         "source": {
           "type": "string"
         },
+        "url": {
+          "type": "string"
+        },
         "window_s": {
           "type": "number"
         }
@@ -1862,7 +1865,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Stop the project's listener and ingest the capture as a stamped recording; a session with no datagrams fails by name.",
+    "description": "Stop the capture and save it, stamped: a recording, or footage from a camera; nothing received fails by name.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},

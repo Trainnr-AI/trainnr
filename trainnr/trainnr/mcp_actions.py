@@ -96,6 +96,13 @@ def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     return [*argv, "python"]
 
 
+def pipeline_python(*extras: str) -> list[str]:
+    """The command for a Python in the core's environment with `extras`,
+    under the platform's launch environment: what a child the server
+    starts outside the job table runs (a camera capture's live feed)."""
+    return _uv(PIPELINE_DIR, *extras, env_file=ENV_FILE)
+
+
 def inside_project(value: str | None, *, default: str, what: str) -> str:
     """A path a tool reads or writes, inside the current project: a bare
     name lands in the project's `runs/`, a relative path is read from the

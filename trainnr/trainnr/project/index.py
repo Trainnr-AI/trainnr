@@ -79,6 +79,7 @@ from trainnr.project.kinds import (
 )
 from trainnr.project.locate import (
     FOLDERS,
+    FOOTAGE_FOLDER,
     INDEX_DIR,
     LOOPS,
     RECORDINGS_FOLDER,
@@ -380,6 +381,18 @@ def _live_capture(project: Project) -> list[dict[str, str]]:
         if state.topics
         else f"{state.datagrams} messages"
     )
+    if state.lands == Kind.FOOTAGE.value:  # a camera: its pictures, rate and size
+        seen = state.measured
+        rate = f", {seen['fps']:g} fps" if seen.get("fps") else ""
+        size = f", {seen['width']}x{seen['height']}" if seen.get("width") else ""
+        return [
+            {
+                "path": f"{FOOTAGE_FOLDER}/{state.name}",
+                "stage": f"filming {state.source}: "
+                f"{state.datagrams} pictures{rate}{size}",
+                "kind": Kind.FOOTAGE.value,
+            }
+        ]
     return [
         {
             "path": f"{RECORDINGS_FOLDER}/{state.name}",

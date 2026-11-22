@@ -267,11 +267,12 @@ class OneInterfacePerProcess(unittest.TestCase):
 
 
 class TheRegistry(unittest.TestCase):
-    def test_two_sources_and_their_options(self) -> None:
+    def test_the_sources_and_their_options(self) -> None:
         names = {s["name"]: s for s in capture.sources()}
-        self.assertEqual(set(names), {"udp", "dds"})
+        self.assertEqual(set(names), {"udp", "dds", "camera"})
         self.assertEqual(names["dds"]["platforms"], ["linux"])
         self.assertNotIn("ingest", names["dds"]["options"])
+        self.assertEqual(names["camera"]["lands"], "footage")  # #130
 
     def test_an_unknown_source_and_a_foreign_option_are_refused(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
