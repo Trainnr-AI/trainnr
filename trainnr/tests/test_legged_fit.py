@@ -73,7 +73,10 @@ class Refusals(unittest.TestCase):
             method = LeggedJoints()
             self.assertIn("hinge joints, fewer than", method.accepts(flat, rec) or "")
             bundle = _go2_bundle(root)
-            self.assertIn("not hinges of the model", method.accepts(bundle, rec) or "")
+            self.assertIn(
+                "none of the recorded joints ['j'] is a hinge of the model",
+                method.accepts(bundle, rec) or "",
+            )
 
 
 class TheFilterRuns(unittest.TestCase):
@@ -147,6 +150,47 @@ class VendorNamesAndIdleStarts(unittest.TestCase):
         self.assertEqual(fit.torque_source, EFFORT)
         self.assertTrue(all(j.endswith("_joint") for j in fit.samples.joints))
         self.assertIn("unitree-motors-to-model", fit.base_handling)
+        self.assertEqual(len(fit.balance.result.parameters), 36)
+
+
+@needs_sim
+class AJointTheModelLacks(unittest.TestCase):
+    """A robot often has a servo its walking model leaves out (Microduck
+    Nano's beak): the recording is fitted on the joints the model has, and
+    the record names the one left out, never refused whole (#133)."""
+
+    def test_the_rest_are_fitted_and_the_extra_is_named(self) -> None:
+        import dataclasses  # noqa: PLC0415
+
+        import numpy as np  # noqa: PLC0415
+
+        from trainnr.robot.legged_fit import LeggedJoints  # noqa: PLC0415
+        from trainnr.robot.quadruped_synth import simulate  # noqa: PLC0415
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = _go2_bundle(root)
+            recording, _truth = simulate(bundle / "go2.xml")
+            channels = {}
+            for name, channel in recording.channels.items():
+                beak = np.zeros((len(channel.times), 1))
+                channels[name] = (
+                    dataclasses.replace(
+                        channel,
+                        values=np.hstack([beak, channel.values]),
+                        components=("beak", *channel.components),
+                    )
+                    if name.startswith("joint.")
+                    else channel
+                )
+            rec = root / "with-beak"
+            dataclasses.replace(recording, channels=channels).write(rec)
+            method = LeggedJoints()
+            self.assertIsNone(method.accepts(bundle, rec))
+            fit = method.fit_balance(bundle, rec)
+        self.assertNotIn("beak", fit.samples.joints)
+        self.assertEqual(len(fit.samples.joints), 12)
+        self.assertIn("recorded joints ['beak'] left out", fit.base_handling)
         self.assertEqual(len(fit.balance.result.parameters), 36)
 
 
