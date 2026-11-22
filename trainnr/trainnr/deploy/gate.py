@@ -63,6 +63,8 @@ class Trial(TrackingOutcome):
     """One held command's episode, judged under the shared rule."""
 
     command: list[float]
+    # the declared limit over several joints the trial broke (#121)
+    limit: str | None = None
 
 
 # The saved stream of a gate, per runtime, inside its deployment; its
@@ -94,7 +96,12 @@ def run_trial(  # noqa: PLR0913 - the trial's own knobs, each named
     if poses is not None:
         poses.begin(trial_segment(index))
     meter = Ticks(
-        manifest.control.step_dt, mirror=mirror, contacts=contacts, poses=poses
+        manifest.control.step_dt,
+        mirror=mirror,
+        contacts=contacts,
+        poses=poses,
+        limits=manifest.limits,
+        joint_names=tuple(manifest.joints.policy_order),
     )
     if mirror is not None:
         mirror.trial(index, command)

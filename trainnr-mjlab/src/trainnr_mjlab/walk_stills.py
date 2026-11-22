@@ -23,6 +23,7 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -97,14 +98,17 @@ def write_sheet(rows: list[dict[str, Any]], stills_dir: Path) -> Path:
     return out
 
 
-def scene_renderer(scene_xml: Path, chase: CameraFraming) -> tuple[Any, Any, Any, Any]:
+def scene_renderer(
+    scene_xml: Path, chase: CameraFraming, size: tuple[int, int] = (WIDTH, HEIGHT)
+) -> tuple[Any, Any, Any, Any]:
     """The robot's scene and a renderer framing it the way the walk's own
     chase camera does (`walks.CameraFraming`, declared by the walk)."""
     import mujoco  # noqa: PLC0415
 
+    width, height = size
     spec = mujoco.MjSpec.from_file(str(scene_xml))
-    spec.visual.global_.offwidth = WIDTH
-    spec.visual.global_.offheight = HEIGHT
+    spec.visual.global_.offwidth = width
+    spec.visual.global_.offheight = height
     model = spec.compile()
     data = mujoco.MjData(model)
     camera = mujoco.MjvCamera()
@@ -112,7 +116,7 @@ def scene_renderer(scene_xml: Path, chase: CameraFraming) -> tuple[Any, Any, Any
     camera.distance = chase.distance
     camera.elevation = chase.elevation
     camera.azimuth = chase.azimuth
-    return model, data, mujoco.Renderer(model, height=HEIGHT, width=WIDTH), camera
+    return model, data, mujoco.Renderer(model, height=height, width=width), camera
 
 
 def render_pose(scene: tuple[Any, Any, Any, Any], qpos: Any, out: Path) -> None:
@@ -128,23 +132,37 @@ def render_pose(scene: tuple[Any, Any, Any, Any], qpos: Any, out: Path) -> None:
 
 
 def _scene_file(robot: str) -> Path:
+    from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
     from trainnr.bundles.locate import find_bundle  # noqa: PLC0415
 
-    folder = find_bundle(robot)
+    from trainnr_mjlab.walks import bundle_of  # noqa: PLC0415
+
+    name = bundle_of(robot)  # a legged walk's own robot (#100)
+    folder = find_bundle(name)
     if folder is None:
-        raise FileNotFoundError(f"no robot bundle named {robot!r}")
-    for name in (f"scene_{robot}.xml", f"{robot}.xml"):
-        if (folder / name).is_file():
-            return folder / name
-    raise FileNotFoundError(f"{folder}: no scene file for {robot}")
+        raise FileNotFoundError(f"no robot bundle named {name!r}")
+    for candidate in (f"scene_{name}.xml", f"{name}.xml"):
+        if (folder / candidate).is_file():
+            return folder / candidate
+    recorded = model_file_for_use(folder)  # an onboarded robot's own model
+    if recorded is not None:
+        return recorded
+    raise FileNotFoundError(f"{folder}: no scene file for {name}")
 
 
-def _policy_loader(spec: Any, device: str) -> tuple[Any, Any]:
+def _policy_loader(
+    spec: Any, device: str, configure: Callable[[Any], None] | None = None
+) -> tuple[Any, Any]:
+    """One world at the nominal point and a loader putting a checkpoint's
+    actor into it; `configure` changes the env config before it is built
+    (the film pins the command)."""
     from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv  # noqa: PLC0415
     from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: PLC0415
 
     cfg, _ = spec.env_cfg(dr_span=None, pin_scale=None)
     cfg.scene.num_envs = 1
+    if configure is not None:
+        configure(cfg)
     agent = spec.agent(1)
     env = RslRlVecEnvWrapper(
         ManagerBasedRlEnv(cfg, device=device), clip_actions=agent.clip_actions
@@ -190,11 +208,15 @@ def write_stills(  # noqa: PLR0913 - the tool's knobs, each named
     rows = [row for row in rows if row["iteration"] in done]
     todo = [(n, f) for n, f in selected if n not in done]
     if todo:
+        from trainnr_mjlab.walks import adopt_legged_of  # noqa: PLC0415
+
+        adopt_legged_of(robot, todo[0][1])  # a legged run's own robot (#100)
         env, load = _policy_loader(walk_spec(robot), device)
         scene = scene_renderer(_scene_file(robot), walk_spec(robot).chase)
         for n, checkpoint in todo:
             torch.manual_seed(seed)
             env.unwrapped.seed(seed)
+            env.reset()  # each from the same start, not where the last ended
             walk = rollout_episodes(
                 env, load(checkpoint), 1, capture=True, max_ticks=tick
             )[0]

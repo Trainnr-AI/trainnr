@@ -498,7 +498,7 @@
       "destructiveHint": false,
       "readOnlyHint": true
     },
-    "description": "One robot in full: its model census, its fit records, and whether repeated fits agree.",
+    "description": "One robot as its Studio page shows it: census, joints, keyframes, sites, fits.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1306,7 +1306,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Add a robot from its MJCF file (meshes and includes come along) or a USD file: a hash-stamped robot folder, compiled once to check it loads; the reply lists the collision geoms, sites and trunk a trainer needs.",
+    "description": "Add a robot from its MJCF file (only the files it uses) or a USD file: a hash-stamped folder, compiled once to check it loads; the reply lists the geoms, sites and trunk a trainer needs. Same name again: a revision.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1397,7 +1397,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Open an experiment's checkpoint in mjlab's viewer (viser or native), streamed into the Studio's Simulator; a tracking run plays its clip once, filmed. A job.",
+    "description": "Play a checkpoint in mjlab's viewer (viser, native) and the Studio; viewer film: a video (checkpoint: comma-separated or all). Tracking films its clip. Job.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1827,7 +1827,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Record a robot's telemetry live into the project, over UDP or Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from the robot or its simulator); stop_capture saves it as a recording.",
+    "description": "Record a robot live: telemetry over UDP or Unitree's DDS (rt/lowstate, rt/lowcmd), or source camera: url (http/rtsp stream or /dev/videoN), shown in the Studio; stop_capture saves it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1846,6 +1846,9 @@
         "source": {
           "type": "string"
         },
+        "url": {
+          "type": "string"
+        },
         "window_s": {
           "type": "number"
         }
@@ -1862,7 +1865,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Stop the project's listener and ingest the capture as a stamped recording; a session with no datagrams fails by name.",
+    "description": "Stop the capture and save it, stamped: a recording, or footage from a camera; nothing received fails by name.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -1927,7 +1930,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Train a walk (a declared task, or robot go1/go2/microduck). recipe=smoke checks the stack in minutes, saving nothing; recipe=full trains (8000 iterations unless set, hours on a GPU) as experiment `name`, never over one.",
+    "description": "Train a walk: a declared task (any robot: family legged-walk) or robot go1/go2/microduck. recipe smoke: minutes, saves nothing; full: 8000 iterations unless set (hours, GPU), as experiment `name`, never over one.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

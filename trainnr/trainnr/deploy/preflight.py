@@ -455,7 +455,7 @@ def check_policy_widths(ctx: Context) -> Check:
     observation terms and joints (unitree_rl_mjlab #25)."""
     m = ctx.manifest
     wanted_in = sum(o.width for o in m.observations)
-    wanted_out = len(m.joints.policy_order)
+    wanted_out = len(m.joints.acting)
     got_in, got_out = _policy_widths(ctx.runtime)
     ok = got_in == wanted_in and got_out == wanted_out
     return Check(

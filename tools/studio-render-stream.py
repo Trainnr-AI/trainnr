@@ -2069,6 +2069,15 @@ def walk_scene_of(scene: str) -> tuple[str, int]:
     return parts[1], int(parts[2])
 
 
+def _without_floor(spec: "mujoco.MjSpec") -> "mujoco.MjSpec":
+    """A robot model without the floor plane an onboarded scene file brings:
+    the walk view lays one ground under every copy (#100)."""
+    for geom in list(spec.worldbody.geoms):
+        if geom.type == mujoco.mjtGeom.mjGEOM_PLANE:
+            spec.delete(geom)
+    return spec
+
+
 def walk_scene(
     robot: str,
     worlds: int,
@@ -2103,7 +2112,10 @@ def walk_scene(
     stage = mujoco.MjSpec.from_file(stage_xml) if stage_xml else None
     scene, _ = grid_of(
         f"{robot}-rl-{worlds}",
-        (mujoco.MjSpec.from_file(str(model_file)) for _ in range(worlds)),
+        (
+            _without_floor(mujoco.MjSpec.from_file(str(model_file)))
+            for _ in range(worlds)
+        ),
         pitch=0.0,
         stage=stage,
         sky=dressed,

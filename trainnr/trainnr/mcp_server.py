@@ -156,10 +156,19 @@ def describe_robot(robot: str) -> dict[str, Any]:
     root = find_bundle(robot) if robot in names else None
     if root is None or robot in NOT_A_BUNDLE:
         raise KeyError(f"no robot {robot!r}; one of {names}")
-    detail: dict[str, Any] = {
-        "stamp": stamp(robot, root),
-        "files": sorted(p.name for p in root.iterdir()),
-    }
+    from trainnr.project.details import robot_sections  # noqa: PLC0415
+
+    version = stamp(robot, root)
+    detail: dict[str, Any] = {"stamp": version}
+    # what the robot's page in the Studio shows, section by section (#123):
+    # the census, joints, keyframes, actuators, bodies, sensors, sites,
+    # the importer's audit, the files
+    try:
+        sections = robot_sections(root, version)
+    except (ValueError, OSError) as why:
+        detail["census"] = f"unreadable: {why}"
+    else:
+        detail.update({sec["title"]: _section_json(sec) for sec in sections})
     profile = root / "profile.json"
     if profile.exists():
         # Raw JSON, deliberately not through RobotProfile's validating
@@ -167,12 +176,22 @@ def describe_robot(robot: str) -> dict[str, Any]:
         # and this window reports what a bundle SAYS, schema or not.
         detail["profile"] = json.loads(profile.read_text())
     fits = root / FITS_DIR
-    if fits.is_dir():
-        detail["fits"] = {
-            record.name: json.loads(record.read_text())
-            for record in sorted(fits.glob("*.json"))
-        }
+    records = sorted(fits.glob("*.json")) if fits.is_dir() else []
+    detail["fits"] = (
+        {record.name: json.loads(record.read_text()) for record in records}
+        if records
+        else "none yet: identify_system fits one from a recording"
+    )
     return detail
+
+
+def _section_json(section: dict[str, Any]) -> Any:
+    """A page section as an agent reads it: key/value rows as an object,
+    a table as one object per row keyed by its columns."""
+    if section.get("kind") == "table":
+        columns = section["columns"]
+        return [dict(zip(columns, row, strict=False)) for row in section["rows"]]
+    return {key: value for key, value in section["rows"]}
 
 
 def _actuator_bundles(actuator: str | None = None) -> list[dict[str, Any]]:
@@ -326,7 +345,7 @@ def create_task(
     project = current_project()
     try:
         out = declare_task(project, family, name, settings)
-    except (KeyError, ValueError, FileExistsError, TypeError) as why:
+    except (KeyError, ValueError, FileExistsError, FileNotFoundError, TypeError) as why:
         return refusal(_reason(why))
     write_index(project, index_project(project))
     # The reply speaks the call's words: the family and the settings given.
@@ -350,9 +369,10 @@ def onboard_robot(
     ] = False,
 ) -> dict[str, Any] | Refusal:
     """A robot enters as a hash-stamped bundle, by its file's format: an
-    MJCF's directory copied whole (meshes and includes ride along) and
-    compiled once as the honesty check; a URDF through MuJoCo's own
-    loader; a USD asset (.usd/.usda/.usdc/.usdz) read by Newton's
+    MJCF's own files copied (its includes, the meshes and textures they
+    name, a licence beside it; never the rest of its folder, and the stamp
+    covers exactly those) and compiled once as the honesty check; a URDF
+    through MuJoCo's own loader; a USD asset (.usd/.usda/.usdc/.usdz) read by Newton's
     importer and written as a bundle with leaf names, mesh files, sensors
     and a home key — `variants` selects its variant sets (e.g.
     {"Physics": "Newton_compliant"}) and `root` is "fixed" (default) or
@@ -362,8 +382,9 @@ def onboard_robot(
     bundle removed unless `accept_changes` is true, and the record then
     says so. The reply carries the audit's one line. Into the current
     project's `robots/` when a project is open, else the library. Never
-    overwrites; refuses by name, including an option the format does
-    not take."""
+    overwrites: the name of a robot already there adds a revision (the
+    one it replaces kept, what changed listed; the same content again is
+    the same stamp). Refuses by name an option the format does not take."""
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
@@ -483,18 +504,30 @@ def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each r
     root = _project_root_if_any()
     dr_span: float | None = None
     task_stamp: str | None = None
+    legged_spec: str | None = None
     if task is None and robot is None:
         task = _the_project_walk(root)
         if task is None:
             return refusal(_no_single_walk(root))
+    from trainnr.tasks.walks import LEGGED_RIG  # noqa: PLC0415
+
+    if task is None and robot == LEGGED_RIG:
+        return refusal(
+            "a walk on your own robot is declared first: create_task(family="
+            "'legged-walk', name=..., settings={'robot': ..., 'actuator': ...}), "
+            "then train_walk(task=...)"
+        )
+    run_robot = robot
     if task is not None:
         declared = _declared_walk(root, task)
         if isinstance(declared, str):
             return refusal(declared)
         robot, dr_span, task_stamp = declared.robot, declared.dr_span, declared.stamp
         fit = fit if fit is not None else declared.fit
+        legged_spec = declared.legged_spec
+        run_robot = declared.legged_robot or robot
     if name is None and root is not None and agent == ARCHIVED_AGENT:
-        name = _dated_run_name(robot)
+        name = _dated_run_name(run_robot)
     try:
         log_dir = _run_dir(root, name)
         scene_dir = _scene_dir(root, scene)
@@ -522,6 +555,7 @@ def train_walk(  # noqa: PLR0913, PLR0917, PLR0911 - the trainer's knobs, each r
             cameras=cameras,
             fit=fit,
             lag_dr_ms=lag_dr_ms,
+            legged_spec=legged_spec,
         )
     except ValueError as why:
         return refusal(str(why))
@@ -714,6 +748,8 @@ class DeclaredWalk:
     dr_span: float | None
     stamp: str
     fit: str | None = None  # the joint fit the walk trains under, if declared
+    legged_spec: str | None = None  # a legged walk's resolved spec, written (#100)
+    legged_robot: str | None = None  # and the robot it walks, by name
 
 
 def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
@@ -721,7 +757,11 @@ def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
     reason it is not one."""
     from trainnr.project.locate import Project  # noqa: PLC0415
     from trainnr.project.task_ref import read_task_reference  # noqa: PLC0415
-    from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
+    from trainnr.tasks.walks import (  # noqa: PLC0415
+        is_legged,
+        walk_robot,
+        write_legged_spec,
+    )
 
     if root is None:
         return "a declared task needs an open project"
@@ -732,8 +772,22 @@ def _declared_walk(root: Path | None, task: str) -> DeclaredWalk | str:
         return _reason(why)
     if walk is None:
         return f"{task!r} is not a walk"
+    legged_spec = legged_robot = None
+    if is_legged(ref.task_id):
+        try:
+            written = write_legged_spec(ref.folder, ref.spec, ref.stamp)
+        except (FileNotFoundError, KeyError, ValueError) as why:
+            return _reason(why)
+        legged_spec = str(written)
+        legged_robot = str(ref.spec.get("robot", "")).split("@", 1)[0]
     return DeclaredWalk(
-        name=task, robot=walk, dr_span=ref.dr_span, stamp=ref.stamp, fit=ref.fit
+        name=task,
+        robot=walk,
+        dr_span=ref.dr_span,
+        stamp=ref.stamp,
+        fit=ref.fit,
+        legged_spec=legged_spec,
+        legged_robot=legged_robot,
     )
 
 
@@ -1147,8 +1201,12 @@ def _walk_of_run(artifacts: Iterable[Any], run_dir: Path) -> str | None:
     """The walk robot a run belongs to: the family of the declared task
     its identity cites, else the robot its identity names when that is
     a registered walk's."""
-    from trainnr.tasks.walks import walk_robot  # noqa: PLC0415
+    from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+    from trainnr.tasks.walks import LEGGED_RIG, walk_robot  # noqa: PLC0415
 
+    identity = run_dir / IDENTITY_FILE
+    if identity.is_file() and json.loads(identity.read_text()).get(LEGGED_RIG):
+        return LEGGED_RIG  # a declared legged walk: its spec rides in the run
     task_id = _task_id_in_project(artifacts, _run_task(run_dir))
     robot = walk_robot(task_id) if task_id else None
     return robot if robot is not None else _robot_of_run(run_dir)
@@ -1522,6 +1580,10 @@ def list_gate_runtimes() -> list[dict[str, Any]]:
     ]
 
 
+FILM_VIEWER = "film"  # play_walk's offscreen film (trainnr_mjlab.walk_film, #137)
+ALL_CHECKPOINTS = "all"
+
+
 def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     experiment: str,
     checkpoint: str,
@@ -1532,10 +1594,12 @@ def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     """Open a checkpoint of an experiment in mjlab's own viewer - `viser`,
     its browser viewer (the URL is on the job's log), or `native`, its
     MuJoCo window - with the same rollout streamed into the Studio's Live
-    view by the recorder. `experiment` is its folder under runs/,
-    `checkpoint` a file in it; `scene` names the captured scene a
-    scene-trained checkpoint walks on (its identity says which). Job
-    handle; the viewer lives until closed."""
+    view by the recorder; or `film` it offscreen to a video beside the run
+    (`play-model_N/play.mp4`), `checkpoint` then one file, several
+    comma-separated, or `all`, several joined in order as `film.mp4`.
+    `experiment` is its folder under runs/, `checkpoint` a file in it;
+    `scene` names the captured scene a scene-trained checkpoint walks on
+    (its identity says which). Job handle; the viewer lives until closed."""
     run = experiment
     from trainnr.mcp_actions import Actions  # noqa: PLC0415
     from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
@@ -1543,26 +1607,46 @@ def play_walk(  # noqa: PLR0911 - each refusal named, and the tracking branch
     from trainnr.project.locate import plain_name  # noqa: PLC0415
 
     project = current_project()
+    film = viewer == FILM_VIEWER
     try:
         plain_name(run, "run name")
         run_dir = project.folder(RUNS_FOLDER) / run
         if not run_dir.is_dir():
             return refusal(f"no experiment {run!r} in this project")
-        path = with_checkpoint_suffix(run_dir / checkpoint)
-        if not path.resolve().is_relative_to(run_dir.resolve()):
-            return refusal(f"checkpoint {checkpoint!r} is not a file of {run!r}")
-        if not path.is_file():
-            held = ", ".join(_checkpoints_in(run_dir)) or "none"
-            return refusal(f"no checkpoint {checkpoint!r} in {run!r}; it holds {held}")
+        held = _checkpoints_in(run_dir)
+        if film and checkpoint == ALL_CHECKPOINTS:
+            names = held
+        else:
+            names = [c.strip() for c in checkpoint.split(",")] if film else [checkpoint]
+        paths = []
+        for name in names:
+            path = with_checkpoint_suffix(run_dir / name)
+            if not path.resolve().is_relative_to(run_dir.resolve()):
+                return refusal(f"checkpoint {name!r} is not a file of {run!r}")
+            if not path.is_file():
+                return refusal(
+                    f"no checkpoint {name!r} in {run!r}; it holds "
+                    f"{', '.join(held) or 'none'}"
+                )
+            paths.append(path)
         artifacts = index_project(project).artifacts
-        tracking = _tracking_play(project, artifacts, run_dir, path)
-        if tracking is not None:
-            return tracking
+        if len(paths) == 1:
+            tracking = _tracking_play(project, artifacts, run_dir, paths[0])
+            if tracking is not None:
+                return tracking
         robot = _walk_of_run(artifacts, run_dir)
         if robot is None:
             return refusal(f"run {run!r} names no walk")
+        if film:
+            if scene is not None:
+                return refusal(
+                    "a film draws the walk's flat floor; a captured scene is not filmed"
+                )
+            return Actions(JobManager(_jobs_root)).film_walk(
+                [str(p) for p in paths], robot=robot, project=str(project.root)
+            )
         return Actions(JobManager(_jobs_root)).play_walk(
-            str(path),
+            str(paths[0]),
             robot=robot,
             envs=envs,
             project=str(project.root),
@@ -2235,6 +2319,9 @@ def ingest_recording(
 _CAPTURES: dict[str, Any] = {}
 
 
+CAMERA_SOURCE = "camera"  # robots.capture's camera, which takes a url (#130)
+
+
 def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     name: str,
     *,
@@ -2243,6 +2330,7 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     network: str | None = None,
     basis: str | None = None,
     window_s: float | None = None,
+    url: str | None = None,
 ) -> dict[str, Any] | Refusal:
     """Listen for a robot's telemetry and land it in the current project;
     `stop_capture` ingests it as a stamped recording. `source` names the
@@ -2250,7 +2338,10 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     port; `dds` is Unitree's bus, `rt/lowstate` and `rt/lowcmd` as one
     recording, on `network` (`lo` for their simulator, the robot's
     interface for the robot), its `basis` "own robot" unless declared
-    "simulation" for the stand-in. The state on disk
+    "simulation" for the stand-in; `camera` is a camera's picture at `url`
+    (an http(s) MJPEG or rtsp(s) stream, or /dev/videoN), shown live in
+    the Studio with its measured rate and size and saved as footage, the
+    way `ingest_video` stamps it (#130). The state on disk
     (`<project>/.index/capture.json`) is what `describe_capture` and the
     Studio read. Refused by name: no project open, a capture already
     listening for this project, a recording of that name already present,
@@ -2281,8 +2372,14 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
             f"window_s is between 0 and {MAX_CAPTURE_WINDOW_S:g} seconds, "
             f"got {window_s}"
         )
-    given = {"port": port, "network": network, "basis": basis}
-    options = {k: v for k, v in given.items() if v is not None}
+    given = {"port": port, "network": network, "basis": basis, "url": url}
+    options: dict[str, Any] = {k: v for k, v in given.items() if v is not None}
+    if source == CAMERA_SOURCE:
+        from trainnr.mcp_actions import pipeline_python  # noqa: PLC0415
+
+        if url is None:
+            return refusal("a camera capture needs `url`: a stream or /dev/videoN")
+        options["python"] = pipeline_python("viz")  # the live view needs Rerun
     try:
         listener = live_capture(
             project, name, source=source or DEFAULT_SOURCE, **options
@@ -3824,8 +3921,8 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     _guard_tools(server)
     server.tool(description="Every robot: name@hash, file census")(list_robots)
     server.tool(
-        description="One robot in full: its model census, its fit records, and "
-        "whether repeated fits agree."
+        description="One robot as its Studio page shows it: census, joints, "
+        "keyframes, sites, fits."
     )(describe_robot)
     server.tool(
         description="The actuator library: servos, friction tiers, provenance, and "
@@ -3923,14 +4020,13 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "options, and whether it runs on this machine."
     )(list_capture_sources)
     server.tool(
-        description="Record a robot's telemetry live into the project, over UDP or "
-        "Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from "
-        "the robot or its simulator); stop_capture saves it as a "
-        "recording."
+        description="Record a robot live: telemetry over UDP or Unitree's DDS "
+        "(rt/lowstate, rt/lowcmd), or source camera: url (http/rtsp stream or "
+        "/dev/videoN), shown in the Studio; stop_capture saves it."
     )(start_capture)
     server.tool(
-        description="Stop the project's listener and ingest the capture as a stamped "
-        "recording; a session with no datagrams fails by name."
+        description="Stop the capture and save it, stamped: a recording, or "
+        "footage from a camera; nothing received fails by name."
     )(stop_capture)
     server.tool(
         description="The project's capture state on disk: idle, listening, ingested, "
@@ -4170,10 +4266,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "evaluation -> fold with intervals. smoke scale runs on a laptop. Job handle."
     )(actions.run_chain)
     server.tool(
-        description="Train a walk (a declared task, or robot go1/go2/microduck). "
-        "recipe=smoke checks the stack in minutes, saving nothing; recipe=full "
-        "trains (8000 iterations unless set, hours on a GPU) as experiment `name`, "
-        "never over one."
+        description="Train a walk: a declared task (any robot: family "
+        "legged-walk) or robot go1/go2/microduck. recipe smoke: minutes, saves "
+        "nothing; full: 8000 iterations unless set (hours, GPU), as experiment "
+        "`name`, never over one."
     )(train_walk)
     server.tool(
         description="Evaluate a policy: paired episodes, exact intervals, versions "
@@ -4181,9 +4277,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "uses its task's pushes and lag. Job."
     )(evaluate_walk)
     server.tool(
-        description="Open an experiment's checkpoint in mjlab's viewer (viser or "
-        "native), streamed into the Studio's Simulator; a tracking run plays its "
-        "clip once, filmed. A job."
+        description="Play a checkpoint in mjlab's viewer (viser, native) and the "
+        "Studio; viewer film: a video (checkpoint: comma-separated or all). "
+        "Tracking films its clip. Job."
     )(play_walk)
     server.tool(
         description="See the reward before training: roll the declared walk for "
@@ -4201,10 +4297,10 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "success criterion, streamed to the Studio. Job handle."
     )(actions.generate_planned_demos)
     server.tool(
-        description="Add a robot from its MJCF file (meshes and includes come along) "
-        "or a USD file: a hash-stamped robot folder, compiled once to check it "
-        "loads; the reply lists the collision geoms, sites and trunk a "
-        "trainer needs."
+        description="Add a robot from its MJCF file (only the files it uses) "
+        "or a USD file: a hash-stamped folder, compiled once to check it "
+        "loads; the reply lists the geoms, sites and trunk a trainer needs. "
+        "Same name again: a revision."
     )(onboard_robot)
     server.tool(
         description="A job's state and log tail; `wait_s` (up to 300; 60 under "

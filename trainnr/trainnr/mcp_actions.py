@@ -96,6 +96,13 @@ def _uv(project: Path, *extras: str, env_file: Path | None = None) -> list[str]:
     return [*argv, "python"]
 
 
+def pipeline_python(*extras: str) -> list[str]:
+    """The command for a Python in the core's environment with `extras`,
+    under the platform's launch environment: what a child the server
+    starts outside the job table runs (a camera capture's live feed)."""
+    return _uv(PIPELINE_DIR, *extras, env_file=ENV_FILE)
+
+
 def inside_project(value: str | None, *, default: str, what: str) -> str:
     """A path a tool reads or writes, inside the current project: a bare
     name lands in the project's `runs/`, a relative path is read from the
@@ -166,11 +173,19 @@ def walk_robots() -> tuple[str, ...]:
 def require_walk_robot(robot: str | None) -> str:
     """The robot a walk door acts on, or a refusal naming the legal set.
     None is refused too: no door assumes a robot."""
+    from trainnr.tasks.walks import LEGGED_RIG  # noqa: PLC0415
+
     known = walk_robots()
+    # the legged walk is reached through a declared task, not by name
+    named = ", ".join(r for r in known if r != LEGGED_RIG)
+    own = (
+        "; a robot of your own walks through a declared task: "
+        "create_task(family='legged-walk', settings={'robot': ..., 'actuator': ...})"
+    )
     if robot is None:
-        raise ValueError(f"name the robot of the walk: one of {', '.join(known)}")
+        raise ValueError(f"name the robot of the walk: one of {named}{own}")
     if robot not in known:
-        raise ValueError(f"robot is one of {', '.join(known)}, got {robot!r}")
+        raise ValueError(f"robot is one of {named}, got {robot!r}{own}")
     return robot
 
 
@@ -225,6 +240,7 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
     cameras: bool = True,
     fit: str | None = None,
     lag_dr_ms: float = 0.0,
+    legged_spec: str | None = None,
     env_file: Path | None = ENV_FILE,
 ) -> list[str]:
     """The one command line that trains a walk through trainnr_mjlab, for the
@@ -255,6 +271,8 @@ def walk_train_argv(  # noqa: PLR0913 - the trainer's own knobs, each named
         raise ValueError(f"a command lag is not negative: {lag_dr_ms} ms")
     if lag_dr_ms:  # a random command lag in training (trainnr_mjlab.lag_dr)
         argv += ["--lag-dr-ms", f"{lag_dr_ms:g}"]
+    if legged_spec is not None:  # a declared legged walk's resolved spec (#100)
+        argv += ["--legged-spec", legged_spec]
     return argv
 
 
@@ -417,6 +435,7 @@ class Actions:
         cameras: bool = True,
         fit: str | None = None,
         lag_dr_ms: float = 0.0,
+        legged_spec: str | None = None,
     ) -> JobHandle:
         """Train a walk through trainnr_mjlab (the certified stack: stamped
         bundles, declared DR bases, the linter green by construction).
@@ -439,6 +458,7 @@ class Actions:
             cameras=cameras,
             fit=fit,
             lag_dr_ms=lag_dr_ms,
+            legged_spec=legged_spec,
             env_file=self.env_file,
         )
         return self.jobs.start("train-walk", argv, TRAINNR_MJLAB_DIR)
@@ -573,6 +593,23 @@ class Actions:
         if scene is not None:  # played on the captured scene it trained on
             argv += ["--scene", scene]
         return self.jobs.start("play-walk", argv, TRAINNR_MJLAB_DIR)
+
+    def film_walk(
+        self, checkpoints: list[str], *, robot: str | None, project: str
+    ) -> JobHandle:
+        """Walk checkpoints filmed offscreen, one held command and seed,
+        each beside the run and several joined (trainnr_mjlab.walk_film)."""
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.walk_film",
+            *checkpoints,
+            "--robot",
+            require_walk_robot(robot),
+            "--project",
+            project,
+        ]
+        return self.jobs.start("film-walk", argv, TRAINNR_MJLAB_DIR)
 
     def play_tracking(
         self, checkpoint: str, *, reference: str, footage: str, out: str, project: str
@@ -985,12 +1022,15 @@ class Actions:
         written as a bundle); `options` are the format's own (a USD's
         variant selections and root), refused by name otherwise.
         Synchronous — seconds, and the caller wants the stamp in the reply."""
-        from trainnr.project.locate import plain_name  # noqa: PLC0415
+        from trainnr.project.locate import MANIFEST_FILE, plain_name  # noqa: PLC0415
         from trainnr.robot.onboarding import onboard  # noqa: PLC0415
 
         plain_name(name, "robot name")
         destination = (Path(into) if into else robots_dir()) / name
-        return onboard(Path(model_path), name, destination, options)
+        # a project's robot is revised under its name (#119); the library's
+        # certified bundles never are
+        in_project = into is not None and (Path(into).parent / MANIFEST_FILE).is_file()
+        return onboard(Path(model_path), name, destination, options, revise=in_project)
 
     # -- jobs ----------------------------------------------------------
 

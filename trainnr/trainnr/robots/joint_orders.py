@@ -72,18 +72,21 @@ def anatomy_of(joint: str) -> tuple[str, str]:
 def rename_to(
     names: tuple[str, ...], targets: set[str]
 ) -> tuple[tuple[str, ...], str | None]:
-    """`names` onto `targets` (a model's hinges): unchanged when every name
-    is already a target, else through the one declared table that maps
-    every name onto a target. Returns the names and the table used (None
-    when none was needed); refused by name when no table maps them."""
-    if all(n in targets for n in names):
-        return names, None
+    """`names` onto `targets` (a model's hinges): unchanged, or through the
+    declared table that brings the most names onto a target (unchanged
+    wins a tie). Returns the names, a name no target takes left as it is,
+    and the table used (None when none was). A robot often has joints its
+    model leaves out (a beak, a gripper, a fan): the caller fits the names
+    that reached a hinge and says which did not (#133). Refused by name
+    only when none does."""
+    best, used = names, None
     for table_name, table in JOINT_RENAMES.items():
         mapped = tuple(table.get(n, n) for n in names)
-        if all(m in targets for m in mapped):
-            return mapped, table_name
-    unknown = [n for n in names if n not in targets]
-    raise ValueError(
-        f"joints {unknown} are not hinges of the model, and no table in "
-        f"JOINT_RENAMES ({sorted(JOINT_RENAMES)}) maps them onto one"
-    )
+        if sum(m in targets for m in mapped) > sum(b in targets for b in best):
+            best, used = mapped, table_name
+    if not any(b in targets for b in best):
+        raise ValueError(
+            f"none of the recorded joints {list(names)} is a hinge of the model "
+            f"(its hinges: {sorted(targets)})"
+        )
+    return best, used

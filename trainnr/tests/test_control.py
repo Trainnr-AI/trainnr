@@ -34,6 +34,7 @@ from trainnr.project.control import (
     wait,
 )
 from trainnr.project.locate import INDEX_DIR, PROJECT_ENV, PROJECTS_ENV, Project
+from trainnr.viz import VIEWER_BIND_ENV
 
 # Every test here runs against its own empty projects home: a project no
 # Studio has run on looks for a window on the Welcome page there
@@ -596,3 +597,90 @@ class APlantedStateFile(unittest.TestCase):
             self.assertEqual(out["status"], "failed", out)
             self.assertIn("not a Studio", out["reason"])
             self.assertIsNone(victim.poll(), "the process was not signalled")
+
+
+class TheSecondStudio(unittest.TestCase):
+    """Issue #124: a second session on its own trainnr home found the
+    viewer's port held by the first session's Studio and was refused; it
+    gets a window of its own on a free port, and its feeds stream there."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name) / "projects"
+        self.home.mkdir()
+        env = mock.patch.dict(os.environ, {PROJECTS_ENV: str(self.home)})
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(VIEWER_BIND_ENV, None)
+        self.addCleanup(control.adopt_viewer, None)
+
+    def _fake_studio(self) -> tuple[Path, Path]:
+        """A Studio that writes its environment and one heartbeat, then
+        waits: enough for launch() to see it start."""
+        seen = Path(self._tmp.name) / "env.txt"
+        fake = Path(self._tmp.name) / "trainnr-studio"
+        fake.write_text(
+            "#!/bin/sh\n"
+            f'env > "{seen}"\n'
+            'state="$TRAINNR_PROJECT/.index/studio-state.json"\n'
+            'mkdir -p "$(dirname "$state")"\n'
+            'printf \'{"schema": "trainnr-studio-state/1", "pid": %s, '
+            '"heartbeat": %s, "project": "%s"}\' '
+            '"$$" "$(date +%s)" "$TRAINNR_PROJECT" > "$state"\n'
+            "sleep 5\n"
+        )
+        fake.chmod(0o755)
+        return fake, seen
+
+    def test_a_studio_this_home_cannot_see_leaves_this_one_a_free_port(self) -> None:
+        from trainnr.viz import studio_address  # noqa: PLC0415
+
+        project = create_project(self.home / "mine", "mine")
+        fake, seen = self._fake_studio()
+        with (
+            mock.patch.object(control, "viewer_port_free", lambda *a: False),
+            mock.patch.object(control, "port_holder_pid", lambda port: 4242),
+            mock.patch.object(control, "is_studio_process", lambda pid: True),
+        ):
+            answer = launch(project, binary=fake)
+            self.addCleanup(control.terminate_group, int(answer.get("pid") or 0))
+            self.assertEqual(answer["status"], "done", answer)
+            bind = answer["viewer"]
+            port = int(bind.rpartition(":")[2])
+            self.assertNotEqual(port, control.VIEWER_PORT)
+            self.assertIn(f"{VIEWER_BIND_ENV}={bind}", seen.read_text().splitlines())
+            recorded = json.loads(
+                (project.root / INDEX_DIR / "viewer.json").read_text()
+            )
+            self.assertEqual(recorded["bind"], bind)
+            # this session's feeds, and the jobs it starts, stream there
+            self.assertEqual(studio_address(), f"rerun+http://127.0.0.1:{port}/proxy")
+            # another project of this session goes back to the default
+            other = create_project(self.home / "other", "other")
+            self.assertIsNone(control.adopt_viewer(other))
+            self.assertNotIn(VIEWER_BIND_ENV, os.environ)
+
+    def test_a_port_held_by_something_else_is_still_refused(self) -> None:
+        project = create_project(self.home / "mine", "mine")
+        fake, _ = self._fake_studio()
+        with (
+            mock.patch.object(control, "viewer_port_free", lambda *a: False),
+            mock.patch.object(control, "port_holder_pid", lambda port: 4242),
+            mock.patch.object(control, "is_studio_process", lambda pid: False),
+            mock.patch.object(control, "PORT_FREE_TIMEOUT_S", 0.0),
+        ):
+            answer = launch(project, binary=fake)
+        self.assertEqual(answer["status"], "refused")
+        self.assertIn("not a Studio", answer["reason"])
+
+    def test_an_operators_bind_is_never_replaced(self) -> None:
+        with mock.patch.dict(os.environ, {VIEWER_BIND_ENV: "0.0.0.0:9876"}):
+            project = create_project(self.home / "mine", "mine")
+            (project.root / INDEX_DIR).mkdir(parents=True, exist_ok=True)
+            (project.root / INDEX_DIR / "viewer.json").write_text(
+                json.dumps({"bind": "127.0.0.1:5555", "pid": os.getpid()})
+            )
+            with mock.patch.object(control, "is_studio_process", lambda pid: True):
+                self.assertIsNone(control.adopt_viewer(project))
+            self.assertEqual(os.environ[VIEWER_BIND_ENV], "0.0.0.0:9876")

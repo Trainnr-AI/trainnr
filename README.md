@@ -70,11 +70,12 @@ Studio shows each stage as it lands, whoever ran it.
   (on Linux) in Unitree's simulator over DDS.
 - **Your own robot:** onboard it from MJCF, URDF or USD, identify its
   joints from telemetry (positions, velocities, and torques or PD
-  commands) and simulate it today. Training it needs a task module: walks
-  are registered for the Unitree Go1 and Go2 and the microduck biped, arm
-  tasks for the SO-101, ALOHA 2 and the Robotiq 2F-85 gripper
-  (`list_task_families`). A package of your own can register more through
-  the `trainnr.tasks` entry point.
+  commands) and simulate it today. A legged robot also walks: the
+  `legged-walk` family trains, evaluates and exports a walk on any
+  onboarded legged bundle, its shape read off the model. Other tasks need
+  a task module: arm tasks are registered for the SO-101, ALOHA 2 and the
+  Robotiq 2F-85 gripper (`list_task_families`), and a package of your own
+  can register more through the `trainnr.tasks` entry point.
 - **trainnr does not replace MuJoCo, mjlab, rsl_rl or LeRobot.** It drives
   them, and keeps the record of what each run used and produced.
 
@@ -198,7 +199,7 @@ you    Create a project called go2, onboard Unitree's Go2 from
        ~/unitree_rl_mjlab/src/assets/robots/unitree_go2/xmls/go2.xml,
        and identify it from the IIT chirp log.
 agent  create_project("go2")                        → ~/trainnr/projects/go2, now open
-       onboard_robot(".../go2.xml", "go2")          → go2@e5aa641994fc, shape checked
+       onboard_robot(".../go2.xml", "go2")          → go2@9fd00d4b4ee1, shape checked
        ingest_public_log("iit-go2-chirp")           → job ingest-public-log-…, started
        describe_job(job_id, wait_s=60)              → done · 24 s · 200 Hz · 6 channels · public log
        identify_system("go2", "iit-go2-chirp")      → 31 of 36 parameters pinned at 95 %
@@ -524,8 +525,16 @@ check on the fit's own recording is refused: it can only say "within".
 
 Your own robot enters by its MJCF, URDF or USD file (`onboard_robot`); the
 reply says whether it is in the shape a task needs before anything trains.
-Identifying and simulating it work today; training it needs a task module
-(see [Status](#status)).
+A legged robot then walks without any code of yours: declare its walk with
+`create_task(family="legged-walk", settings={"robot": ..., "actuator": ...})`
+and the rest is read off its model (the trunk is the body of its free
+joint, the feet its sites and collision geoms named `foot`, the stand pose
+its `home` or `stand` keyframe), with anything missing refused by name and
+the setting to declare named with it. `actuator` is an actuator bundle (a
+library one such as `xl330.m6`, or one fitted for your servo) or `model`,
+your model's own actuators, recorded as declared and not identified. Then
+`check_task`, `train_walk`, `evaluate_walk`, `export_deployment` and
+`gate_deployment` as for any walk.
 
 ## Measured, not claimed
 

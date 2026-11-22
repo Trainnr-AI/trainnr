@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import subprocess
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -107,7 +108,7 @@ def present(
     was shown: the kind, the entity paths logged, the view it got."""
     import rerun as rr  # noqa: PLC0415 - viz extra
 
-    from trainnr.viz import STUDIO_ADDRESS  # noqa: PLC0415
+    from trainnr.viz import studio_address  # noqa: PLC0415
 
     index = index or index_project(project)
     artifact = next((a for a in index.artifacts if a.stamp == stamp), None)
@@ -125,7 +126,7 @@ def present(
     recording = rr.RecordingStream(
         application_id=entry_name(stamp), recording_id=_recording_id(stamp)
     )
-    recording.connect_grpc(STUDIO_ADDRESS)
+    recording.connect_grpc(studio_address())
     try:
         # The saved streams first (docs/76 §10.5): each lands in the viewer
         # under its own recording id with the layout it was saved with -
@@ -156,7 +157,7 @@ def compare(
     import rerun as rr  # noqa: PLC0415 - viz extra
     import rerun.blueprint as rrb  # noqa: PLC0415
 
-    from trainnr.viz import STUDIO_ADDRESS  # noqa: PLC0415
+    from trainnr.viz import studio_address  # noqa: PLC0415
 
     index = index or index_project(project)
     halves = []
@@ -173,7 +174,7 @@ def compare(
         application_id=entry_name(f"{a} vs {b}"),
         recording_id=_recording_id(f"{a} vs {b}"),
     )
-    recording.connect_grpc(STUDIO_ADDRESS)
+    recording.connect_grpc(studio_address())
     shown = []
     try:
         for side, artifact, kind, presenter in halves:
@@ -291,9 +292,11 @@ def _present_robot(
 ) -> Shown:
     """The bundle's model as meshes in a 3D view, posed at its keyframe."""
     import mujoco  # noqa: PLC0415
+    import rerun as rr  # noqa: PLC0415
     import rerun.blueprint as rrb  # noqa: PLC0415
 
     from trainnr.bundles.bundle import model_file_for_use  # noqa: PLC0415
+    from trainnr.project.previews import preview_keyframe  # noqa: PLC0415
     from trainnr.viz import RigMirror  # noqa: PLC0415
 
     folder = project.root / artifact.path
@@ -302,12 +305,36 @@ def _present_robot(
         raise ValueError(f"{folder}: no MJCF to show")
     model = mujoco.MjModel.from_xml_path(str(model_file))
     data = mujoco.MjData(model)
-    if model.nkey > 0:
-        mujoco.mj_resetDataKeyframe(model, data, 0)
-    mujoco.mj_forward(model, data)
+    shown = preview_keyframe(model)
+    last = shown if shown is not None else 0  # the pose the view opens on
+    names = [
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_KEY, k) or f"#{k}"
+        for k in range(model.nkey)
+    ]
     with _AsDefault(rr_):
         mirror = RigMirror(model, model_colors=True)
-        mirror.log(data, path=root, static=True)
+        if model.nkey > 1:
+            # every keyframe a step of the `keyframe` timeline, the one the
+            # preview stands in last, so the view opens on it and the
+            # timeline chooses another (#122)
+            order = [k for k in range(model.nkey) if k != last] + [last]
+            for step, k in enumerate(order):
+                mujoco.mj_resetDataKeyframe(model, data, k)
+                mujoco.mj_forward(model, data)
+                rr_.set_time(KEYFRAME_TIMELINE, sequence=step)
+                mirror.log(data, path=root)
+                rr_.log(f"{root}/keyframe", rr.TextLog(names[k]))
+        else:
+            if shown is not None:
+                mujoco.mj_resetDataKeyframe(model, data, shown)
+            mujoco.mj_forward(model, data)
+            mirror.log(data, path=root, static=True)
+        keyframes = (
+            f"- keyframes {', '.join(names)}; the `{KEYFRAME_TIMELINE}` timeline "
+            f"steps through them, ending on `{names[last]}`\n"
+            if model.nkey > 1
+            else ""
+        )
         rr_.log(
             f"{root}/census",
             _doc(
@@ -315,6 +342,7 @@ def _present_robot(
                 f"- bodies {model.nbody} · joints {model.njnt} · actuators {model.nu} "
                 f"· sensors {model.nsensor} · geoms {model.ngeom}\n"
                 f"- model `{model_file.name}` · timestep {model.opt.timestep:g} s\n"
+                + keyframes
                 + _lineage(artifact)
             ),
             static=True,
@@ -330,6 +358,10 @@ def _present_robot(
     }
 
 
+# The timeline a robot's keyframes are shown on, one step each.
+KEYFRAME_TIMELINE = "keyframe"
+
+
 # Footage comes as frames ffmpeg decoded, thinned and shrunk so a long clip
 # stays a small stream, not as a video for the viewer to decode: the Studio's
 # viewer has no AV1 decoder (Rerun's `nasm` feature), and it plays H.264 only
@@ -338,9 +370,10 @@ FRAMES_FPS = 15
 FRAMES_WIDTH = 640
 
 
-def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
-    import rerun as rr  # noqa: PLC0415
-
+@contextlib.contextmanager
+def decoded_frames(video: Path) -> Iterator[list[Path]]:
+    """The video's frames as JPEGs ffmpeg decoded at `FRAMES_FPS`, at most
+    `FRAMES_WIDTH` wide, gone when the block ends."""
     from trainnr.video.footage import tool  # noqa: PLC0415
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -361,7 +394,14 @@ def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
             timeout=600,
             check=True,
         )
-        for i, frame in enumerate(sorted(Path(tmp).glob("*.jpg"))):
+        yield sorted(Path(tmp).glob("*.jpg"))
+
+
+def log_frames(rr_: rr.RecordingStream, entity: str, video: Path) -> str:
+    import rerun as rr  # noqa: PLC0415
+
+    with decoded_frames(video) as frames:
+        for i, frame in enumerate(frames):
             rr_.set_time("video", duration=i / FRAMES_FPS)
             rr_.log(entity, rr.EncodedImage(path=frame))
     return f"frames at {FRAMES_FPS} fps"
@@ -597,7 +637,7 @@ def _present_rl_run(
                         continue
                     rr_.set_time(COL_ITERATION, sequence=int(row[it]))
                     rr_.log(path, rr.Scalars(float(row[c])))
-        stills = _log_stills(folder, rr_, root)
+        stills = _log_films(folder, rr_, root) or _log_stills(folder, rr_, root)
         identity = folder / IDENTITY_FILE
         facts = {k: v for k, v in record.items() if k not in ("columns", "curve")}
         text = json.dumps(facts, indent=1)
@@ -642,6 +682,35 @@ def _present_rl_run(
 
 
 STILLS_DIR, STILLS_FILE = "stills", "stills.json"  # walk_stills writes them
+
+
+PLAY_FILMS = "play-*/play.mp4"  # play_walk's films, one per checkpoint (#137)
+
+
+def _log_films(folder: Path, rr_: rr.RecordingStream, root: str) -> str | None:
+    """A run's checkpoint films one after another on the `video` timeline,
+    each frame also at its checkpoint's iteration, so scrubbing the reward
+    curve shows that checkpoint walking. The entity path, or None when the
+    run has no films."""
+    import rerun as rr  # noqa: PLC0415
+
+    films = sorted(
+        (int(m.group(1)), f)
+        for f in folder.glob(PLAY_FILMS)
+        if (m := re.search(r"_(\d+)$", f.parent.name))
+    )
+    if not films:
+        return None
+    path, start = f"{root}/checkpoint", 0.0
+    for iteration, film in films:
+        with decoded_frames(film) as frames:
+            for i, frame in enumerate(frames):
+                rr_.set_time("video", duration=start + i / FRAMES_FPS)
+                rr_.set_time(COL_ITERATION, sequence=iteration)
+                rr_.log(path, rr.EncodedImage(path=frame))
+            start += len(frames) / FRAMES_FPS
+    rr_.reset_time()
+    return path
 
 
 def _log_stills(folder: Path, rr_: rr.RecordingStream, root: str) -> str | None:

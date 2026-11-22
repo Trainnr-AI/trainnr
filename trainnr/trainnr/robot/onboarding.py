@@ -169,19 +169,35 @@ def onboard(
     name: str,
     destination: Path,
     options: Mapping[str, Any] | None = None,
+    *,
+    revise: bool = False,
 ) -> dict[str, Any]:
-    """The door: the file must exist, the bundle must not, the format
-    must be known and the options must be its; then the source writes
-    the bundle and the reply carries the stamp. The name's spelling is
-    the project layer's rule (`project.locate.plain_name`), checked by
-    the caller above this tier."""
+    """The door: the file must exist, the format must be known and the
+    options must be its; then the source writes the bundle and the reply
+    carries the stamp. With `revise` (a project's robots), a robot already
+    onboarded under the name gets a new revision (`robot.revisions`), the
+    one it replaces kept; elsewhere an existing bundle is refused. The
+    name's spelling is the project layer's rule
+    (`project.locate.plain_name`), checked by the caller above this tier."""
     source_path = Path(source_path).expanduser()
     if not source_path.is_file():
         raise FileNotFoundError(
             f"no model file at {source_path}{_where_from(source_path)}"
         )
     destination = Path(destination)
+    if destination.exists() and revise:
+        # a project's robot again under its own name: a revision, never an
+        # overwrite; the bundle it replaces is kept (#119)
+        from trainnr.robot.revisions import revise as make_revision  # noqa: PLC0415
+
+        incoming = destination.parent / f".{destination.name}.incoming"
+        shutil.rmtree(incoming, ignore_errors=True)
+        out = onboard(source_path, name, incoming, options)
+        revised = make_revision(name, destination, incoming)
+        return {**out, **revised, "path": str(destination)}
     if destination.exists():
+        # the library (and a folder outside a project) is never revised:
+        # its bundles are certified, and moving one would break the checkout
         raise FileExistsError(
             f"robots/{name} already exists (stamp: {stamp(name, destination)}) "
             "— onboarding never overwrites a bundle; pick another name or "
@@ -227,27 +243,86 @@ def audit_written(
     return audit
 
 
+# How many names of the files left beside a model the reply lists.
+LEFT_BESIDE_SHOWN = 20
+
+
+def copy_model_closure(source_path: Path, destination: Path) -> dict[str, Any]:
+    """Copy what an MJCF model reaches (`mjcf_closure`), and its licence
+    and readme, keeping their places relative to the model's folder; never
+    the rest of the folder (#120). Refuses by name a file outside the
+    folder, and the copy is compiled from where it landed, so a reference
+    the reader missed fails here, not in training. Returns what was copied
+    and what was left beside."""
+    import mujoco  # noqa: PLC0415 - sim extra
+
+    from trainnr.robot.mjcf_closure import kept_beside, model_closure  # noqa: PLC0415
+
+    folder = source_path.resolve().parent
+    files = [*model_closure(source_path), *kept_beside(source_path)]
+    total = 0
+    for path in files:
+        if not path.is_relative_to(folder):
+            raise ValueError(
+                f"{source_path.name} uses {path}, outside its folder {folder}; "
+                "move the file in beside the model"
+            )
+        if not path.is_file():
+            raise FileNotFoundError(f"{source_path.name} uses {path}, which is missing")
+        total += path.stat().st_size
+    if total > MODEL_FOLDER_MAX_BYTES:
+        raise ValueError(
+            f"{source_path.name} reaches more than {MODEL_FOLDER_MAX_BYTES >> 30} GB "
+            "of files"
+        )
+    copied = sorted({path.relative_to(folder) for path in files})
+    for relative in copied:
+        (destination / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(folder / relative, destination / relative)
+    try:
+        mujoco.MjModel.from_xml_path(str(destination / source_path.name))
+    except ValueError as why:
+        shutil.rmtree(destination)
+        raise ValueError(
+            f"{source_path.name} uses a file trainnr's copy did not take ({why}); "
+            "please report it with the model"
+        ) from why
+    taken = {folder / relative for relative in copied}
+    beside = sorted(
+        path.relative_to(folder).as_posix()
+        for path in folder.rglob("*")
+        if path.is_file() and path not in taken
+    )
+    return {
+        "copied": [relative.as_posix() for relative in copied],
+        "left_beside": len(beside),
+        "left_beside_names": beside[:LEFT_BESIDE_SHOWN],
+    }
+
+
 @model_source(
     MJCF_SOURCE,
     MJCF_SUFFIXES,
-    doc="an MJCF: its whole directory copied (meshes and includes ride along), "
-    "compiled once before a byte lands",
+    doc="an MJCF: the files it reaches copied (its includes, meshes and "
+    "textures, and a licence beside it), compiled once before a byte lands",
 )
 def onboard_mjcf(
     source_path: Path, name: str, destination: Path, options: Mapping[str, Any]
 ) -> dict[str, Any]:
     """MJCF: compile FIRST — a model that does not compile is refused
-    before a single byte lands — then the directory whole, then the record."""
+    before a single byte lands — then the files it reaches, then the record."""
     import mujoco  # noqa: PLC0415 - sim extra
 
     del options  # an MJCF source takes none; `onboard` refused any
     model = mujoco.MjModel.from_xml_path(str(source_path))
-    copy_model_folder(source_path.parent, destination)
+    files = copy_model_closure(source_path, destination)
     write_bundle_record(destination, name, source_path.name, model, source=source_path)
     return {
         "stamp": stamp(name, destination),
         "path": str(destination),
         "model_file": source_path.name,
+        # the stamp covers exactly these: the model's own files (#120)
+        "files": files,
         "bodies": int(model.nbody),
         "joints": int(model.njnt),
         "actuators": int(model.nu),

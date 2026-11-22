@@ -33,6 +33,7 @@ not in this repository.
 | [85 The desktop app](85-the-desktop-app.md) | The app people download and use on their own, which an agent can also drive over MCP: the evidence from Paper and Spline, the architecture, the phases | phases 1 to 5 built on feat/desktop-app, 2026-10-11; signing and the Mac and Windows checks left |
 | [86 From video to robot training data](86-video-to-robot.md) | Raw video to robot training data on NVIDIA's stack: video gives the motion, physics gives the contact; the core modules, and the project templates that start a project on it | proposed 2026-11-01; templates and footage built; phase 3 (video to a G1 reference, tracking training) built 2026-11-15 |
 | [87 The deployment manifest](87-the-deployment-manifest.md) | `deploy.json` (`trainnr-deploy/1`) for runtimes outside trainnr: one control tick, every key, each observation source's definition and units, and the servo groups | written 2026-11-15 (issue #106) |
+| [88 Your own robot](88-your-own-robot.md) | Any legged robot through the tools, no code: what the model needs, the walk's settings, the actuator (the model's own, a library one, or one fitted on a servo bench), and limits over several joints (rules, tables, grids) in the walk, the evaluation, the deployment and the gate | written 2026-11-22 (issues #100, #101, #121) |
 
 ## Research
 

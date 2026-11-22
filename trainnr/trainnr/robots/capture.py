@@ -80,6 +80,8 @@ class CaptureState:
     stamp: str | None = None  # set when ingested
     error: str | None = None
     notes: list[str] = field(default_factory=list)
+    lands: str = "recording"  # the kind it becomes: a recording, or footage (a camera)
+    measured: dict[str, Any] = field(default_factory=dict)  # a camera's rate and size
 
     def write(self, state_dir: Path) -> Path:
         out = Path(state_dir) / STATE_FILE
@@ -211,7 +213,9 @@ def status(state_dir: Path) -> dict[str, Any]:
 # -- the registry of live sources ---------------------------------------------
 
 # Options every listener takes from the layer above, never from a caller.
-INTERNAL_OPTIONS = ("ingest", "on_state", "subscribe")
+INTERNAL_OPTIONS = ("ingest", "on_state", "subscribe", "python")
+RECORDING = "recording"
+FOOTAGE = "footage"
 
 
 class Listener(Protocol):
@@ -235,15 +239,15 @@ class SourceSpec:
     cls: str
     options: tuple[str, ...]
     platforms: tuple[str, ...] = ()  # empty: everywhere
+    lands: str = RECORDING  # what stop_capture makes of it: a recording, or footage
 
     def open(self, recordings: Path, state_dir: Path, name: str, **options: Any) -> Any:
         """The listener, or a refusal by name: an option the source does
         not take, a platform it does not run on."""
         unknown = sorted(set(options) - set(self.options))
         if unknown:
-            raise ValueError(
-                f"source {self.name!r} takes {list(self.options)}, not {unknown}"
-            )
+            public = [o for o in self.options if o not in INTERNAL_OPTIONS]
+            raise ValueError(f"source {self.name!r} takes {public}, not {unknown}")
         if self.platforms and sys.platform not in self.platforms:
             raise RuntimeError(
                 f"the {self.name} capture source ({self.description}) runs on "
@@ -276,6 +280,16 @@ SOURCES: dict[str, SourceSpec] = {
         ),
         platforms=("linux",),
     ),
+    "camera": SourceSpec(
+        name="camera",
+        description="a camera's live picture: an MJPEG or RTSP stream from the "
+        "robot (http://, https://, rtsp://) or a local video device "
+        "(/dev/video0), shown live in the Studio and saved as footage",
+        module="trainnr.robots.camera_capture",
+        cls="CameraCapture",
+        options=("url", *INTERNAL_OPTIONS),
+        lands=FOOTAGE,
+    ),
 }
 DEFAULT_SOURCE = "udp"
 
@@ -305,6 +319,7 @@ def sources() -> list[dict[str, Any]]:
             "options": [o for o in spec.options if o not in INTERNAL_OPTIONS],
             "platforms": list(spec.platforms) or ["any"],
             "here": not spec.platforms or sys.platform in spec.platforms,
+            "lands": spec.lands,
         }
         for spec in SOURCES.values()
     ]

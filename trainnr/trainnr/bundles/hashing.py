@@ -81,11 +81,15 @@ LICENSES_DIR = "LICENSES"
 # it is a record about the bundle, so a stamp is the same with the fetched
 # files in place as it was when they were carried.
 FETCH_MANIFEST = "FETCH.json"
+# A revision's record of the bundle it replaced and what changed (#119):
+# about the bundle, not in it.
+REVISION_FILE = "revision.json"
 BUNDLE_RECORDS: tuple[str, ...] = (
     f"{FITS_DIR}/*",
     AUDIT_FILE,
     f"{LICENSES_DIR}/*",
     FETCH_MANIFEST,
+    REVISION_FILE,
 )
 
 

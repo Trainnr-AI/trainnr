@@ -504,6 +504,12 @@ class JobManager:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         job_id = f"{tool}-{uuid.uuid4().hex[:8]}"
         log_path = self.jobs_dir / f"{job_id}.log"
+        # The job streams to the Studio its project has open, which is not
+        # the default port when another session's Studio held it (#124).
+        from trainnr.project.control import adopt_viewer  # noqa: PLC0415
+        from trainnr.project.locate import Project  # noqa: PLC0415
+
+        adopt_viewer(Project(self.jobs_dir.parent))
         # The module's spawn is looked up now, not at construction: the
         # server builds a job manager per call, and a test stubs it here.
         process = (self._spawner or _spawn)(argv, Path(cwd), log_path)

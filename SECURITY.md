@@ -95,6 +95,7 @@ What listens:
 | `play_walk`'s browser viewer (viser) | `127.0.0.1:8080` |
 | `start_capture` over UDP | Every interface, because the robot sends from the network; at most an hour per capture; anything that reaches the port is recorded |
 | `start_capture` over DDS | Joins the DDS domain on the network interface it is given (the robot's), to subscribe to its topics |
+| `start_capture` from a camera | Connects to the one address it is given (an http(s) or rtsp(s) stream, never a local file) or reads the video device named, for the capture's window; the address's user and password are kept out of every record, state file and stream |
 | The MCP server | None: it speaks over stdio |
 
 Nothing phones home: there is no telemetry or update check, and Rerun's
