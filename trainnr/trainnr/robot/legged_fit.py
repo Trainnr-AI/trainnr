@@ -12,7 +12,8 @@ handling and the data's basis (own robot, public log, simulation).
 What it needs and what it refuses, by name: joint channels whose
 component names are the model's joint names, or map onto them through
 a declared table (`robots.joint_orders.JOINT_RENAMES`: Unitree's bus
-names a motor `FR_hip`, the model `FR_hip_joint`); a torque source; for a
+names a motor `FR_hip`, the model `FR_hip_joint`), a recorded joint the
+model has no hinge for left out and named in the record; a torque source; for a
 floating-base model with a walking log, an orientation and a gyro (an
 IMU, or base channels already in MuJoCo's conventions) and foot
 contacts, else every sample counts and the anchor says the base was
@@ -330,6 +331,27 @@ def hinges_of(model: Any) -> set[str]:
     }
 
 
+def _without_columns(
+    recording: Recording, named: tuple[str, ...], hinges: set[str]
+) -> Recording:
+    """The recording with every joint channel (one column per recorded
+    joint) cut to the joints the model has a hinge for."""
+    keep = [k for k, m in enumerate(named) if m in hinges]
+    channels = {
+        name: replace(
+            channel,
+            values=np.atleast_2d(channel.values.T).T[:, keep],
+            components=tuple(channel.components[k] for k in keep)
+            if channel.components
+            else (),
+        )
+        if name.startswith("joint.") and channel.width == len(named)
+        else channel
+        for name, channel in recording.channels.items()
+    }
+    return replace(recording, channels=channels)
+
+
 def prepare(  # noqa: PLR0913 - the balance's knobs, each a named dataclass
     recording: Recording,
     model: Any,
@@ -349,7 +371,15 @@ def prepare(  # noqa: PLR0913 - the balance's knobs, each a named dataclass
         raise ValueError(f"the recording needs {JOINT_POSITION} and {JOINT_VELOCITY}")
     if not position.components:
         raise ValueError(f"{JOINT_POSITION} names no joints in its components")
-    joints, renamed = rename_to(tuple(position.components), hinges_of(model))
+    hinges = hinges_of(model)
+    named, renamed = rename_to(tuple(position.components), hinges)
+    left_out = [
+        n for n, m in zip(position.components, named, strict=True) if m not in hinges
+    ]
+    if left_out:
+        recording = _without_columns(recording, named, hinges)
+        position = recording.channels[JOINT_POSITION]
+    joints = tuple(m for m in named if m in hinges)
     clock = position.times
     torque, source = torque_of(recording, clock)
     times, q_mid, v_mid, acc = tick_aligned(clock, position.values, smoothing=smoothing)
@@ -377,6 +407,10 @@ def prepare(  # noqa: PLR0913 - the balance's knobs, each a named dataclass
     handling = f"{base_words}; {mask_words}"
     if renamed is not None:
         handling += f"; joint names mapped to the model's by {renamed!r}"
+    if left_out:
+        handling += (
+            f"; recorded joints {left_out} left out, the model has no hinge for them"
+        )
     if stride > 1:
         handling += (
             f"; every {stride}th aligned sample kept ({len(times)} of the log, "
