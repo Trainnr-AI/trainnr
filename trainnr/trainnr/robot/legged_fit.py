@@ -23,6 +23,7 @@ the ground carries a contact force the log does not hold.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -57,7 +58,7 @@ from trainnr.robot.torque_balance import (
     tick_aligned,
     units_for,
 )
-from trainnr.robots.joint_orders import anatomy_of, rename_to
+from trainnr.robots.joint_orders import rename_to
 from trainnr.robots.recording import (
     BASE_ACCELERATION,
     BASE_POSE,
@@ -279,15 +280,80 @@ def base_of(
     }, "; ".join(words)
 
 
+def _body_depth(model: Any, body: int) -> int:
+    depth = 0
+    while body > 0:
+        body, depth = int(model.body_parentid[body]), depth + 1
+    return depth
+
+
+def _named_body(model: Any, foot: str) -> int:
+    """The body a contact channel's foot names: the deepest body whose own
+    name, or a site's or geom's on it, is `foot` or carries it as a whole
+    word (`FL` in `FL_foot`, any case). Refused by name when none does."""
+    import mujoco  # noqa: PLC0415
+
+    word = foot.lower()
+
+    def carries(name: str | None) -> bool:
+        return bool(name) and word in re.split(r"[^0-9a-z]+", str(name).lower())
+
+    found = []
+    for kind, count, owner in (
+        (mujoco.mjtObj.mjOBJ_BODY, model.nbody, None),
+        (mujoco.mjtObj.mjOBJ_SITE, model.nsite, model.site_bodyid),
+        (mujoco.mjtObj.mjOBJ_GEOM, model.ngeom, model.geom_bodyid),
+    ):
+        for i in range(count):
+            name = mujoco.mj_id2name(model, kind, i)
+            if name == foot or carries(name):
+                found.append(i if owner is None else int(owner[i]))
+    found = [b for b in found if b > 0]
+    if not found:
+        raise ValueError(
+            f"the foot-contact channel names a foot {foot!r} that no body, site or "
+            "geom of the model carries in its name"
+        )
+    return max(found, key=lambda b: _body_depth(model, b))
+
+
+def feet_below(
+    model: Any, joints: tuple[str, ...], feet: tuple[str, ...]
+) -> list[list[int]]:
+    """For each joint, the indices in `feet` of the feet below it in the
+    model's body tree: a foot's contact force reaches the joints between
+    it and the trunk and no others. Empty for a joint above no foot (a
+    head): its torque carries no contact force."""
+    import mujoco  # noqa: PLC0415
+
+    foot_bodies = [_named_body(model, foot) for foot in feet]
+    out = []
+    for joint in joints:
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint)
+        top = int(model.jnt_bodyid[jid])
+        below = []
+        for k, foot in enumerate(foot_bodies):
+            node = foot
+            while node > 0 and node != top:
+                node = int(model.body_parentid[node])
+            if node == top:
+                below.append(k)
+        out.append(below)
+    return out
+
+
 def usable_of(
     recording: Recording,
     times: np.ndarray,
     joints: tuple[str, ...],
+    model: Any,
     mask: ContactMask = DEFAULT_CONTACT,
 ) -> tuple[np.ndarray | None, str]:
-    """Per joint, the samples whose leg is in the air, with a margin
-    around every contact transition; None when there is no contact
-    channel (every sample counts)."""
+    """Per joint, the samples where every foot below it (`feet_below`) is
+    in the air, with a margin around every contact transition; None when
+    there is no contact channel (every sample counts). Any robot: the feet
+    are found in the model by the channel's names (once Go2's leg names,
+    #133's follow-up)."""
     contact = recording.channels.get(FOOT_CONTACT)
     if contact is None:
         return None, "every sample counts (no foot-contact channel)"
@@ -306,19 +372,21 @@ def usable_of(
         for edge in edges:
             in_air[max(0, edge - margin) : edge + margin + 1, k] = False
     usable = np.ones((len(times), len(joints)), dtype=bool)
-    for j, joint in enumerate(joints):
-        leg = anatomy_of(joint)[0]
-        if leg not in feet:
-            raise ValueError(
-                f"joint {joint!r} names leg {leg!r}, not one of the contact feet {feet}"
-            )
-        usable[:, j] = in_air[:, feet.index(leg)]
+    above_none = []
+    for j, below in enumerate(feet_below(model, joints, feet)):
+        if not below:
+            above_none.append(joints[j])
+        for k in below:
+            usable[:, j] &= in_air[:, k]
     share = usable.mean(axis=0)
-    return usable, (
+    words = (
         f"swing-phase samples only, {mask.margin_s * 1e3:.0f} ms clear of every "
         f"touchdown and lift-off ({share.min():.0%}-{share.max():.0%} of the log "
         "per joint)"
     )
+    if above_none:
+        words += f"; every sample for {above_none}, above no foot"
+    return usable, words
 
 
 def hinges_of(model: Any) -> set[str]:
@@ -385,7 +453,7 @@ def prepare(  # noqa: PLR0913 - the balance's knobs, each a named dataclass
     times, q_mid, v_mid, acc = tick_aligned(clock, position.values, smoothing=smoothing)
     torque = torque[:-1]
     base, base_words = base_of(recording, times, model, smoothing)
-    usable, mask_words = usable_of(recording, times, joints, mask)
+    usable, mask_words = usable_of(recording, times, joints, model, mask)
     rate = 1.0 / float(np.median(np.diff(times)))
     stride = decimation.stride(len(times), rate, bandwidth.cutoff_hz)
     if stride > 1:

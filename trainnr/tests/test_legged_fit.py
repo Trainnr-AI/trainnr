@@ -194,6 +194,78 @@ class AJointTheModelLacks(unittest.TestCase):
         self.assertEqual(len(fit.balance.result.parameters), 36)
 
 
+CAPSULE = '<geom type="capsule" fromto="0 0 0 0 0 -.2" size=".02" mass=".2"/>'
+
+
+def _leg(side: str) -> str:
+    return (
+        f'<body name="{side}_thigh"><joint name="{side}_hip" axis="0 1 0"/>{CAPSULE}'
+        f'<body name="{side}_shin" pos="0 0 -.2">'
+        f'<joint name="{side}_knee" axis="0 1 0"/>{CAPSULE}'
+        f'<site name="{side}_foot" pos="0 0 -.2"/></body></body>'
+    )
+
+
+BIPED = (
+    '<mujoco><worldbody><body name="torso"><freejoint/>'
+    '<geom type="box" size=".1 .1 .1" mass="2"/>'
+    '<body name="head"><joint name="neck" axis="0 0 1"/>'
+    '<geom type="sphere" size=".05" mass=".2"/></body>'
+    f"{_leg('left')}{_leg('right')}</body></worldbody></mujoco>"
+)
+
+
+@needs_sim
+class AnyRobotsFeet(unittest.TestCase):
+    """A foot's contact masks the joints between it and the trunk, found
+    in the model by the channel's names: any robot, not Go2's leg names
+    alone (a biped's contact channel was refused on 'not a Go2 hip')."""
+
+    def test_a_biped_masks_each_leg_by_its_own_foot_and_never_the_head(self) -> None:
+        import mujoco  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from trainnr.robot.legged_fit import feet_below, usable_of  # noqa: PLC0415
+        from trainnr.robots.recording import Channel, Recording  # noqa: PLC0415
+
+        model = mujoco.MjModel.from_xml_string(BIPED)
+        joints = ("neck", "left_hip", "left_knee", "right_knee")
+        feet = ("left_foot", "right_foot")
+        self.assertEqual(feet_below(model, joints, feet), [[], [0], [0], [1]])
+        times = np.arange(0, 2.0, 0.01)
+        down = np.zeros((len(times), 2))
+        down[:100, 0] = 1.0  # the left foot down for the first second
+        recording = Recording(
+            source="x",
+            adapter="test",
+            channels={"foot.contact": Channel("foot.contact", times, down, "", feet)},
+        )
+        usable, words = usable_of(recording, times, joints, model)
+        assert usable is not None
+        self.assertTrue(usable[:, 0].all())  # the neck: every sample
+        self.assertFalse(usable[:100, 1].any())  # the left leg while its foot is down
+        self.assertTrue(usable[150:, 1].all())
+        self.assertTrue(usable[:, 3].all())  # the right leg: its foot never down
+        self.assertIn("['neck'], above no foot", words)
+        with self.assertRaisesRegex(ValueError, "foot 'tail'"):
+            feet_below(model, joints, ("tail",))
+
+    def test_go2s_leg_names_still_find_its_feet(self) -> None:
+        import mujoco  # noqa: PLC0415
+
+        from trainnr.robot.legged_fit import feet_below, hinges_of  # noqa: PLC0415
+        from trainnr.robots.joint_orders import (  # noqa: PLC0415
+            GO2_MENAGERIE_FEET,
+            anatomy_of,
+        )
+
+        model = mujoco.MjModel.from_xml_path(str(go2_model_or_skip()))
+        joints = tuple(sorted(hinges_of(model)))
+        self.assertEqual(len(joints), 12)
+        by_table = [[GO2_MENAGERIE_FEET.index(anatomy_of(j)[0])] for j in joints]
+        self.assertEqual(feet_below(model, joints, GO2_MENAGERIE_FEET), by_table)
+
+
 @needs_sim
 class SyntheticFit(unittest.TestCase):
     def test_a_synthetic_log_fits_into_a_record_with_basis_and_metrics(self) -> None:
