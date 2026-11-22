@@ -340,6 +340,22 @@ work. Live listeners: the archived rig over UDP and, since 2026-09-24,
 Unitree's DDS; a live ROS 2 listener would need a ROS installation,
 which is what the seam avoids.
 
+A camera is a live source too (#130, `trainnr/trainnr/robots/camera_capture.py`):
+`start_capture(name, source="camera", url=...)` reads an MJPEG stream
+over http(s), an RTSP stream or a video device (`/dev/videoN`) once with
+ffmpeg, which writes the footage (H.264, a fragmented MP4 that stays
+playable if the feed is cut) and a JPEG preview at the camera's own rate.
+The preview reaches the Studio's viewer from a child process with the
+`viz` extra, so the server needs neither Rerun nor a decoder; beside the
+picture it shows the frame rate measured as pictures arrive, the size and
+the codec. Delay is not measured: an MJPEG stream or a device carries no
+capture time to compare with arrival. `stop_capture` lands the footage
+through `ingest_video`'s stamping (its `origin`, "filmed live from" the
+address), and the Recordings page lists the capture while it films. A
+URL's user and password reach no record, state file or stream; the feed
+ends with the server that started it. Recording the picture beside a
+telemetry capture on one clock is the next step, not built.
+
 ### 5.2 Showing an artifact as itself
 
 The Studio can index a project and launch the viewer; `present`

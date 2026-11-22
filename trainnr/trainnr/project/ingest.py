@@ -18,10 +18,12 @@ from trainnr.project.kinds import Kind, stamp_kind
 from trainnr.project.locate import INDEX_DIR, Project
 from trainnr.robots.capture import (
     DEFAULT_SOURCE,
+    FOOTAGE,
     LISTENING,
     CaptureState,
     Listener,
     open_capture,
+    source_spec,
 )
 from trainnr.robots.capture import status as capture_state
 from trainnr.robots.ingest import ingest as ingest_into
@@ -67,12 +69,24 @@ def capture(
     project: Project, name: str, *, source: str = DEFAULT_SOURCE, **options: Any
 ) -> Listener:
     """A live capture into the project: the registry's listener for
-    `source` pointed at the project's recordings and state directory,
-    landing through the stamping ingest above, re-indexing as it runs."""
+    `source` pointed at the project's recordings (or, for a camera, its
+    footage) and state directory, landing through the stamping ingest
+    above (or `ingest_video`'s), re-indexing as it runs."""
     last = {"at": 0.0}
+    footage = source_spec(source).lands == FOOTAGE
 
     def land(_recordings: Path, source: Path, **kw: Any) -> dict[str, Any]:
         return ingest(project, source, **kw)
+
+    def land_footage(_footage: Path, source: Path, **kw: Any) -> dict[str, Any]:
+        from trainnr.video.footage import ingest_footage  # noqa: PLC0415
+
+        folder = ingest_footage(project.footage, source, **kw)
+        return {
+            "stamp": stamp_kind(Kind.FOOTAGE, folder),
+            "path": str(folder.relative_to(project.root)),
+            "notes": [],
+        }
 
     def reindex(state: CaptureState) -> None:
         now = time.monotonic()
@@ -88,10 +102,10 @@ def capture(
 
     return open_capture(
         source,
-        project.recordings,
+        project.footage if footage else project.recordings,
         project.root / INDEX_DIR,
         name,
-        ingest=land,
+        ingest=land_footage if footage else land,
         on_state=reindex,
         **options,
     )

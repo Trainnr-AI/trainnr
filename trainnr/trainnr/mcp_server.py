@@ -2319,6 +2319,9 @@ def ingest_recording(
 _CAPTURES: dict[str, Any] = {}
 
 
+CAMERA_SOURCE = "camera"  # robots.capture's camera, which takes a url (#130)
+
+
 def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     name: str,
     *,
@@ -2327,6 +2330,7 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     network: str | None = None,
     basis: str | None = None,
     window_s: float | None = None,
+    url: str | None = None,
 ) -> dict[str, Any] | Refusal:
     """Listen for a robot's telemetry and land it in the current project;
     `stop_capture` ingests it as a stamped recording. `source` names the
@@ -2334,7 +2338,10 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
     port; `dds` is Unitree's bus, `rt/lowstate` and `rt/lowcmd` as one
     recording, on `network` (`lo` for their simulator, the robot's
     interface for the robot), its `basis` "own robot" unless declared
-    "simulation" for the stand-in. The state on disk
+    "simulation" for the stand-in; `camera` is a camera's picture at `url`
+    (an http(s) MJPEG or rtsp(s) stream, or /dev/videoN), shown live in
+    the Studio with its measured rate and size and saved as footage, the
+    way `ingest_video` stamps it (#130). The state on disk
     (`<project>/.index/capture.json`) is what `describe_capture` and the
     Studio read. Refused by name: no project open, a capture already
     listening for this project, a recording of that name already present,
@@ -2365,8 +2372,14 @@ def start_capture(  # noqa: PLR0913 - the listener's knobs, each named
             f"window_s is between 0 and {MAX_CAPTURE_WINDOW_S:g} seconds, "
             f"got {window_s}"
         )
-    given = {"port": port, "network": network, "basis": basis}
-    options = {k: v for k, v in given.items() if v is not None}
+    given = {"port": port, "network": network, "basis": basis, "url": url}
+    options: dict[str, Any] = {k: v for k, v in given.items() if v is not None}
+    if source == CAMERA_SOURCE:
+        from trainnr.mcp_actions import pipeline_python  # noqa: PLC0415
+
+        if url is None:
+            return refusal("a camera capture needs `url`: a stream or /dev/videoN")
+        options["python"] = pipeline_python("viz")  # the live view needs Rerun
     try:
         listener = live_capture(
             project, name, source=source or DEFAULT_SOURCE, **options
@@ -4007,14 +4020,13 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
         "options, and whether it runs on this machine."
     )(list_capture_sources)
     server.tool(
-        description="Record a robot's telemetry live into the project, over UDP or "
-        "Unitree's DDS (rt/lowstate and rt/lowcmd as one recording, from "
-        "the robot or its simulator); stop_capture saves it as a "
-        "recording."
+        description="Record a robot live: telemetry over UDP or Unitree's DDS "
+        "(rt/lowstate, rt/lowcmd), or source camera: url (http/rtsp stream or "
+        "/dev/videoN), shown in the Studio; stop_capture saves it."
     )(start_capture)
     server.tool(
-        description="Stop the project's listener and ingest the capture as a stamped "
-        "recording; a session with no datagrams fails by name."
+        description="Stop the capture and save it, stamped: a recording, or "
+        "footage from a camera; nothing received fails by name."
     )(stop_capture)
     server.tool(
         description="The project's capture state on disk: idle, listening, ingested, "
