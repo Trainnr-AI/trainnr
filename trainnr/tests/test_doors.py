@@ -233,6 +233,28 @@ class TheWalkDoors(unittest.TestCase):
             self.assertEqual(film[film.index("--robot") + 1], "microduck")
             self.assertEqual(film[film.index("--project") + 1], str(project.root))
 
+    def test_the_walk_only_tools_refuse_a_tracking_deployment(self) -> None:
+        """Pre-flight, attribution, the assay, staging and the DDS gate are
+        built around a walk's commanded twist: a tracking deployment is
+        refused by name and pointed at the plain MuJoCo gate (docs/87 §8)."""
+        with project_with() as (project, spawned):
+            folder = project.root / "deploy" / "dance"
+            folder.mkdir(parents=True)
+            (folder / "deploy.json").write_text(json.dumps({"tracking": {"frames": 3}}))
+            calls = [
+                server.preflight_deployment("dance"),
+                server.attribute_deployment("dance"),
+                server.assay_deployment("dance", "garden"),
+                server.stage_deployment("dance", "garden"),
+            ]
+            if sys.platform.startswith("linux"):  # elsewhere DDS refuses for its OS
+                calls.append(server.gate_deployment("dance", runtime="dds"))
+            for out in calls:
+                self.assertEqual(out["status"], "refused", out)
+                self.assertIn("dance is a tracking policy", out["reason"])
+                self.assertIn("gate_deployment", out["reason"])
+            self.assertEqual(spawned.calls, [])
+
     def test_preview_rewards_reads_the_declared_walk(self) -> None:
         with project_with("go2-walk") as (project, spawned):
             server.preview_rewards("go2-flat", controller="stand")

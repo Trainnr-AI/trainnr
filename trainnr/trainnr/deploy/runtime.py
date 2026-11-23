@@ -32,6 +32,8 @@ from trainnr.deploy.manifest import (
     SOURCE_JOINT_VEL_REL,
     SOURCE_LAST_ACTION,
     SOURCE_PROJECTED_GRAVITY,
+    TIME_STEP_INPUT,
+    Key,
     Manifest,
     Observation,
 )
@@ -46,6 +48,7 @@ GRAVITY_DOWN = np.array([0.0, 0.0, -1.0])
 STANDING_COMMAND = 0.1  # the reference's threshold: no gait clock below it
 SENSOR_PREFIX = "sensor "
 ONNX_PROVIDERS = ("CPUExecutionProvider",)
+CARRIED_ASSETS = "assets"  # meshes a deployment carries beside its scene
 
 
 @dataclass
@@ -67,6 +70,9 @@ class Runtime:
     joint_qvel: np.ndarray = field(init=False)
     sensors: dict[str, tuple[int, int]] = field(init=False)
     ticks: int = field(init=False, default=0)  # control steps since reset
+    # the joints' encoder bias a `biased` joint_pos_rel term reads (mjlab's
+    # `joint_pos_biased`): zero on a robot, drawn per trial by a gate
+    encoder_bias: np.ndarray | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         joints = self.manifest.joints
@@ -87,6 +93,9 @@ class Runtime:
         self.joint_qvel = np.array(
             [self.model.jnt_dofadr[self.model.joint(j).id] for j in joints.policy_order]
         )
+        if self.manifest.tracking is not None:
+            # its observation sources register themselves (deploy/tracking.py)
+            import trainnr.deploy.tracking  # noqa: F401, PLC0415
         self.sensors = {}
         for i in range(self.model.nsensor):
             adr, dim = int(self.model.sensor_adr[i]), int(self.model.sensor_dim[i])
@@ -154,7 +163,13 @@ class Runtime:
 
     def act(self, obs: np.ndarray) -> np.ndarray:
         name = self.session.get_inputs()[0].name
-        out = self.session.run(None, {name: obs[None, :]})[0][0]
+        feed = {name: obs[None, :]}
+        clock = self.manifest.raw[Key.ONNX].get(TIME_STEP_INPUT)
+        if (
+            clock
+        ):  # a tracking policy's reference frame, one ahead of the tick (docs/87 §8)
+            feed[clock] = np.array([[self.ticks + 1]], dtype=np.float32)
+        out = self.session.run(None, feed)[0][0]
         action = np.asarray(out, dtype=np.float32)
         clip = self.manifest.action.clip
         return action if clip is None else np.clip(action, clip[0], clip[1])
@@ -243,7 +258,15 @@ class Runtime:
 Source = Callable[[Runtime, Observation], np.ndarray]
 SOURCES: dict[str, Source] = {
     SOURCE_PROJECTED_GRAVITY: lambda rt, _t: rotate_inverse(rt.quat, GRAVITY_DOWN),
-    SOURCE_JOINT_POS_REL: lambda rt, _t: rt.data.qpos[rt.joint_qpos] - rt.default_pos,
+    SOURCE_JOINT_POS_REL: lambda rt, t: (
+        rt.data.qpos[rt.joint_qpos]
+        - rt.default_pos
+        + (
+            rt.encoder_bias
+            if t.params.get("biased") and rt.encoder_bias is not None
+            else 0.0
+        )
+    ),
     SOURCE_JOINT_VEL_REL: lambda rt, _t: rt.data.qvel[rt.joint_qvel],
     SOURCE_LAST_ACTION: lambda rt, _t: rt.last_action.astype(np.float64),
     SOURCE_COMMAND_TWIST: lambda rt, _t: rt.command.astype(np.float64),
@@ -297,6 +320,9 @@ def assets_dir_of(manifest: Manifest) -> Path:
     `assets/`, found project-first (`bundles.locate`)."""
     from trainnr.bundles.locate import find_bundle  # noqa: PLC0415
 
+    carried = manifest.root / CARRIED_ASSETS
+    if carried.is_dir():  # a robot from a trainer's own library (the G1) brings them
+        return carried
     robot = manifest.robot_name
     bundle = find_bundle(robot) if robot else None
     if bundle is None:

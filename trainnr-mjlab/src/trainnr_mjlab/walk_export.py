@@ -393,7 +393,13 @@ def _manifest(env: Any, ex: Export) -> dict[str, Any]:
         raise SystemExit(
             f"observation widths sum to {widths}, the actor takes {ex.obs_dim}"
         )
-    twist = env.command_manager.get_term(COMMAND_TERM)
+    # a tracking task has no twist (trainnr_mjlab.tracking_export replaces
+    # the block with its reference)
+    twist = (
+        env.command_manager.get_term(COMMAND_TERM)
+        if COMMAND_TERM in env.command_manager.active_terms
+        else None
+    )
     twist_cfg = getattr(twist, "cfg", None)
     ranges = getattr(twist_cfg, "ranges", None)
     command_ranges = (

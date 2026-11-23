@@ -363,7 +363,7 @@
    "tool": "export_deployment",
    "page": "deployments",
    "label": "Export",
-   "summary": "Export a trained walk policy: ONNX with normalization folded in, a manifest of joint orders, gains, observations and control rate, and the scene as MJCF.",
+   "summary": "Export a trained walk or tracking policy: ONNX (normalization folded in), a manifest (joint orders, gains, observations, rate), the scene as MJCF.",
    "fields": [
     {
      "name": "experiment",

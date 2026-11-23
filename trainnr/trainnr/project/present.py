@@ -1109,7 +1109,11 @@ def _present_deploy(
             # A trial with no recorded error ratio is left out of the bars
             # and counted, never drawn as a perfect zero.
             recorded = [t for t in g.get("records", []) if "err_ratio" in t]
-            unrated[runtime] = len(g.get("records", [])) - len(recorded)
+            # a tracking gate judges the clip's end, never a velocity error
+            through_clip = bool((g.get("protocol") or {}).get("conditions"))
+            unrated[runtime] = (
+                0 if through_clip else len(g.get("records", [])) - len(recorded)
+            )
             ratios = [float(t["err_ratio"]) for t in recorded]
             if ratios:
                 rr_.log(f"{root}/gate/{runtime}", rr.BarChart(ratios), static=True)

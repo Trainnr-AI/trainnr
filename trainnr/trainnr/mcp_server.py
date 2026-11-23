@@ -1068,8 +1068,9 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
     )
     if run_art is None:
         return refusal(f"run {run!r} is not in the index")
-    robot = _walk_of_run(index.artifacts, run_dir)
-    if robot is None:
+    tracking = _tracking_identity(run_dir)
+    robot = None if tracking else _walk_of_run(index.artifacts, run_dir)
+    if robot is None and not tracking:
         return refusal(
             f"run {run!r} names no walk (no task in its identity); pass one by name"
         )
@@ -1097,6 +1098,11 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
             "(evaluate_walk), or pass unevaluated=True for a deliberate export "
             "whose gates will report and judge nothing"
         )
+    if tracking:
+        return _export_tracking(
+            project, index.artifacts, tracking, path, name, certificate, policy
+        )
+    assert robot is not None  # a walk names its robot (refused above otherwise)
     return Actions(JobManager(_jobs_root)).export_deployment(
         str(path),
         name=name,
@@ -1104,6 +1110,50 @@ def export_deployment(  # noqa: PLR0911 - each return is one named refusal
         project=str(project.root),
         certificate=certificate,
         policy_stamp=policy.stamp if policy else None,
+    )
+
+
+def _tracking_identity(run_dir: Path) -> dict[str, Any] | None:
+    """A tracking run's identity (mjlab's tracking task), else None."""
+    from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
+    from trainnr.templates import TRACKING_TASK  # noqa: PLC0415
+
+    identity = run_dir / IDENTITY_FILE
+    ident = json.loads(identity.read_text()) if identity.is_file() else {}
+    return ident if ident.get("task") == TRACKING_TASK else None
+
+
+def _export_tracking(  # noqa: PLR0913, PLR0917 - the export's sources, each named
+    project: Any,
+    artifacts: list[Any],
+    ident: dict[str, Any],
+    checkpoint: Path,
+    name: str,
+    certificate: str | None,
+    policy: Any,
+) -> JobHandle | Refusal:
+    """A tracking run's export: its reference by the version its run cites,
+    and the command lag of the task it is judged under (the gate takes the
+    cited evaluation's own conditions; this is the manifest's default)."""
+    from trainnr.mcp_actions import Actions  # noqa: PLC0415
+    from trainnr.mcp_jobs import JobManager  # noqa: PLC0415
+
+    try:
+        reference = pick_artifact(
+            artifacts, str(ident.get("reference")), "recording", str(project.root)
+        )
+        task = _tracking_task_for(project, ident)
+    except (KeyError, ValueError) as why:
+        return refusal(_reason(why))
+    lag_ms = float(task.spec.get("lag_ms", 0.0)) if task is not None else 0.0
+    return Actions(JobManager(_jobs_root)).export_tracking(
+        str(checkpoint),
+        name=name,
+        project=str(project.root),
+        reference=str(project.root / reference.path),
+        certificate=certificate,
+        policy_stamp=policy.stamp if policy else None,
+        lag_ms=lag_ms,
     )
 
 
@@ -1294,6 +1344,12 @@ def gate_deployment(
         return refusal(str(why))
     if not (project.folder(DEPLOY_FOLDER) / name / MANIFEST_FILE).is_file():
         return refusal(f"no deployment {name!r} in this project")
+    if runtime != DEFAULT_RUNTIME:
+        tracked = _walks_only(
+            project.folder(DEPLOY_FOLDER) / name, f"the {runtime} gate"
+        )
+        if tracked:
+            return tracked
     return Actions(JobManager(_jobs_root)).gate_deployment(
         name,
         project=str(project.root),
@@ -1348,6 +1404,9 @@ def stage_deployment(  # noqa: PLR0913, PLR0917 - the stage's own knobs, each na
         source = project.folder(DEPLOY_FOLDER) / deployment
         if not (source / MANIFEST_FILE).is_file():
             raise FileNotFoundError(f"no deployment {deployment!r} in this project")
+        tracked = _walks_only(source, "staging on a scene")
+        if tracked:
+            return tracked
         scene_dir = project.scenes / scene
         if not (scene_dir / SCENE_FILE).is_file():
             raise FileNotFoundError(f"no scene {scene!r} in this project")
@@ -1413,6 +1472,9 @@ def assay_deployment(
         return refusal(str(why))
     if not (project.folder(DEPLOY_FOLDER) / deployment / MANIFEST_FILE).is_file():
         return refusal(f"no deployment {deployment!r} in this project")
+    tracked = _walks_only(project.folder(DEPLOY_FOLDER) / deployment, "the assay")
+    if tracked:
+        return tracked
     if not (project.scenes / scene / SCENE_FILE).is_file():
         return refusal(f"no scene {scene!r} in this project")
     return Actions(JobManager(_jobs_root)).assay_deployment(
@@ -1462,6 +1524,9 @@ def attribute_deployment(
     folder = _deployment_folder(deployment)
     if not isinstance(folder, Path):
         return folder
+    tracked = _walks_only(folder, "attribution")
+    if tracked:
+        return tracked
     project = current_project()
     try:
         read_attribution(folder)  # a record of another schema is refused now
@@ -1474,6 +1539,20 @@ def attribute_deployment(
         return refusal(_reason(why))
     return Actions(JobManager(_jobs_root)).attribute_deployment(
         deployment, project=str(project.root), runtime=runtime, trials=trials, seed=seed
+    )
+
+
+def _walks_only(folder: Path, what: str) -> Refusal | None:
+    """A refusal when the deployment is a tracking policy, for the tools
+    built around a walk's commanded twist; None for a walk."""
+    from trainnr.deploy.manifest import MANIFEST_FILE, Key  # noqa: PLC0415
+
+    raw = json.loads((folder / MANIFEST_FILE).read_text(encoding="utf-8"))
+    if not raw.get(Key.TRACKING):
+        return None
+    return refusal(
+        f"{folder.name} is a tracking policy: {what} is built for a walk's commanded "
+        "twist; gate_deployment (plain MuJoCo) judges it through its clip"
     )
 
 
@@ -1533,6 +1612,9 @@ def preflight_deployment(
     folder = _deployment_folder(deployment)
     if not isinstance(folder, Path):
         return folder
+    tracked = _walks_only(folder, "pre-flight")
+    if tracked:
+        return tracked
     try:
         require_platform(runtime_spec(runtime))
         read_preflight(folder)  # a record of another schema is refused now
@@ -4225,10 +4307,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     actions = Actions(JobManager(_jobs_root))
 
     server.tool(
-        description="Export a trained walk policy: ONNX with normalization folded in, "
-        "a manifest of joint orders, gains, observations and control "
-        "rate, and the scene as MJCF. Cites the checkpoint's evaluation. "
-        "A job."
+        description="Export a trained walk or tracking policy: ONNX (normalization "
+        "folded in), a manifest (joint orders, gains, observations, rate), the "
+        "scene as MJCF. Cites the checkpoint's evaluation. A job."
     )(export_deployment)
     server.tool(
         description="The sim-to-sim gate: the exported policy driven by its "

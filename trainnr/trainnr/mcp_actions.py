@@ -771,6 +771,43 @@ class Actions:
         ]
         return self.jobs.start("check-task", argv, PIPELINE_DIR)
 
+    def export_tracking(  # noqa: PLR0913 - the export's own knobs, each named
+        self,
+        checkpoint: str,
+        *,
+        name: str,
+        project: str,
+        reference: str,
+        certificate: str | None = None,
+        policy_stamp: str | None = None,
+        lag_ms: float = 0.0,
+    ) -> JobHandle:
+        """Export a tracking policy for deployment (trainnr_mjlab.tracking_export,
+        docs/87 §8): mjlab's tracking ONNX, the reference, the manifest with
+        its tracking section, the G1's scene and meshes."""
+        from trainnr.project.locate import plain_name  # noqa: PLC0415
+
+        plain_name(name, "deployment name")
+        argv = [
+            *self._uv(TRAINNR_MJLAB_DIR, *TRAINER_EXTRAS),
+            "-m",
+            "trainnr_mjlab.tracking_export",
+            checkpoint,
+            "--project",
+            project,
+            "--name",
+            name,
+            "--reference",
+            reference,
+            "--lag-ms",
+            f"{lag_ms:g}",
+        ]
+        if certificate is not None:
+            argv += ["--certificate", certificate]
+        if policy_stamp is not None:
+            argv += ["--policy-stamp", policy_stamp]
+        return self.jobs.start("export-deployment", argv, TRAINNR_MJLAB_DIR)
+
     def export_deployment(  # noqa: PLR0913 - the export's own knobs, each named
         self,
         checkpoint: str,

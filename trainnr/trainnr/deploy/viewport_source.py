@@ -28,6 +28,7 @@ both of its processes and hands the physics one's pump to `run`.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,7 @@ import numpy as np
 from trainnr.deploy.manifest import (
     MANIFEST_FILE,
     TWIST_SHORT,
+    Key,
     Manifest,
     load_manifest,
     read_gates,
@@ -254,12 +256,36 @@ def _open_runtime(model: Any, manifest: Manifest, *, policy: bool = True) -> Any
 
 
 def _plan_live(ctx: Context) -> Plan:
+    if ctx.manifest.tracking is not None:  # a dance has no twist to drive
+        return Plan(
+            caption=f"{ctx.scene.name} · live: the policy through its clip, "
+            "no pushes, no lag, again and again",
+            run=_run_clip_live,
+        )
     return Plan(
         caption=f"{ctx.scene.name} · live: drive it with WASD or the Commands "
         "tab, inside the manifest's trained ranges",
         run=_run_live,
         twist_ranges=twist_ranges(ctx.manifest),
     )
+
+
+def _run_clip_live(model: Any, loop: Loop, ctx: Context) -> None:
+    """A tracking deployment live: its clip from the first frame, clean,
+    over and over, every tick published (a broken bound ends a pass)."""
+    from trainnr.deploy.tracking import Conditions, run_clip_trial  # noqa: PLC0415
+
+    runtime = _open_runtime(model, ctx.manifest)
+    clean = Conditions(pushes=False, lag_ms=0.0, noise=False, drawn_start=False)
+    while True:
+        run_clip_trial(
+            ctx.manifest,
+            runtime,
+            clean,
+            np.random.default_rng(0),
+            on_tick=lambda rt: loop.tick(rt.data, rt.step_dt),
+        )
+        _hold(runtime, loop, END_HOLD_S)
 
 
 class TwistInput:
@@ -324,11 +350,13 @@ def _plan_gate(ctx: Context) -> Plan:
     runtime_name, index, record, row = _gate_trial(ctx)
     spec = RUNTIMES[runtime_name]
     how = RERUN_WORD if spec.rerun_in_plain else REPLAY_WORD
-    what = (
-        _twist_words(row["command"])
-        if "command" in row
-        else f"along the course at {float(row.get('speed', 0.0)):.2f} m/s"
-    )
+    if "command" in row:
+        what = _twist_words(row["command"])
+    elif "lag_ticks" in row:  # a tracking policy's trial through its clip
+        late = int(row["lag_ticks"])
+        what = f"the clip, {late} tick{'' if late == 1 else 's'} late"
+    else:
+        what = f"along the course at {float(row.get('speed', 0.0)):.2f} m/s"
     caption = (
         f"{ctx.scene.name} · {spec.instrument} gate · trial {index} of "
         f"{len(record.get('records') or [])} · {what} · {outcome_of(row)} · {how}"
@@ -356,12 +384,14 @@ def _run_gate_rerun(model: Any, loop: Loop, ctx: Context) -> None:
     )
     from trainnr.deploy.gate import run_trial  # noqa: PLC0415
 
-    _runtime_name, index, _record, row = _gate_trial(ctx)
+    _runtime_name, index, record, row = _gate_trial(ctx)
     runtime = _open_runtime(model, ctx.manifest)
     mirror: Any = _Pumped(runtime, loop)
     course = Course.of_manifest(ctx.manifest)
     while True:
-        if "command" in row:
+        if ctx.manifest.tracking is not None:
+            _rerun_clip_trial(ctx.manifest, runtime, loop, record, index)
+        elif "command" in row:
             run_trial(
                 ctx.manifest,
                 runtime,
@@ -384,6 +414,31 @@ def _run_gate_rerun(model: Any, loop: Loop, ctx: Context) -> None:
                 f"trial {index} names neither a command nor a course speed"
             )
         _hold(runtime, loop, END_HOLD_S)
+
+
+def _rerun_clip_trial(
+    manifest: Any, runtime: Any, loop: Loop, record: dict[str, Any], index: int
+) -> None:
+    """A tracking gate's trial again: the same draw (seed, trial) under the
+    conditions its record states, every tick published to the viewport."""
+    from trainnr.deploy.gate import trial_rng  # noqa: PLC0415
+    from trainnr.deploy.tracking import Conditions, run_clip_trial  # noqa: PLC0415
+
+    protocol = record.get("protocol") or {}
+    stated = protocol.get("conditions") or {}
+    conditions = Conditions(
+        pushes=bool(stated.get("pushes")),
+        lag_ms=float(stated.get("lag_ms", 0.0)),
+        noise=bool(stated.get("observation_noise")),
+        drawn_start=True,
+    )
+    run_clip_trial(
+        manifest,
+        runtime,
+        conditions,
+        trial_rng(int(protocol.get("seed", 0)), index),
+        on_tick=lambda rt: loop.tick(rt.data, rt.step_dt),
+    )
 
 
 def _run_gate_poses(model: Any, loop: Loop, ctx: Context) -> None:
@@ -617,6 +672,13 @@ def open_scene(
     return ViewportScene(context, model, MODES[scene.mode].plan(context))
 
 
+def read_json_quiet(path: Path) -> dict[str, Any]:
+    try:
+        return dict(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return {}
+
+
 def scenes_of(folder: Path) -> list[list[str]]:
     """Every scene the viewport can show of a deployment, as [label,
     scene]: live first, then each gate trial it can show (re-run, or
@@ -624,7 +686,9 @@ def scenes_of(folder: Path) -> list[list[str]]:
     the drawer offers; nothing it would refuse."""
     folder = Path(folder)
     name = folder.name
-    out = [["▶ live, driven from the Studio", scene_text(name)]]
+    tracking = bool(read_json_quiet(folder / MANIFEST_FILE).get(Key.TRACKING))
+    live = "▶ live, through its clip" if tracking else "▶ live, driven from the Studio"
+    out = [[live, scene_text(name)]]
     for runtime_name, record in read_gates(folder).items():
         spec = RUNTIMES[runtime_name]
         rows = record.get("records") or []

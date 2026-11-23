@@ -4,7 +4,8 @@
 an exported policy.*
 
 `export_deployment` writes a folder: `policy.onnx`, `scene.xml` and
-`deploy.json`. This page is `deploy.json`, the contract between the
+`deploy.json` (and, for a tracking policy, `motion.npz` and `assets/`;
+§8). This page is `deploy.json`, the contract between the
 policy and whatever runs it. Every rule here is what the reference
 runtime does (`trainnr/trainnr/deploy/runtime.py`, plain MuJoCo and
 onnxruntime, nothing from the training stack), and what the exporter
@@ -61,7 +62,8 @@ runtime ticks at `control.control_hz`, that is every
 | `observations` | below, in concatenation order | yes |
 | `onnx` | `file`, `input` and `output` tensor names, `input_width`, `output_width`, `normalization` (always "folded into the graph": feed raw terms), `export_check_max_abs_diff` | yes |
 | `scene` | `file`, `meshes`, `terrain`, `floor` (the trained floor's size, condim, priority, friction) | yes |
-| `commands` | `twist`: the ranges the policy trained under for `lin_vel_x`, `lin_vel_y`, `ang_vel_z` (and `heading` when it was trained with one); `heading_gain` when it steered by heading | yes |
+| `commands` | `twist`: the ranges the policy trained under for `lin_vel_x`, `lin_vel_y`, `ang_vel_z` (and `heading` when it was trained with one); `heading_gain` when it steered by heading | a walk |
+| `tracking` | a tracking policy's reference and bounds, in place of `commands` (§8) | a tracking policy |
 | `command_basis` | in words, which command curriculum stage the checkpoint had reached | |
 | `termination` | `fell_over_deg`: the tilt at which the evaluation counted a fall | |
 | `unitree` | for a Unitree robot only: the names their simulator and controller use | |
@@ -122,6 +124,77 @@ are concatenated in the listed order.
 `sensor <entity>/<name>` reads the sensor named `<name>`; other sensor
 names follow the same rule, and the loader refuses any source not in
 this table.
+
+## 8. A tracking policy
+
+*Added 2026-11-23 (docs/86 phase 3): an optional `tracking` section and
+three observation sources. A walk's manifest is unchanged; a runtime
+that predates them refuses a tracking manifest by name, as the loader
+does.*
+
+A policy trained on mjlab's tracking task follows a reference motion
+instead of a commanded twist. Its folder holds, beside `deploy.json`:
+
+- `policy.onnx`, mjlab's tracking export as it is: two inputs, `obs`
+  (`onnx.input`) and `time_step` (`onnx.time_step_input`, one float, the
+  reference frame), and seven outputs, the action first and then the
+  reference at that frame (`joint_pos`, `joint_vel`, `body_pos_w`,
+  `body_quat_w`, `body_lin_vel_w`, `body_ang_vel_w`), with mjlab's
+  metadata in the model's properties. The action depends on `obs` alone;
+- `motion.npz`, the reference as the runtime reads it: `joint_pos` and
+  `joint_vel` (frames × joints, policy order), and `body_pos_w`,
+  `body_quat_w` (w x y z), `body_lin_vel_w`, `body_ang_vel_w` (frames ×
+  `tracking.body_names` × 3 or 4, world frame), one frame per control tick;
+- `assets/`, the robot's meshes, when the robot is not a project bundle
+  (the G1 comes from mjlab's asset zoo).
+
+**The clock.** The robot starts at frame 0 and the reference's clock
+leads the control tick by one: at tick k (0 on the first) the policy
+reads frame k + 1, the physics steps, and the bounds are checked against
+frame k + 1 (mjlab advances its clock once at reset). Past the last frame
+the frame stays at the last.
+
+| `tracking` field | What |
+|---|---|
+| `motion`, `frames` | the reference file and its frame count |
+| `anchor_body` | the torso the reference terms are taken against |
+| `body_names` | the bodies `motion.npz` holds, in its order; the first is the floating base |
+| `terminations` | `anchor_z_m`, `anchor_tilt`, `end_effector_z_m`, `end_effectors` (below) |
+| `start` | `pose_range` and `velocity_range` (`x y z roll pitch yaw`, added to frame 0's root pose and velocity), `joint_position_range` (added to every joint), `soft_limit_factor` (joints clipped to their range narrowed about its middle by this factor) |
+| `pushes` | `interval_s` (`[lo, hi]` between pushes) and `velocity_range` (added to the root's world velocity), or null |
+| `noise` | per observation term, `[lo, hi]` of uniform noise added in training |
+| `randomization` | training's start-up draws: `encoder_bias` (`[lo, hi]` per joint, read by a `biased` joint term), `body_com` (`body`, per-axis offsets of its centre of mass), `foot_friction` (`geoms`, one shared `range` value) |
+| `lag_ms` | the command lag of the task the policy is judged under (whole control ticks, uniform in `[0, lag_ms]`) |
+| `criterion` | what success is: the clip played to its end with no bound broken |
+
+`start`, `pushes`, `noise`, `randomization` and `lag_ms` are the
+conditions an evaluation judges under; a robot brings its own.
+
+| `source` | Width | Value |
+|---|---|---|
+| `command motion` | 2 × joints | the reference's `joint_pos` then `joint_vel` at the frame |
+| `motion_anchor_pos_b` | 3 | the reference anchor's position minus the robot anchor's, rotated into the robot anchor's frame (m) |
+| `motion_anchor_ori_b` | 6 | the rotation from the robot anchor to the reference anchor (R = R_robotᵀ R_ref), its first two columns read row by row: R00, R01, R10, R11, R20, R21 |
+
+The robot anchor is `anchor_body`'s pose in the world (MuJoCo's `xpos`,
+`xquat`). A trial fails, at the first tick it happens, when:
+
+- the robot anchor's height differs from the reference anchor's by more
+  than `anchor_z_m`;
+- the z of gravity projected into the robot anchor's frame differs from
+  the reference anchor's by more than `anchor_tilt`;
+- any end effector's height differs from the reference body's by more
+  than `end_effector_z_m` (mjlab compares the reference carried to the
+  robot's position and heading; a turn about the vertical leaves heights
+  as they are).
+
+The reference runtime's definitions are `trainnr/trainnr/deploy/tracking.py`;
+they were checked against mjlab's own terms on mjlab's rollout states,
+and the bounds against its terminations
+([record](findings/g1-court-dance-gated-2026-11-23.json)). The gate judges
+a tracking deployment through its clip under the cited evaluation's
+conditions; pre-flight, attribution, the assay, staging on a scene and the
+DDS gate are built for a walk's twist and refuse one by name.
 
 ## Reading the files
 

@@ -166,7 +166,8 @@ def require_same_draw(record: dict[str, Any], what: str) -> None:
 # Told after every trial: (trials done, trials planned, that trial's
 # outcome) - how a run says "trial 7 of 20" to the Studio's Running now
 # panel (`mcp_jobs.Tracker.progress`) without the gate knowing the panel.
-TrialProgress = Callable[[int, int, "TrackingOutcome"], None]
+# a walk's TrackingOutcome, a tracking policy's ClipTrial (deploy/tracking.py)
+TrialProgress = Callable[[int, int, Any], None]
 
 
 def _each_trial(
@@ -321,32 +322,39 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         # simulator that ours cannot re-run (deploy/viewport_source.py).
         poses = PoseTrack(manifest.control.step_dt, tuple(manifest.joints.policy_order))
         course = Course.of_manifest(manifest)
-        results: list[TrackingOutcome] = (
-            _walk_course(
-                manifest,
-                driver,
-                course,
-                protocol,
-                trials,
-                seed,
-                mirror,
-                contacts,
-                poses,
+        results: list[Any]
+        if manifest.tracking is not None:  # through the clip (deploy/tracking.py)
+            results = _through_clip(
+                manifest, driver, protocol, trials, seed, certificate, mirror, poses,
                 on_trial,
+            )  # fmt: skip
+        else:
+            results = (
+                _walk_course(
+                    manifest,
+                    driver,
+                    course,
+                    protocol,
+                    trials,
+                    seed,
+                    mirror,
+                    contacts,
+                    poses,
+                    on_trial,
+                )
+                if course is not None
+                else hold_twists(
+                    manifest,
+                    driver,
+                    protocol,
+                    trials,
+                    seed,
+                    mirror,
+                    contacts,
+                    poses,
+                    on_trial,
+                )
             )
-            if course is not None
-            else hold_twists(
-                manifest,
-                driver,
-                protocol,
-                trials,
-                seed,
-                mirror,
-                contacts,
-                poses,
-                on_trial,
-            )
-        )
         k = sum(t.success for t in results)
         lo, hi = clopper_pearson(k, trials)
         record: dict[str, Any] = {
@@ -392,6 +400,64 @@ def gate(  # noqa: PLR0913 - the gate's own knobs, each named
         close = getattr(driver, "close", None)
         if close is not None:
             close()
+
+
+def _through_clip(  # noqa: PLR0913, PLR0917 - the gate's shape, positional inside the gate
+    manifest: Manifest,
+    driver: GateRuntime,
+    protocol: dict[str, Any],
+    trials: int,
+    seed: int,
+    certificate: dict[str, Any] | None,
+    mirror: GateMirror | None,
+    poses: PoseTrack,
+    on_trial: TrialProgress | None,
+) -> list[Any]:
+    """A tracking policy's trials: each from the clip's first frame under
+    the cited evaluation's conditions (deploy/tracking.py), judged by the
+    clip's end; the protocol says the criterion and the conditions."""
+    from trainnr.deploy.runtime import Runtime  # noqa: PLC0415
+    from trainnr.deploy.tracking import Conditions, run_clip_trial  # noqa: PLC0415
+
+    tracking = manifest.tracking
+    assert tracking is not None
+    if not isinstance(driver, Runtime):
+        raise ValueError("a tracking deployment is gated in plain MuJoCo (docs/87 §8)")
+    conditions = Conditions.of(tracking, certificate)
+    for key in ("err_ratio_bound", "err_floor_mps"):
+        protocol.pop(key, None)
+    protocol["criterion"] = tracking.criterion
+    protocol["conditions"] = {
+        "pushes": conditions.pushes,
+        "lag_ms": conditions.lag_ms,
+        "observation_noise": conditions.noise,
+        "start": "the clip's first frame, pose and velocity drawn as in training",
+        "from": "the cited evaluation's protocol" if certificate else "the manifest",
+    }
+    zero = np.zeros(3, dtype=np.float32)
+    results = []
+    for i in range(trials):
+        poses.begin(trial_segment(i))
+        if mirror is not None:
+            mirror.trial(i, zero)
+
+        def seen(runtime: Any) -> None:
+            poses.add(runtime.pose())
+            if mirror is not None:
+                mirror.tick(
+                    manifest.control.step_dt,
+                    runtime.pose(),
+                    zero,
+                    runtime.base_velocity_b(),
+                )
+
+        trial = run_clip_trial(
+            manifest, driver, conditions, trial_rng(seed, i), on_tick=seen
+        )
+        results.append(trial)
+        if on_trial is not None:
+            on_trial(i + 1, trials, trial)
+    return results
 
 
 OTHER_PROTOCOL = (

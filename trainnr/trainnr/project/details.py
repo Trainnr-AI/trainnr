@@ -1556,6 +1556,23 @@ def gate_trials(g: dict[str, Any], instrument: str) -> Section:
             "success" if r.get("success") else "failure",
         ]
 
+    if protocol.get("conditions"):  # a tracking policy's trials through its clip
+        return _table(
+            f"Gate trials: {instrument}",
+            ["steps", "of", "lag (ticks)", "pushes", "bound broken", "success"],
+            [
+                [
+                    r.get("steps"),
+                    r.get("frames"),
+                    r.get("lag_ticks"),
+                    r.get("pushes"),
+                    r.get("bound") or "",
+                    "success" if r.get("success") else "failure",
+                ]
+                for r in records
+            ],
+            note=f"{protocol.get('conditions')}; {protocol.get('criterion')}",
+        )
     if protocol.get("course"):
         rows = [
             [
@@ -1582,6 +1599,23 @@ def gate_trials(g: dict[str, Any], instrument: str) -> Section:
             for r in records
         ],
     )
+
+
+def _tracking_rows(t: dict[str, Any]) -> list[tuple[str, Any]]:
+    """A tracking deployment's reference and bounds (docs/87 §8)."""
+    bounds = t.get("terminations") or {}
+    return [
+        ("reference", f"{t.get('motion')} · {t.get('frames')} frames"),
+        ("anchor", t.get("anchor_body")),
+        (
+            "bounds",
+            f"anchor height {bounds.get('anchor_z_m')} m, "
+            f"tilt {bounds.get('anchor_tilt')}, "
+            f"end effectors {bounds.get('end_effector_z_m')} m "
+            f"({', '.join(bounds.get('end_effectors') or [])})",
+        ),
+        ("success", t.get("criterion")),
+    ]
 
 
 def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
@@ -1631,9 +1665,15 @@ def _deploy(project: Project, root: Path, artifact: Artifact) -> list[Section]:
                     f"{(m.get('scene') or {}).get('file')} · terrain "
                     f"{(m.get('scene') or {}).get('terrain')}",
                 ),
-                (
-                    "fell-over limit (deg)",
-                    (m.get("termination") or {}).get("fell_over_deg"),
+                *(
+                    _tracking_rows(m["tracking"])
+                    if m.get("tracking")
+                    else [
+                        (
+                            "fell-over limit (deg)",
+                            (m.get("termination") or {}).get("fell_over_deg"),
+                        )
+                    ]
                 ),
             ],
         )
