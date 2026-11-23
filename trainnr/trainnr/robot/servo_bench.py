@@ -584,7 +584,11 @@ class ServoBench:
         for channel in (JOINT_POSITION, JOINT_COMMAND):
             found = recording.channels.get(channel)
             if found is None:
-                return f"the recording has no {channel} channel"
+                return (
+                    f"the recording has no {channel} channel (it has "
+                    f"{', '.join(sorted(recording.channels)) or 'none'}); the "
+                    "bench needs the servo's commanded and measured positions"
+                )
             if bench.joint not in found.components:
                 return f"the recording's {channel} has no joint {bench.joint!r}"
         return None

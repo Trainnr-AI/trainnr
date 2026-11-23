@@ -7,8 +7,12 @@ the container (magic, records by opcode, chunks) and decodes the two
 messages the pipeline needs from their CDR bytes: `sensor_msgs/msg/
 JointState` (name[], position[], velocity[], effort[] — effort "in Nm or
 N" per the message definition) and `sensor_msgs/msg/Imu` (orientation,
-angular_velocity, linear_acceleration). Anything else on the bag is
-counted in the census and left alone.
+angular_velocity, linear_acceleration). `/joint_states` is the measured
+state (`joint.position`, ...); a JointState topic named `/joint_commands`,
+`/joint_command` or `/commands` is the command (`joint.command`,
+`joint.command_velocity`, `joint.feedforward`; #147); any other JointState
+topic keeps its topic as a prefix. Anything else on the bag is counted in
+the census and left alone.
 
 Standard library only, by design: the point of the seam is that a
 recording enters with nothing installed. The one limit that follows:
@@ -36,7 +40,10 @@ from trainnr.robots.recording import (
     IMU_ANGULAR_VELOCITY,
     IMU_LINEAR_ACCELERATION,
     IMU_ORIENTATION,
+    JOINT_COMMAND,
+    JOINT_COMMAND_VELOCITY,
     JOINT_EFFORT,
+    JOINT_FEEDFORWARD,
     JOINT_POSITION,
     JOINT_VELOCITY,
     QUATERNION_WXYZ,
@@ -58,6 +65,15 @@ from trainnr.robots.ros_layouts import (
 
 NAME = "mcap"
 SUFFIX = ".mcap"
+# JointState topics by what they carry, without the leading slash: the
+# robot's measured state, and its commands (#147). A bag with several
+# command topics reads the first of these it holds as the command; the
+# rest, and any other JointState topic, keep their topic as a prefix.
+STATE_TOPIC = "joint_states"
+COMMAND_TOPICS = ("joint_commands", "joint_command", "commands")
+# What a JointState's fields become, measured and commanded.
+STATE_NAMES = (JOINT_POSITION, JOINT_VELOCITY, JOINT_EFFORT)
+COMMAND_NAMES = (JOINT_COMMAND, JOINT_COMMAND_VELOCITY, JOINT_FEEDFORWARD)
 MAGIC = b"\x89MCAP0\r\n"
 
 # Record opcodes (mcap.dev/spec).
@@ -132,6 +148,7 @@ class McapAdapter:
         channels: dict[str, Channel] = {}
         topics: dict[str, dict[str, Any]] = {}
         notes: list[str] = [CLOCK_HEADER_ELSE_LOG]
+        command = command_topic(bag)
         for channel in bag.channels.values():
             schema = bag.schemas.get(channel.schema_id)
             kind = schema.name if schema else "unknown"
@@ -140,7 +157,11 @@ class McapAdapter:
             if not msgs or channel.encoding != CDR_ENCODING:
                 continue
             if kind == JOINT_STATE:
-                channels.update(_joint_state_channels(channel.topic, msgs, notes))
+                channels.update(
+                    _joint_state_channels(
+                        channel.topic, msgs, notes, command=channel.topic == command
+                    )
+                )
             elif kind == IMU:
                 channels.update(_imu_channels(channel.topic, msgs, notes))
         if not channels:
@@ -258,8 +279,25 @@ def _decompress(compression: str, data: bytes) -> bytes | None:
 # -- the two messages, decoded by the shared layouts (robots/ros_layouts) ---
 
 
+def command_topic(bag: _Bag) -> str | None:
+    """The JointState topic read as the robot's command: the first of
+    `COMMAND_TOPICS` the bag holds with messages, else None."""
+    held = {
+        c.topic.strip("/"): c.topic
+        for c in bag.channels.values()
+        if bag.messages.get(c.id)
+        and (s := bag.schemas.get(c.schema_id)) is not None
+        and s.name == JOINT_STATE
+    }
+    return next((held[t] for t in COMMAND_TOPICS if t in held), None)
+
+
 def _joint_state_channels(
-    topic: str, msgs: list[tuple[int, bytes]], notes: list[str]
+    topic: str,
+    msgs: list[tuple[int, bytes]],
+    notes: list[str],
+    *,
+    command: bool = False,
 ) -> dict[str, Channel]:
     times: list[float] = []
     names: tuple[str, ...] | None = None
@@ -296,12 +334,19 @@ def _joint_state_channels(
     if names is None:
         return {}
     times_arr, keep = monotone(np.asarray(times, dtype=np.float64))
-    prefix = (
-        "" if topic in ("/joint_states", "joint_states") else f"{topic.strip('/')}."
+    plain = command or topic.strip("/") == STATE_TOPIC
+    prefix = "" if plain else f"{topic.strip('/')}."
+    position_name, velocity_name, effort_name = (
+        f"{prefix}{n}" for n in (COMMAND_NAMES if command else STATE_NAMES)
     )
+    if command:
+        notes.append(
+            f"{topic}: read as the command ({JOINT_COMMAND}, and its velocity and "
+            "effort as the commanded velocity and feed-forward when present)"
+        )
     out: dict[str, Channel] = {
-        f"{prefix}{JOINT_POSITION}": Channel(
-            f"{prefix}{JOINT_POSITION}",
+        position_name: Channel(
+            position_name,
             times_arr,
             np.asarray(pos_rows, dtype=np.float64)[keep],
             unit="rad or m (JointState: rad for revolute, m for prismatic)",
@@ -310,8 +355,8 @@ def _joint_state_channels(
     }
     vel = np.asarray(vel_rows, dtype=np.float64)[keep]
     if not np.all(np.isnan(vel)):
-        out[f"{prefix}{JOINT_VELOCITY}"] = Channel(
-            f"{prefix}{JOINT_VELOCITY}",
+        out[velocity_name] = Channel(
+            velocity_name,
             times_arr,
             vel,
             unit="rad/s or m/s",
@@ -319,10 +364,10 @@ def _joint_state_channels(
         )
     eff = np.asarray(eff_rows, dtype=np.float64)[keep]
     if not np.all(np.isnan(eff)):
-        out[f"{prefix}{JOINT_EFFORT}"] = Channel(
-            f"{prefix}{JOINT_EFFORT}", times_arr, eff, unit="N*m or N", components=names
+        out[effort_name] = Channel(
+            effort_name, times_arr, eff, unit="N*m or N", components=names
         )
-    else:
+    elif not command:  # a command with no feed-forward is the usual case
         notes.append(f"{topic}: effort array empty — no torque in this bag")
     return out
 

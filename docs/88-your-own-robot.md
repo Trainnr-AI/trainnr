@@ -53,7 +53,10 @@ the supply voltage, `kp` the P-gain register the servo ran at, `max_pwm` its
 duty ceiling (1.0 unless known). Record the servo's commanded position
 (`joint.command`) and its measured one (`joint.position`) at a known rate,
 for example a ROS 2 MCAP's `/joint_commands` and `/joint_states`, through
-`ingest_recording`. The protocol is BAM's: steps and chirps, a few seconds
+`ingest_recording`: the MCAP reader takes a `sensor_msgs/JointState` topic
+named `/joint_commands`, `/joint_command` or `/commands` (the first of
+these the bag holds) as the command, and keeps any other JointState topic
+under its own name (`joint_targets.joint.position`). The protocol is BAM's: steps and chirps, a few seconds
 each, starting at rest; 12 s or more per recording; two or three arm masses
 in separate recordings.
 

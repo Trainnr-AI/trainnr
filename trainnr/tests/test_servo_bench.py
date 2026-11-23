@@ -150,6 +150,70 @@ class TheServoBench(unittest.TestCase):
         self.assertAlmostEqual(firmware["error_gain"] * 32, found["duty_per_rad"])
         self.assertLess(bundle["metrics"]["held_out_position_rmse_rad"], 0.02)
 
+    def test_a_robots_mcap_reaches_the_fit(self) -> None:
+        """The guide's path end to end (#147): the commanded and measured
+        positions as `/joint_commands` and `/joint_states` in a ROS 2 MCAP
+        (and a third JointState topic, as Microduck Nano's runtime writes),
+        ingested into the project, accepted and fitted by the bench."""
+        from tests.test_robots import joint_state_mcap  # noqa: PLC0415
+        from trainnr.project.ingest import ingest  # noqa: PLC0415
+        from trainnr.project.locate import create_project  # noqa: PLC0415
+        from trainnr.robot import servo_bench  # noqa: PLC0415
+
+        bench = servo_bench.Bench.load(self.bench_dir)
+        arm = servo_bench.Arm.of(self.bench_dir / "bench.xml", "servo")
+        recording = synthetic_recording(arm, bench)
+        measured = recording.channels["joint.position"]  # type: ignore[attr-defined]
+        command = recording.channels["joint.command"]  # type: ignore[attr-defined]
+
+        def rows(channel: object) -> list:
+            return [
+                (float(t) + 1.0, ["servo"], [float(v)], [], [])
+                for t, v in zip(channel.times, channel.values[:, 0], strict=True)  # type: ignore[attr-defined]
+            ]
+
+        bag = joint_state_mcap(
+            self.root / "bench.mcap",
+            {
+                "/joint_states": rows(measured),
+                "/joint_commands": rows(command),
+                "/joint_targets": rows(command),
+            },
+        )
+        project = create_project(self.root / "p", "p")
+        landed = ingest(project, bag, name="bench-run")
+        folder = project.root / landed["path"]
+        self.assertIsNone(servo_bench.ServoBench().accepts(self.bench_dir, folder))
+        known = servo_bench.BenchFit(
+            estimate=TRUE,
+            replicates=np.array([TRUE, TRUE]),
+            asymptotic=TRUE * 0.01,
+            rmse_rad=0.003,
+            held_out_rmse_rad=0.005,
+            blocks=6,
+        )
+        with mock.patch.object(servo_bench, "fit_bench", lambda *a, **k: known):
+            result, record = servo_bench.ServoBench().fit(self.bench_dir, folder)
+        self.assertIsNotNone(record)
+        self.assertEqual(len(result.pinned), len(servo_bench.PARAMETERS))
+
+    def test_a_missing_command_names_the_channels_there_are(self) -> None:
+        from trainnr.robot.servo_bench import ServoBench  # noqa: PLC0415
+        from trainnr.robots.recording import Channel, Recording  # noqa: PLC0415
+
+        t = np.arange(0.0, 1.0, 0.02)
+        Recording(
+            source="x",
+            adapter="test",
+            channels={
+                name: Channel(name, t, np.zeros((len(t), 1)), "rad", ("servo",))
+                for name in ("joint.position", "joint_targets.joint.position")
+            },
+        ).write(self.root / "rec")
+        why = ServoBench().accepts(self.bench_dir, self.root / "rec") or ""
+        self.assertIn("no joint.command channel", why)
+        self.assertIn("joint_targets.joint.position", why)
+
     def test_what_the_bench_lacks_is_said(self) -> None:
         from trainnr.robot.servo_bench import ServoBench  # noqa: PLC0415
 
