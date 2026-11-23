@@ -150,7 +150,12 @@ run.
 - [Claude Code](https://claude.com/claude-code), or
   another MCP client (below).
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) (it brings
-  Python 3.12 if you don't have it) and git.
+  Python 3.12 if you don't have it) and git. The server runs through uv,
+  so without it the plugin cannot start; the session hook then says so.
+  On macOS and Linux, `curl -LsSf https://astral.sh/uv/install.sh | sh`;
+  on Windows, in PowerShell,
+  `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`.
+  Restart Claude Code afterwards so it sees uv on PATH.
 - Disk: the plugin clones this repository (about 216 MB); the server's
   environment is about 1 GB; the Studio is a 72 MB download, about 200 MB
   unpacked ([The Studio](#the-studio)); the trainer's environment, built

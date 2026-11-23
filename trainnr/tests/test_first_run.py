@@ -84,24 +84,59 @@ class TheFirstSession(unittest.TestCase):
     """After the install and the restart nothing said that trainnr was
     there or what to say; the hook now tells the model once."""
 
-    def _run(self, data: Path) -> str:
+    def _run(self, data: Path, path: str) -> str:
         env = {
             **os.environ,
+            "PATH": path,
             "TRAINNR_NO_PREFETCH": "1",
             "CLAUDE_PLUGIN_ROOT": str(HOOK.parents[1]),
             "CLAUDE_PLUGIN_DATA": str(data),
         }
+        sh = shutil.which("sh")
+        assert sh is not None
         done = subprocess.run(
-            ["sh", str(HOOK)], env=env, capture_output=True, text=True, check=True
+            [sh, str(HOOK)], env=env, capture_output=True, text=True, check=True
         )
         return done.stdout
 
+    @staticmethod
+    def _path(with_uv: Path | None) -> str:
+        """The test's PATH without any uv on it, and `with_uv` first."""
+        dirs = [
+            d
+            for d in os.environ.get("PATH", "").split(os.pathsep)
+            if d and not (Path(d) / "uv").exists()
+        ]
+        if with_uv is not None:
+            dirs.insert(0, str(with_uv))
+        return os.pathsep.join(dirs)
+
+    @staticmethod
+    def _fake_uv(into: Path) -> Path:
+        into.mkdir()
+        uv = into / "uv"
+        uv.write_text("#!/bin/sh\nexit 0\n")
+        uv.chmod(0o755)
+        return into
+
     def test_the_first_session_hears_what_to_say_and_the_next_does_not(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            first = self._run(Path(tmp) / "data")
+            path = self._path(self._fake_uv(Path(tmp) / "bin"))
+            first = self._run(Path(tmp) / "data", path)
             self.assertIn("create a project called go2", first)
             self.assertIn("launch_studio", first)
-            self.assertEqual(self._run(Path(tmp) / "data"), "")
+            self.assertEqual(self._run(Path(tmp) / "data", path), "")
+
+    def test_without_uv_every_session_hears_how_to_install_it(self) -> None:
+        # The server is `uv run …`; without uv Claude Code said only
+        # "Connection closed" (native Windows, 2026-11-18).
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._path(None)
+            self._run(Path(tmp) / "data", path)  # the first session's line
+            again = self._run(Path(tmp) / "data", path)
+            self.assertIn("uv, which is not on PATH", again)
+            self.assertIn("install.ps1", again)  # Windows
+            self.assertIn("install.sh", again)  # macOS and Linux
 
 
 if __name__ == "__main__":
