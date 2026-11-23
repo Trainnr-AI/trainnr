@@ -43,11 +43,11 @@ from trainnr.evaluate.tracking import (
     criterion_text,
 )
 from trainnr.mcp_jobs import (
-    VIEWPORT_WALK,
     Tracker,
     default_jobs_root,
     jobs_dir_of,
     track,
+    walk_viewport,
 )
 from trainnr.paths import checkout
 from trainnr.viz import viewer_file
@@ -745,7 +745,7 @@ def main() -> None:
         VERDICT_KIND,
         jobs_dir=jobs_dir_of(args.project or default_jobs_root()),
         name=verdict_job_name(args),
-        viewport=VIEWPORT_WALK,
+        viewport=walk_viewport(Path(args.checkpoint).resolve().parent.name),
         # no stream is written under --no-studio: point at none, not at an
         # older judgment's file
         viewer="" if args.no_studio else str(verdict_viewer(args.checkpoint)),

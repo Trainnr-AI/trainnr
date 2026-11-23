@@ -46,7 +46,7 @@ from typing import Any
 
 # Per-agent knob defaults; an explicit flag always wins.
 from trainnr.envs.rsl_rl_log import FIELD_LINE, ITERATION_LINE
-from trainnr.mcp_jobs import VIEWPORT_WALK, default_jobs_root, jobs_dir_of, track
+from trainnr.mcp_jobs import default_jobs_root, jobs_dir_of, track, walk_viewport
 from trainnr.project.kinds import IDENTITY_FILE
 
 from trainnr_mjlab.walks import (
@@ -398,7 +398,7 @@ def main() -> None:  # noqa: PLR0915 - one CLI, each knob named
         TRAIN_KIND,
         jobs_dir=jobs_dir_of(args.project or default_jobs_root()),
         name=log_dir.name if log_dir is not None else f"{args.robot} {tag}",
-        viewport=VIEWPORT_WALK,
+        viewport=walk_viewport(log_dir.name if log_dir is not None else None),
         viewer="" if log_dir is None else str(viewer_file(log_dir, TRAIN_STREAM)),
         stream="" if args.no_recorder else stream,
     ) as run:

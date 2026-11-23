@@ -9,7 +9,6 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 
@@ -33,7 +32,6 @@ from trainnr.deploy.manifest import (
 )
 from trainnr.deploy.runtime import gait_phase, open_runtime, rotate_inverse
 from trainnr.deploy.runtimes import runtime_spec
-from trainnr.mcp_server import _task_id_in_project
 from trainnr.project import PROJECT_ENV, create_project
 from trainnr.project.index import _summary_deploy
 
@@ -252,22 +250,21 @@ class ManifestType(unittest.TestCase):
 
 class TheRunsTaskFamily(unittest.TestCase):
     """A run trained by the door cites its task by the project's stamp;
-    the export door needs the family id the environment card records."""
+    its walk is the family the environment card records (one rule for the
+    doors and the Studio's simulator, `tasks.walks.walk_robot_of`)."""
 
     def test_a_project_stamp_resolves_through_the_environment_card(self) -> None:
-        card = SimpleNamespace(
-            kind="task",
-            stamp="go2-flat@0e7e123a7de7",
-            summary={"task_id": "trainnr/go2-walk", "stamp": "go2-walk@0e7e123a7de7"},
-        )
+        from trainnr.tasks.walks import walk_robot_of  # noqa: PLC0415
+
+        cards = {"0e7e123a7de7": "trainnr/go2-walk"}
+        self.assertEqual(walk_robot_of({"task": "go2-walk@0e7e123a7de7"}, cards), "go2")
+        self.assertEqual(walk_robot_of({"task": "trainnr/go1-walk"}, cards), "go1")
+        self.assertIsNone(walk_robot_of({"task": "go2-walk@ffffffffffff"}, cards))
+        self.assertIsNone(walk_robot_of({}, cards))
         self.assertEqual(
-            _task_id_in_project([card], "go2-walk@0e7e123a7de7"), "trainnr/go2-walk"
+            walk_robot_of({"legged": {"robot": "r"}, "task": "x"}, {}), "legged"
         )
-        self.assertEqual(
-            _task_id_in_project([card], "trainnr/go1-walk"), "trainnr/go1-walk"
-        )
-        self.assertIsNone(_task_id_in_project([card], "go2-walk@ffffffffffff"))
-        self.assertIsNone(_task_id_in_project([card], None))
+        self.assertIsNone(walk_robot_of({"task": "Mjlab-Tracking-Flat-Unitree-G1"}, {}))
 
 
 class TheGaitClock(unittest.TestCase):

@@ -98,7 +98,10 @@ serves two jobs and the 3D view is agnostic to which is live:
   the stage line, elapsed time, pid, and the buttons. The buttons are
   **open log** (the last 12 lines, live), **show in viewer** (the run's
   `.rrd` loaded into the viewer), **watch in simulator** (`deploy:<name>`,
-  or `walk` for training) and **stop**. Stop asks twice: it signals a
+  or `walk:<experiment>` for a training run or an evaluation: that
+  experiment's newest checkpoint with its own robot, whatever else the
+  project declares; when the simulator exits, its banner carries the
+  process's last line) and **stop**. Stop asks twice: it signals a
   door job's process group, and a tool's or agent's pid. The selection
   is kept by job id through the once-a-second refresh
   (`kept_selection`) and clears when its run drops off. Clicking the

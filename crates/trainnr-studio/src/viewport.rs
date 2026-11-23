@@ -247,6 +247,10 @@ pub struct ViewportFeed {
     /// request killed the renderer and the panel just... stopped) —
     /// `show` turns this into a visible error instead.
     stream_ended: Arc<AtomicBool>,
+    /// The subprocess's last line of output, for the banner when it exits:
+    /// the one line that says why ("3 declared walks …", #151), which the
+    /// log buries under the window's own warnings.
+    last_words: Arc<std::sync::Mutex<Option<String>>>,
     /// The scene this feed runs (a preview task name), for the state file.
     task: Option<String>,
     /// When each of the last frames was drawn, for the on-screen rate.
@@ -414,6 +418,52 @@ pub struct SimReport {
     pub model: Option<Arc<SimModel>>,
 }
 
+/// Forward the scene process's stderr to the Studio's own (its log keeps
+/// every line) and keep the last non-empty line for the exit banner.
+fn spawn_stderr_tail(
+    stderr: std::process::ChildStderr,
+    last_words: Arc<std::sync::Mutex<Option<String>>>,
+) {
+    use std::io::BufRead as _;
+    std::thread::spawn(move || {
+        // a traceback's exception line says why better than the message's
+        // last line (torch's hints run on for several); else the last line
+        let mut exception = false;
+        for line in std::io::BufReader::new(stderr).lines() {
+            let Ok(line) = line else { break };
+            eprintln!("{line}");
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let raised = is_exception_line(trimmed);
+            if raised || !exception {
+                exception |= raised;
+                if let Ok(mut last) = last_words.lock() {
+                    *last = Some(trimmed.chars().take(LAST_WORDS_MAX).collect());
+                }
+            }
+        }
+    });
+}
+
+/// Whether a line is a Python exception's own (`pickle.UnpicklingError: …`,
+/// `SystemExit`): a dotted name ending in Error, Exception or Exit, then a
+/// colon or nothing.
+fn is_exception_line(line: &str) -> bool {
+    let head = line.split_once(": ").map_or(line, |(head, _)| head);
+    !head.is_empty()
+        && head
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+        && ["Error", "Exception", "Exit"]
+            .iter()
+            .any(|end| head.ends_with(end))
+}
+
+/// How much of the scene process's last line the banner carries.
+const LAST_WORDS_MAX: usize = 300;
+
 /// The scene previews the idle strip offers — pipeline-registry tasks
 /// `studio-render-stream.py` can run. The LIVE scene never comes from
 /// here: a training run mirrors itself into the Rerun 3D view below
@@ -425,6 +475,23 @@ pub const PREVIEW_TASKS: &[&str] = &["kitting", "lift", "duck"];
 /// same frame ring, Ctrl+drag shoves land in the batched sim). Its own
 /// spawn shape: the trainnr_mjlab venv, not the pipeline's.
 pub const WALK_TASK: &str = "walk";
+/// One experiment's walk, `walk:<experiment>`: its newest checkpoint with
+/// its own robot, what a run's "watch in simulator" opens
+/// (`trainnr/mcp_jobs.py::VIEWPORT_WALK_RUN`, pinned by
+/// `tests/test_studio_mirrors.py`; #151).
+pub const WALK_RUN_PREFIX: &str = "walk:";
+
+/// The experiment a `walk:<experiment>` scene names, if it is one.
+pub fn walk_run(name: &str) -> Option<&str> {
+    name.strip_prefix(WALK_RUN_PREFIX)
+        .filter(|run| !run.is_empty())
+}
+
+/// Whether a scene is the RL view: the project's newest walk, or one
+/// experiment's.
+pub fn is_walk(name: &str) -> bool {
+    name == WALK_TASK || walk_run(name).is_some()
+}
 
 /// A deployment in the viewport: `deploy:<name>` live, or
 /// `deploy:<name>:gate:<runtime>:<trial>`,
@@ -443,7 +510,7 @@ pub const TWIN_APP_PREFIX: &str = "trainnr-sim-";
 /// Whether the viewport can run a scene by this name: a preview task,
 /// the walk, or a deployment.
 pub fn is_known_scene(name: &str) -> bool {
-    PREVIEW_TASKS.contains(&name) || name == WALK_TASK || name.starts_with(DEPLOY_PREFIX)
+    PREVIEW_TASKS.contains(&name) || is_walk(name) || name.starts_with(DEPLOY_PREFIX)
 }
 
 impl ViewportFeed {
@@ -464,6 +531,7 @@ impl ViewportFeed {
             last_resize_sent: None,
             perturbing: false,
             stream_ended: Arc::new(AtomicBool::new(false)),
+            last_words: Arc::new(std::sync::Mutex::new(None)),
             task: None,
             drawn_at: std::collections::VecDeque::new(),
             fps_shown: std::cell::Cell::new((None, None)),
@@ -519,7 +587,7 @@ impl ViewportFeed {
         // The RL view runs in the trainnr_mjlab venv (torch + warp + mjlab);
         // the previews in the pipeline's. Same ring, same stdin
         // protocol, different door (`spawn.rs` builds both).
-        let mut command = if task_name == WALK_TASK {
+        let mut command = if is_walk(task_name) {
             walk_command(WALK_SPAWN.module)
         } else {
             pipeline_command(RENDER_STREAM_SCRIPT)
@@ -562,10 +630,14 @@ impl ViewportFeed {
             rgb: Vec::new(),
         });
 
-        if task_name == WALK_TASK {
-            // The project's own walk: its robot, its latest checkpoint.
+        if is_walk(task_name) {
+            // One experiment's newest checkpoint, or the project's newest;
+            // either way the robot is the checkpoint's own run's (#151).
+            match walk_run(task_name) {
+                Some(run) => command.arg(format!("--run={run}")),
+                None => command.arg("--latest"),
+            };
             command
-                .arg("--latest")
                 .arg(format!("--envs={}", WALK_SPAWN.envs))
                 .arg(format!("--project={}", project_root.display()));
         } else if task_name.starts_with(DEPLOY_PREFIX) {
@@ -580,14 +652,18 @@ impl ViewportFeed {
         let spawned = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn();
 
         let frames_published = Arc::new(AtomicU64::new(0));
         let stream_ended = Arc::new(AtomicBool::new(false));
+        let last_words = Arc::new(std::sync::Mutex::new(None));
 
         match (spawned, shm) {
             (Ok(mut child), Ok(shm)) => {
+                if let Some(stderr) = child.stderr.take() {
+                    spawn_stderr_tail(stderr, Arc::clone(&last_words));
+                }
                 let stdout = child.stdout.take().expect("piped stdout, always present");
                 let stdin = child.stdin.take().expect("piped stdin, always present");
                 let report = Arc::new(std::sync::Mutex::new(SimReport::default()));
@@ -610,6 +686,7 @@ impl ViewportFeed {
                     last_resize_sent: None,
                     perturbing: false,
                     stream_ended,
+                    last_words,
                     task: Some(task_name.to_owned()),
                     drawn_at: std::collections::VecDeque::new(),
                     fps_shown: std::cell::Cell::new((None, None)),
@@ -681,11 +758,18 @@ impl ViewportFeed {
         }
 
         if self.stream_ended.load(Ordering::Relaxed) {
-            ui.error_label(
-                "The simulator process for this scene exited; the frame below is its \
-                 last. Its output is in the project's .index/studio.log. Pick the \
-                 scene again to restart it.",
-            );
+            let said = self
+                .last_words
+                .lock()
+                .ok()
+                .and_then(|w| w.clone())
+                .map(|line| format!(" It said: {line}"))
+                .unwrap_or_default();
+            ui.error_label(format!(
+                "The simulator process for this scene exited.{said} The frame below is \
+                 its last; its output is in the project's .index/studio.log. Pick the \
+                 scene again to restart it."
+            ));
         }
 
         let Some(texture) = &self.texture else {
@@ -1244,6 +1328,18 @@ mod tests {
     fn a_deployment_is_a_known_scene_by_its_prefix() {
         assert!(is_known_scene("kitting"));
         assert!(is_known_scene(WALK_TASK));
+        assert!(is_exception_line(
+            "_pickle.UnpicklingError: invalid load key"
+        ));
+        assert!(is_exception_line("SystemExit"));
+        assert!(!is_exception_line(
+            "Check the documentation of torch.load: see"
+        ));
+        // one experiment's walk (#151); an empty name is not one
+        assert!(is_known_scene("walk:nano-walk-01"));
+        assert_eq!(walk_run("walk:nano-walk-01"), Some("nano-walk-01"));
+        assert!(!is_known_scene("walk:"));
+        assert_eq!(walk_run(WALK_TASK), None);
         assert!(is_known_scene("deploy:go2-c2"));
         assert!(is_known_scene("deploy:go2-c2:gate:dds:3"));
         assert!(!is_known_scene("go2-c2"));

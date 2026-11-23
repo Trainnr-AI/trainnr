@@ -181,10 +181,25 @@ def twist_switch(env, axes: int) -> tuple[object | None, str]:
     return env.command_manager.get_term(COMMAND_TERM), bounds
 
 
-def latest_checkpoint(project: Path | None = None) -> Path:
-    """The newest model_*.pt: under the project's runs when a project is
+def latest_checkpoint(project: Path | None = None, run: str | None = None) -> Path:
+    """The newest model_*.pt: of the named experiment (`run`, a folder under
+    the project's runs: the Studio's "watch in simulator" on that run,
+    #151), else under the project's policies and runs when a project is
     given (the Studio's walk scene rolls the project's latest policy),
     else under runs/microduck-walk or the flagship study's arms."""
+    if project is not None and run is not None:
+        run_dir = Path(project) / RUNS_FOLDER / run
+        checkpoints = sorted(
+            run_dir.glob(CHECKPOINT_GLOB), key=lambda p: p.stat().st_mtime
+        )
+        if not checkpoints:
+            raise SystemExit(f"no {CHECKPOINT_GLOB} in the experiment {run!r} yet")
+        if not plain_walk_plays(checkpoints[-1], Path(project)):
+            raise SystemExit(
+                f"{run} trained on a staged scene or with a camera the plain walk "
+                "does not show; play it with walk_play --scene"
+            )
+        return checkpoints[-1]
     if project is not None:
         # A policy artifact first (a judged checkpoint, copied there by
         # the live loop), else any run's checkpoint; newest by time, and
@@ -233,6 +248,26 @@ def latest_checkpoint(project: Path | None = None) -> Path:
             "train one (walk_train) or pull a run from the pod first"
         )
     return checkpoints[-1]
+
+
+def run_walk_robot(checkpoint: Path, project: Path | None) -> str | None:
+    """The walk robot of the run a checkpoint belongs to (its identity,
+    through `tasks.walks.walk_robot_of`, the doors' rule); None when the
+    run says nothing a walk can be built from."""
+    import json  # noqa: PLC0415
+
+    from trainnr.tasks.walks import walk_robot_of  # noqa: PLC0415
+
+    identity = Path(checkpoint).resolve().parent / IDENTITY_FILE
+    if not identity.is_file():
+        return None
+    task_ids: dict[str, str] = {}
+    if project is not None:
+        for task_file in Path(project).glob(f"{TASKS_FOLDER}/*/{TASK_FILE}"):
+            record = json.loads(task_file.read_text())
+            if record.get("stamp") and record.get("task_id"):
+                task_ids[str(record["stamp"]).split("@", 1)[-1]] = record["task_id"]
+    return walk_robot_of(json.loads(identity.read_text()), task_ids)
 
 
 def project_walk_robot(project: Path) -> str:
@@ -528,6 +563,11 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
     parser.add_argument("--no-rerun", action="store_true")
     parser.add_argument("--robot", default=None, help="the walk's robot (bundle name)")
     parser.add_argument(
+        "--run",
+        default=None,
+        help="an experiment of the project: its newest checkpoint",
+    )
+    parser.add_argument(
         "--project",
         type=Path,
         default=None,
@@ -537,10 +577,15 @@ def main() -> None:  # noqa: PLR0915, PLR0912 - one loop, read top to bottom
     from trainnr_mjlab.walks import DEFAULT_ROBOT, use_project  # noqa: PLC0415
 
     use_project(args.project)
-    robot = args.robot or (
-        project_walk_robot(args.project) if args.project else DEFAULT_ROBOT
+    checkpoint = args.checkpoint or latest_checkpoint(args.project, args.run)
+    # the checkpoint's own run says its walk; the project's one declared
+    # walk only for a run that says nothing (a project with several walks
+    # refused every run before, #151)
+    robot = (
+        args.robot
+        or run_walk_robot(checkpoint, args.project)
+        or (project_walk_robot(args.project) if args.project else DEFAULT_ROBOT)
     )
-    checkpoint = args.checkpoint if args.checkpoint else latest_checkpoint(args.project)
     streamer = transport()
 
     import warp as wp  # noqa: PLC0415

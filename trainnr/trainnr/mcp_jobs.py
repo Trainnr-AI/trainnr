@@ -80,6 +80,17 @@ JOBS_DIR_ENV = "TRAINNR_JOBS_DIR"
 # checkpoint): what a training run's "watch in simulator" opens
 # (`viewport.rs::WALK_TASK`, pinned by test_studio_mirrors).
 VIEWPORT_WALK = "walk"
+# One experiment's walk, `walk:<experiment>`: its newest checkpoint with its
+# own robot, what a run's or an evaluation's "watch in simulator" opens
+# (`viewport.rs::WALK_RUN_PREFIX`, pinned by test_studio_mirrors; #151).
+VIEWPORT_WALK_RUN = "walk:"
+
+
+def walk_viewport(experiment: str | None) -> str:
+    """The viewport scene of an experiment's walk; the project's newest
+    walk when there is no experiment folder (a smoke run saves none)."""
+    return f"{VIEWPORT_WALK_RUN}{experiment}" if experiment else VIEWPORT_WALK
+
 
 # The three shapes a door answers with, so every caller reads one word
 # (`status`) before anything else. A refusal names the reason; a handle

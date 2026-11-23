@@ -63,10 +63,14 @@ BANNED_WORDS = re.compile(
 # review the same day added describe_experiment, truer descriptions and a
 # one-line description on the eleven arguments agents misread (recipe,
 # fit, task, checkpoint, evaluation, unevaluated, student, device,
-# command, follow, the USD options): 8,449. Growth past 5% is a decision.
+# command, follow, the USD options): 8,449. Growth past 5% is a decision;
+# the maintainer took it on 2026-11-24 (#151): 10%, the surface having
+# reached 8,871 with the camera capture's `url` and the films, and an
+# experiment's walk needing words in run_simulation.
 TOKEN_PROXY_AT_TRIM = 8449
 CHARS_PER_TOKEN = 3.6
-TOKEN_BUDGET = round(TOKEN_PROXY_AT_TRIM * 1.05)
+TOKEN_GROWTH = 1.10
+TOKEN_BUDGET = round(TOKEN_PROXY_AT_TRIM * TOKEN_GROWTH)
 
 
 def _api(plugins: bool = False) -> list[dict[str, Any]]:

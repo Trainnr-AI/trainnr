@@ -233,6 +233,16 @@ class TheWalkDoors(unittest.TestCase):
             self.assertEqual(film[film.index("--robot") + 1], "microduck")
             self.assertEqual(film[film.index("--project") + 1], str(project.root))
 
+    def test_an_experiments_walk_is_played_only_when_it_has_a_checkpoint(self) -> None:
+        """`walk:<experiment>` plays that run (#151); one with no checkpoint
+        yet, or no such run, is refused before the Studio is asked."""
+        with project_with() as (project, _):
+            (project.root / "runs" / "b-01").mkdir(parents=True)
+            for scene in ("walk:b-01", "walk:ghost", "walk:"):
+                out = server.run_simulation(scene)
+                self.assertEqual(out["status"], "refused", (scene, out))
+                self.assertIn("with a checkpoint", out["reason"])
+
     def test_preview_rewards_reads_the_declared_walk(self) -> None:
         with project_with("go2-walk") as (project, spawned):
             server.preview_rewards("go2-flat", controller="stand")

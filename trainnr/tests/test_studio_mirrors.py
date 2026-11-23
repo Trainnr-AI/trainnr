@@ -505,6 +505,10 @@ class RunningNow(unittest.TestCase):
             constant(VIEWPORT_RS, r'pub const WALK_TASK: &str = "([^"]+)";'),
             mcp_jobs.VIEWPORT_WALK,
         )
+        self.assertEqual(
+            constant(VIEWPORT_RS, r'pub const WALK_RUN_PREFIX: &str = "([^"]+)";'),
+            mcp_jobs.VIEWPORT_WALK_RUN,
+        )
         for word in (mcp_jobs.STATE_RUNNING, mcp_jobs.STATE_DIED):
             self.assertIn(f'"{word}"', RUNNING_RS)
 

@@ -1583,7 +1583,7 @@
       "destructiveHint": false,
       "readOnlyHint": false
     },
-    "description": "Play a scene live in the Studio's Simulator: a task preview (kitting, lift, duck), `walk` (the newest walk) or `deploy:<deployment>` (add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No scene stops it.",
+    "description": "Play a scene live in the Studio's Simulator: a task preview (kitting, lift, duck), `walk` (the newest walk), `walk:<experiment>` or `deploy:<deployment>` (add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No scene stops it.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
