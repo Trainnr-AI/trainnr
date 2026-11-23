@@ -36,6 +36,7 @@ All notable changes to trainnr. The format follows
 
 ### Fixed
 
+- An MCAP's `/joint_commands` (or `/joint_command`, `/commands`) is ingested as the command, `joint.command` (with its velocity and effort as the commanded velocity and feed-forward), beside `/joint_states`' `joint.position`; it landed under its topic's name, so `servo-bench` refused every MCAP recording, the format its guide asks for. A recording with no command now names the channels it has in the refusal (#147).
 - `identify_system` with `legged-joints` reads a foot-contact channel on any legged robot: each joint's samples are masked by the feet below it in the model's body tree, found by the channel's foot names, and a joint above no foot (a head) keeps every sample. It read only Go2's leg names before, and refused any other robot's contact channel as "not a Go2 hip, thigh or calf"; a foot name the model does not carry is refused by name.
 - The Windows `trainnr-studio.exe` carries its version and name: Properties, Details and Task Manager showed v0.2.0's as version 0.0.0.0 with no description. The release checks the built exe names its own version.
 - `identify_system` with `legged-joints` fits a recording that carries a joint the robot's model leaves out (a beak, a gripper, a fan), instead of refusing it whole: it fits the joints the model has a hinge for and names the ones left out in the fit record; `check_drift` reads it the same way. It refuses only a recording none of whose joints is a hinge of the model, listing the model's hinges (#133).

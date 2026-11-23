@@ -220,6 +220,45 @@ def make_mcap(
     return path
 
 
+JointStateRow = tuple[float, list[str], list[float], list[float], list[float]]
+
+
+def joint_state_mcap(path: Path, topics: dict[str, list[JointStateRow]]) -> Path:
+    """A bag of JointState topics, each (time, names, position, velocity,
+    effort) per message, uncompressed: what a robot's runtime writes."""
+    schema = _record(
+        mcap_mod.OP_SCHEMA,
+        struct.pack("<H", 1)
+        + _mcap_str(mcap_mod.JOINT_STATE)
+        + _mcap_str("ros2msg")
+        + _mcap_bytes(b"string[] name\nfloat64[] position\n"),
+    )
+    channels, msgs = b"", b""
+    for cid, (topic, rows) in enumerate(topics.items(), start=1):
+        channels += _record(
+            mcap_mod.OP_CHANNEL,
+            struct.pack("<HH", cid, 1)
+            + _mcap_str(topic)
+            + _mcap_str("cdr")
+            + struct.pack("<I", 0),
+        )
+        for i, (t, names, pos, vel, eff) in enumerate(rows):
+            stamp = int(t * 1e9)
+            msgs += _record(
+                mcap_mod.OP_MESSAGE,
+                struct.pack("<HIQQ", cid, i, stamp, stamp)
+                + joint_state_cdr(t, names, pos, vel, eff),
+            )
+    header = _record(mcap_mod.OP_HEADER, _mcap_str("ros2") + _mcap_str("test"))
+    data_end = _record(mcap_mod.OP_DATA_END, struct.pack("<I", 0))
+    footer = _record(mcap_mod.OP_FOOTER, struct.pack("<QQI", 0, 0, 0))
+    path.write_bytes(
+        mcap_mod.MAGIC + header + schema + channels + msgs + data_end + footer
+        + mcap_mod.MAGIC
+    )  # fmt: skip
+    return path
+
+
 def _mcap_str(s: str) -> bytes:
     raw = s.encode()
     return struct.pack("<I", len(raw)) + raw
@@ -384,6 +423,44 @@ class Mcap(unittest.TestCase):
                 pass
             with self.assertRaisesRegex(mcap_mod.UnsupportedBagError, "zstd"):
                 resolve("mcap").build().read(zstd)
+
+    def test_a_command_topic_is_read_as_the_command(self) -> None:
+        """`/joint_commands` is the robot's command (#147): `joint.command`
+        beside `/joint_states`' `joint.position`, its velocity the commanded
+        velocity; a topic the reader cannot place keeps its prefix."""
+        rows = [(10.0 + 0.02 * i, ["servo"], [0.1 * i], [1.0], []) for i in range(3)]
+        targets = [(t, n, [0.0], [], []) for t, n, *_ in rows]
+        with tempfile.TemporaryDirectory() as tmp:
+            bag = joint_state_mcap(
+                Path(tmp) / "bench.mcap",
+                {
+                    "/joint_states": rows,
+                    "/joint_commands": rows,
+                    "/joint_targets": targets,
+                },
+            )
+            rec = mcap_mod.McapAdapter().read(bag)
+        self.assertEqual(
+            sorted(rec.channels),
+            [
+                "joint.command",
+                "joint.command_velocity",
+                "joint.position",
+                "joint.velocity",
+                "joint_targets.joint.position",
+            ],
+        )
+        self.assertEqual(rec.channels["joint.command"].components, ("servo",))
+        self.assertTrue(
+            any("/joint_commands: read as the command" in n for n in rec.notes)
+        )
+        with tempfile.TemporaryDirectory() as tmp:  # the first command topic wins
+            bag = joint_state_mcap(
+                Path(tmp) / "b.mcap", {"/commands": rows, "/joint_command": rows}
+            )
+            rec = mcap_mod.McapAdapter().read(bag)
+        self.assertIn("joint.command", rec.channels)
+        self.assertIn("commands.joint.position", rec.channels)
 
     def test_a_non_mcap_file_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
