@@ -35,7 +35,7 @@ eframe = { version = "0.36.1", default-features = false, features = [
     "wgpu",
     "default_fonts",
 ] }
-egui = "0.36.1"
+egui = "0.37.0"
 mimalloc = "0.1.52"
 re_ui = "0.36.3"
 # A run's viewer file loaded into the viewer (Running now, 2026-09-25).
