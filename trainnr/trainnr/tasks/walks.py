@@ -14,6 +14,7 @@ the walk's acceptance, run by `tools/accept-task.py`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -201,6 +202,30 @@ def walk_robot(task_id: str) -> str | None:
     for a family that is not a walk."""
     entry = resolve(task_id)
     return entry.rig if entry.walk else None
+
+
+def walk_robot_of(
+    identity: Mapping[str, Any], task_ids: Mapping[str, str]
+) -> str | None:
+    """The walk robot a run belongs to, from its identity record: a
+    declared legged walk's rig; else the walk family of the task it cites
+    (`task_ids` maps a declared task's version, the part after `@`, to its
+    family id, for a run that cites its task by stamp); else the robot it
+    names, when that is a registered walk's. None for a run of no walk
+    (one rule for the doors and the Studio's simulator, #151)."""
+    if identity.get(LEGGED_RIG):
+        return LEGGED_RIG  # a declared legged walk: its spec rides in the run
+    ref = str(identity.get("task") or "")
+    task_id = ref if "@" not in ref else task_ids.get(ref.split("@", 1)[1])
+    if task_id:
+        try:
+            robot = walk_robot(task_id)
+        except KeyError:  # a task of no registered family (a tracking run's)
+            robot = None
+        if robot is not None:
+            return robot
+    named = str(identity.get("robot") or "").split("@", 1)[0]
+    return named if named in walk_robots() else None
 
 
 def walk_robots() -> tuple[str, ...]:

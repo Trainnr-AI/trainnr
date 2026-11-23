@@ -139,13 +139,29 @@ fn prefer_x11_under_wslg(options: &mut eframe::NativeOptions) {
     }));
 }
 
+/// winit's Wayland backend warns "Failed to set cursor" on every pointer
+/// move under WSLg, thousands of times a session, burying the one line a
+/// failed scene leaves in the log (#151); its errors still show. A
+/// `RUST_LOG` that names the module is the user's own and is kept.
+const QUIET_MODULES: &[&str] = &["winit::platform_impl::linux::wayland::window::state"];
+
+fn log_filter() -> String {
+    let mut filter = re_log::default_log_filter();
+    for module in QUIET_MODULES {
+        if !filter.contains(&format!("{module}=")) {
+            filter.push_str(&format!(",{module}=error"));
+        }
+    }
+    filter
+}
+
 /// A simulator command that needs the model before the stream described it.
 const NOT_DESCRIBED: &str = "the model is not described yet";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main_thread_token = re_viewer::MainThreadToken::i_promise_i_am_on_the_main_thread();
-    re_log::setup_logging();
+    re_log::setup_logging_with_filter(&log_filter());
     re_crash_handler::install_crash_handlers(re_viewer::build_info());
 
     // Fails loudly if another viewer already holds the port — close the
@@ -1103,10 +1119,12 @@ impl StudioShell {
                     Some(name) => {
                         if !viewport::is_known_scene(&name) {
                             return Err(format!(
-                                "no preview scene {name:?}; one of {:?}, {:?}, or a \
+                                "no preview scene {name:?}; one of {:?}, {:?}, an \
+                                 experiment's walk as {}<experiment>, or a \
                                  deployment as {}<name>",
                                 viewport::PREVIEW_TASKS,
                                 viewport::WALK_TASK,
+                                viewport::WALK_RUN_PREFIX,
                                 viewport::DEPLOY_PREFIX
                             ));
                         }

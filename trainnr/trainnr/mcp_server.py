@@ -1198,62 +1198,19 @@ def newest_evaluation_of(
 
 
 def _walk_of_run(artifacts: Iterable[Any], run_dir: Path) -> str | None:
-    """The walk robot a run belongs to: the family of the declared task
-    its identity cites, else the robot its identity names when that is
-    a registered walk's."""
+    """The walk robot a run belongs to (`tasks.walks.walk_robot_of`), its
+    declared task's version looked up among the project's tasks."""
     from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
-    from trainnr.tasks.walks import LEGGED_RIG, walk_robot  # noqa: PLC0415
+    from trainnr.tasks.walks import walk_robot_of  # noqa: PLC0415
 
     identity = run_dir / IDENTITY_FILE
-    if identity.is_file() and json.loads(identity.read_text()).get(LEGGED_RIG):
-        return LEGGED_RIG  # a declared legged walk: its spec rides in the run
-    task_id = _task_id_in_project(artifacts, _run_task(run_dir))
-    robot = walk_robot(task_id) if task_id else None
-    return robot if robot is not None else _robot_of_run(run_dir)
-
-
-def _run_task(run_dir: Path) -> str | None:
-    """The declared task a run cites, from its identity record."""
-    from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
-
-    identity = run_dir / IDENTITY_FILE
-    if not identity.is_file():
-        return None
-    return json.loads(identity.read_text()).get("task")
-
-
-def _task_id_in_project(artifacts: Iterable[Any], ref: str | None) -> str | None:
-    """The task family a run's declared task belongs to. A run trained
-    by the door cites its task by the project's stamp (`go2-walk@0e7e…`,
-    the environment card), and the family id (`trainnr/go2-walk`) is
-    what that card's spec records; a run that names the family id
-    directly is taken as is. Unknown: None (the WSL machine, 2026-09-11 - the
-    export door handed the stamp to the registry and was refused)."""
-    if not ref:
-        return None
-    if "@" not in ref:
-        return ref
-    version = ref.split("@", 1)[1]
-    for a in artifacts:
-        if a.kind != "task":
-            continue
-        recorded = str(a.summary.get("stamp", a.stamp))
-        if recorded.split("@", 1)[-1] == version:
-            return a.summary.get("task_id")
-    return None
-
-
-def _robot_of_run(run_dir: Path) -> str | None:
-    """The walk a run belongs to, from the robot its identity names
-    (`go2@…` → go2) when that is a walk the trainer knows."""
-    from trainnr.mcp_actions import walk_robots  # noqa: PLC0415
-    from trainnr.project.kinds import IDENTITY_FILE  # noqa: PLC0415
-
-    identity = run_dir / IDENTITY_FILE
-    if not identity.is_file():
-        return None
-    robot = str(json.loads(identity.read_text()).get("robot", "")).split("@", 1)[0]
-    return robot if robot in walk_robots() else None
+    ident = json.loads(identity.read_text()) if identity.is_file() else {}
+    task_ids = {
+        str(a.summary.get("stamp", a.stamp)).split("@", 1)[-1]: a.summary.get("task_id")
+        for a in artifacts
+        if a.kind == "task" and a.summary.get("task_id")
+    }
+    return walk_robot_of(ident, task_ids)
 
 
 def gate_deployment(
@@ -2814,8 +2771,9 @@ def set_studio_theme(theme: str) -> dict[str, Any] | Refusal:
 def run_simulation(scene: str | None = None) -> dict[str, Any] | Refusal:
     """Run a scene in the Studio's MuJoCo simulator — a preview scene by a
     task's name (`list_tasks`; the simulator's own list is what the
-    Simulator page offers), `walk:<robot>` for the newest trained walk
-    policy of a registered walk family, or a deployment of the open
+    Simulator page offers), `walk` for the project's newest walk
+    checkpoint or `walk:<experiment>` for one experiment's newest (each
+    with its run's own robot, #151), or a deployment of the open
     project (`deploy:<name>` live and drivable, `deploy:<name>:gate:
     <runtime>:<trial>` a gate trial re-run or replayed, `deploy:<name>:
     preflight:<segment>` a pre-flight segment replayed; the index's
@@ -2823,11 +2781,16 @@ def run_simulation(scene: str | None = None) -> dict[str, Any] | Refusal:
     with no scene, stop the simulator. The
     state file then reports `viewport_task` and `viewport_fps`, the
     frames drawn to the screen in the last second."""
+    from trainnr.mcp_jobs import VIEWPORT_WALK_RUN  # noqa: PLC0415
     from trainnr.project import current_project  # noqa: PLC0415
     from trainnr.project.control import command  # noqa: PLC0415
 
     task = scene  # the Studio's command still calls it a task
     project = current_project()
+    if task and task.startswith(VIEWPORT_WALK_RUN):
+        run = task[len(VIEWPORT_WALK_RUN) :]
+        if not run or not _checkpoints_in(project.folder(RUNS_FOLDER) / run):
+            return refusal(f"no experiment {run!r} with a checkpoint in this project")
     if task and task.startswith(DEPLOY_SCENE_PREFIX):
         # Refused here by name: the viewport accepted any deploy:<name> and
         # its process died on FileNotFoundError behind a banner (2026-09-28).
@@ -4185,9 +4148,9 @@ def build_server(plugins: bool = True) -> Any:  # noqa: PLR0915
     )(set_studio_theme)
     server.tool(
         description="Play a scene live in the Studio's Simulator: a task preview "
-        "(kitting, lift, duck), `walk` (the newest walk) or `deploy:<deployment>` "
-        "(add `:gate:<runtime>:<trial>` or `:preflight:<segment>` to replay). No "
-        "scene stops it."
+        "(kitting, lift, duck), `walk` (the newest walk), `walk:<experiment>` or "
+        "`deploy:<deployment>` (add `:gate:<runtime>:<trial>` or "
+        "`:preflight:<segment>` to replay). No scene stops it."
     )(run_simulation)
     server.tool(
         description=(
