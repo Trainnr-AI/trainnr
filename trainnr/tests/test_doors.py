@@ -241,13 +241,15 @@ class TheWalkDoors(unittest.TestCase):
             folder = project.root / "deploy" / "dance"
             folder.mkdir(parents=True)
             (folder / "deploy.json").write_text(json.dumps({"tracking": {"frames": 3}}))
-            for out in (
+            calls = [
                 server.preflight_deployment("dance"),
                 server.attribute_deployment("dance"),
                 server.assay_deployment("dance", "garden"),
                 server.stage_deployment("dance", "garden"),
-                server.gate_deployment("dance", runtime="dds"),
-            ):
+            ]
+            if sys.platform.startswith("linux"):  # elsewhere DDS refuses for its OS
+                calls.append(server.gate_deployment("dance", runtime="dds"))
+            for out in calls:
                 self.assertEqual(out["status"], "refused", out)
                 self.assertIn("dance is a tracking policy", out["reason"])
                 self.assertIn("gate_deployment", out["reason"])

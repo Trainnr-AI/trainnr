@@ -327,16 +327,15 @@ class TheSourcesAreOneTable(unittest.TestCase):
     the sensor-prefixed ones are read off the model by name."""
 
     def test_every_known_source_is_computable(self) -> None:
+        # a tracking policy's sources register from deploy/tracking.py, which
+        # the runtime imports for a tracking manifest (docs/87 §8)
+        import trainnr.deploy.tracking  # noqa: F401, PLC0415
         from trainnr.deploy.manifest import KNOWN_SOURCES  # noqa: PLC0415
         from trainnr.deploy.runtime import (  # noqa: PLC0415
             SENSOR_PREFIX,
             SOURCES,
             register_source,
         )
-
-        # a tracking policy's sources register from deploy/tracking.py, which
-        # the runtime imports for a tracking manifest (docs/87 §8)
-        import trainnr.deploy.tracking  # noqa: F401, PLC0415
 
         named = {s for s in KNOWN_SOURCES if not s.startswith(SENSOR_PREFIX)}
         self.assertEqual(named, set(SOURCES))
